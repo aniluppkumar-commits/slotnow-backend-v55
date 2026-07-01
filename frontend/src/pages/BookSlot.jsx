@@ -232,22 +232,25 @@ export default function BookSlot() {
                     key={shift.start_time}
                     data-testid={`booking-time-${shift.start_time}`}
                     onClick={() => setSelectedTime(shift.start_time)}
-                    className={`w-full flex justify-between items-center p-4 rounded-xl transition-all text-left ${
+                    className={`w-full flex justify-between items-center gap-3 p-4 rounded-xl transition-all text-left ${
                       active
                         ? "bg-forest-faint border-2 border-forest ring-2 ring-forest/10"
                         : "bg-white border border-cream-300 hover:border-forest/40"
                     }`}
                   >
-                    <div>
-                      <p className="font-heading font-bold text-ink text-base">
+                    <div className="min-w-0 flex-1">
+                      <p className="font-heading font-bold text-ink text-base leading-tight">
                         {formatTime(shift.start_time)} – {formatTime(shift.end_time)}
                       </p>
-                      <p className="text-xs text-ink-soft mt-0.5">
-                        {capText} · Token assigned on confirmation
+                      <p className="text-[11px] text-ink-soft mt-1 leading-tight">
+                        {capText}
+                      </p>
+                      <p className="text-[10px] text-ink-muted mt-0.5 leading-tight">
+                        Token on confirm
                       </p>
                     </div>
                     <div
-                      className={`w-6 h-6 rounded-full flex items-center justify-center ${
+                      className={`w-6 h-6 rounded-full flex items-center justify-center shrink-0 ${
                         active ? "bg-forest text-white" : "border-2 border-cream-300"
                       }`}
                     >

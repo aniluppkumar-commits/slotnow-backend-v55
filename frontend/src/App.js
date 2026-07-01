@@ -21,11 +21,13 @@ import ProviderAvailability from "@/pages/provider/ProviderAvailability";
 import ProviderQueue from "@/pages/provider/ProviderQueue";
 import ProviderAssistants from "@/pages/provider/ProviderAssistants";
 import ReceptionistDashboard from "@/pages/receptionist/ReceptionistDashboard";
+import HistoryPage from "@/pages/shared/HistoryPage";
 import AdminDashboard from "@/pages/admin/AdminDashboard";
 import AdminUsers from "@/pages/admin/AdminUsers";
 import AdminBookings from "@/pages/admin/AdminBookings";
 import AdminSettings from "@/pages/admin/AdminSettings";
 import AdminRevenue from "@/pages/admin/AdminRevenue";
+import AdminReferrals from "@/pages/admin/AdminReferrals";
 
 function RequireRole({ roles, children }) {
   const { user } = useAuth();
@@ -82,9 +84,11 @@ function App() {
             <Route path="/provider/availability" element={<RequireAuth><RequireRole roles="provider"><ProviderAvailability /></RequireRole></RequireAuth>} />
             <Route path="/provider/queue" element={<RequireAuth><RequireRole roles="provider"><ProviderQueue /></RequireRole></RequireAuth>} />
             <Route path="/provider/assistants" element={<RequireAuth><RequireRole roles="provider"><ProviderAssistants /></RequireRole></RequireAuth>} />
+            <Route path="/provider/history" element={<RequireAuth><RequireRole roles="provider"><HistoryPage /></RequireRole></RequireAuth>} />
 
             {/* Receptionist */}
             <Route path="/receptionist" element={<RequireAuth><RequireRole roles="receptionist"><ReceptionistDashboard /></RequireRole></RequireAuth>} />
+            <Route path="/receptionist/history" element={<RequireAuth><RequireRole roles="receptionist"><HistoryPage /></RequireRole></RequireAuth>} />
 
             {/* Admin */}
             <Route path="/admin" element={<RequireAuth><RequireRole roles="admin"><AdminDashboard /></RequireRole></RequireAuth>} />
@@ -92,6 +96,7 @@ function App() {
             <Route path="/admin/bookings" element={<RequireAuth><RequireRole roles="admin"><AdminBookings /></RequireRole></RequireAuth>} />
             <Route path="/admin/settings/:kind" element={<RequireAuth><RequireRole roles="admin"><AdminSettings /></RequireRole></RequireAuth>} />
             <Route path="/admin/revenue" element={<RequireAuth><RequireRole roles="admin"><AdminRevenue /></RequireRole></RequireAuth>} />
+            <Route path="/admin/referrals" element={<RequireAuth><RequireRole roles="admin"><AdminReferrals /></RequireRole></RequireAuth>} />
 
             {/* Shared */}
             <Route path="/profile" element={<RequireAuth><Profile /></RequireAuth>} />

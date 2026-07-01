@@ -47,15 +47,17 @@ export function AuthProvider({ children }) {
     }
   };
 
-  const verifyOtp = async (phone, otp, role = "customer") => {
+  const verifyOtp = async (phone, otp, role = "customer", ref = null) => {
     setLoading(true);
     try {
-      const { data } = await api.post("/auth/verify-otp", {
+      const body = {
         phone,
         otp,
         role,
-        via_referral: false,
-      });
+        via_referral: !!ref,
+      };
+      if (ref) body.ref = ref;
+      const { data } = await api.post("/auth/verify-otp", body);
       persist(data.token, data.user);
       return data;
     } finally {

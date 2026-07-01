@@ -27,6 +27,7 @@ export default function AdminDashboard() {
   const [loading, setLoading] = useState(true);
   const [q, setQ] = useState("");
   const [busyId, setBusyId] = useState(null);
+  const [bulkBusy, setBulkBusy] = useState(false);
 
   const load = async () => {
     try {
@@ -73,6 +74,26 @@ export default function AdminDashboard() {
     }
   };
 
+  const bulkApprove = async () => {
+    const pendingIds = providers.filter((p) => p.status === "pending").map((p) => p.id);
+    if (pendingIds.length === 0) return;
+    if (!window.confirm(`Approve all ${pendingIds.length} pending providers?`)) return;
+    setBulkBusy(true);
+    try {
+      let ok = 0;
+      for (const pid of pendingIds) {
+        try {
+          await api.put(`/admin/providers/${pid}/approve`);
+          ok += 1;
+        } catch {}
+      }
+      toast.success(`Approved ${ok}/${pendingIds.length}`);
+      await load();
+    } finally {
+      setBulkBusy(false);
+    }
+  };
+
   const filtered = providers.filter(
     (p) =>
       !q.trim() ||
@@ -113,6 +134,7 @@ export default function AdminDashboard() {
 
         {/* Quick actions */}
         <div className="bg-white border border-cream-300 rounded-2xl divide-y divide-cream-300">
+          <QuickRow testid="admin-open-referrals" icon={<Users size={16} />} title="Referrals" onClick={() => navigate("/admin/referrals")} />
           <QuickRow testid="admin-open-users" icon={<Users size={16} />} title="All users" onClick={() => navigate("/admin/users")} />
           <QuickRow testid="admin-open-bookings" icon={<CalendarCheck size={16} />} title="All bookings" onClick={() => navigate("/admin/bookings")} />
           <QuickRow testid="admin-open-revenue" icon={<Wallet size={16} />} title="Subscription revenue" onClick={() => navigate("/admin/revenue")} />
@@ -139,9 +161,19 @@ export default function AdminDashboard() {
 
           {pending.length > 0 && (
             <>
-              <p className="text-[11px] font-bold uppercase tracking-wider text-amber-700 bg-amber-50 rounded-lg px-2 py-1 inline-block mb-2">
-                Pending approval · {pending.length}
-              </p>
+              <div className="flex items-center justify-between mb-2">
+                <p className="text-[11px] font-bold uppercase tracking-wider text-amber-700 bg-amber-50 rounded-lg px-2 py-1 inline-block">
+                  Pending approval · {pending.length}
+                </p>
+                <button
+                  data-testid="admin-bulk-approve-btn"
+                  onClick={bulkApprove}
+                  disabled={bulkBusy}
+                  className="text-[11px] font-bold bg-forest text-white hover:bg-forest-dark px-3 py-1.5 rounded-full disabled:opacity-50"
+                >
+                  {bulkBusy ? "Approving…" : `Approve all (${pending.length})`}
+                </button>
+              </div>
               <div className="space-y-2 mb-4">
                 {pending.map((p) => (
                   <ProviderRow key={p.id} p={p} busy={busyId === p.id} onApprove={() => approve(p.id)} onReject={() => reject(p.id)} />

@@ -34,6 +34,14 @@ export default function Login() {
   const location = useLocation();
   const from = location.state?.from?.pathname;
 
+  // Capture ?ref=<phone> from URL — persists across form steps
+  const [refCode] = useState(() => {
+    const params = new URLSearchParams(window.location.search);
+    const ref = params.get("ref");
+    if (ref) sessionStorage.setItem("slotnow_ref", ref);
+    return ref || sessionStorage.getItem("slotnow_ref") || null;
+  });
+
   const [role, setRole] = useState("customer");
   const [mode, setMode] = useState("otp");
   const [step, setStep] = useState(1);
@@ -94,8 +102,10 @@ export default function Login() {
     if (!/^\d{4,6}$/.test(otp)) return toast.error("Enter the OTP");
     setLoading(true);
     try {
-      const res = await verifyOtp(phone, otp, role);
+      const res = await verifyOtp(phone, otp, role, refCode);
       toast.success("Welcome to SlotNow");
+      // Consumed — clear stored ref
+      sessionStorage.removeItem("slotnow_ref");
       if (!res.user?.has_pin && res.user?.role !== "admin") {
         setStep(3);
       } else {
@@ -173,6 +183,14 @@ export default function Login() {
 
           {step === 1 && (
             <>
+              {refCode && (
+                <div
+                  data-testid="referral-banner"
+                  className="bg-accent-faint border border-accent/30 rounded-xl px-3 py-2 text-xs text-accent-dark mb-3 flex items-center gap-2"
+                >
+                  <span>🎁</span> Referred by <strong>+91 {refCode}</strong>
+                </div>
+              )}
               {/* Role tiles - 2x2 grid */}
               <div className="mb-5">
                 <p className="text-sm font-bold text-ink mb-2">{t("im_a")}</p>

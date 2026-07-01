@@ -133,14 +133,28 @@ export default function ProviderOnboarding() {
               className="w-full bg-transparent outline-none text-ink font-medium placeholder:text-ink-muted"
             />
           </Field>
-          <Field label="Image URL (optional)">
+          <Field label="Business image URL (optional)">
             <input
               data-testid="onboarding-image"
               value={form.image || ""}
               onChange={(e) => setForm({ ...form, image: e.target.value })}
-              placeholder="https://…"
+              placeholder="https://images.unsplash.com/…"
               className="w-full bg-transparent outline-none text-ink font-medium placeholder:text-ink-muted"
             />
+            {form.image && (
+              <div className="mt-2 flex items-center gap-2">
+                <img
+                  src={form.image}
+                  alt="Preview"
+                  onError={(e) => (e.currentTarget.style.display = "none")}
+                  className="w-20 h-20 rounded-xl object-cover border border-cream-300"
+                  data-testid="onboarding-image-preview"
+                />
+                <p className="text-[11px] text-ink-soft">
+                  Preview — if the image doesn't load, paste a direct image URL (ends in .jpg / .png).
+                </p>
+              </div>
+            )}
           </Field>
         </div>
 

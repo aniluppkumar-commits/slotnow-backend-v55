@@ -14,6 +14,9 @@ import {
   Languages,
   LockKeyhole,
   X,
+  Share2,
+  Copy,
+  Gift,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -160,6 +163,11 @@ export default function Profile() {
           <LockKeyhole size={16} /> {user?.has_pin ? t("change_pin") : "Set PIN"}
         </button>
 
+        {/* Refer & earn */}
+        {!isProvider && user?.role === "customer" && (
+          <ReferShare phone={user?.phone} name={user?.name} />
+        )}
+
         <button
           data-testid="profile-logout-btn"
           onClick={() => setLogoutOpen(true)}
@@ -229,6 +237,62 @@ function Field({ icon, label, children }) {
         {children}
       </div>
     </label>
+  );
+}
+
+function ReferShare({ phone, name }) {
+  const link = `${window.location.origin}/login?ref=${phone}`;
+  const shareText = `Hey! Book appointments in seconds on SlotNow — no waiting. Use my referral: ${link}`;
+
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(link);
+      toast.success("Link copied");
+    } catch {
+      toast.error("Copy failed");
+    }
+  };
+
+  const share = async () => {
+    if (navigator.share) {
+      try {
+        await navigator.share({ title: "Join me on SlotNow", text: shareText, url: link });
+      } catch {}
+    } else {
+      copy();
+    }
+  };
+
+  return (
+    <div className="bg-gradient-to-br from-accent to-accent-dark text-white rounded-2xl p-4 shadow-lg">
+      <div className="flex items-center gap-2 mb-2">
+        <div className="w-9 h-9 bg-white/15 rounded-lg flex items-center justify-center">
+          <Gift size={18} strokeWidth={2.2} />
+        </div>
+        <div>
+          <p className="font-heading font-bold text-base">Refer friends to SlotNow</p>
+          <p className="text-[11px] opacity-80">Skip the wait, together</p>
+        </div>
+      </div>
+      <div className="bg-white/15 rounded-xl px-3 py-2 mt-2 flex items-center justify-between gap-2">
+        <p data-testid="refer-link" className="text-[11px] font-mono truncate opacity-90">{link}</p>
+        <button
+          data-testid="refer-copy-btn"
+          onClick={copy}
+          className="p-1.5 rounded-lg bg-white/20 hover:bg-white/30 shrink-0"
+          title="Copy link"
+        >
+          <Copy size={13} />
+        </button>
+      </div>
+      <button
+        data-testid="refer-share-btn"
+        onClick={share}
+        className="mt-3 w-full flex items-center justify-center gap-2 bg-white text-accent-dark py-2.5 rounded-xl font-bold hover:bg-white/95"
+      >
+        <Share2 size={14} strokeWidth={2.5} /> Share
+      </button>
+    </div>
   );
 }
 

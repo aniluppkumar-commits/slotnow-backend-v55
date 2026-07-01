@@ -13,7 +13,7 @@ export default function ProviderQueue() {
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState(false);
   const [walkOpen, setWalkOpen] = useState(false);
-  const [walk, setWalk] = useState({ name: "", phone: "", vehicle_reg_no: "", vehicle_model: "" });
+  const [walk, setWalk] = useState({ name: "", phone: "", vehicle_reg_no: "", vehicle_model: "", service_type: "Paid" });
   const [services, setServices] = useState([]);
 
   const load = useCallback(async () => {
@@ -75,10 +75,11 @@ export default function ProviderQueue() {
         phone: walk.phone || null,
         vehicle_reg_no: walk.vehicle_reg_no || null,
         vehicle_model: walk.vehicle_model || null,
+        service_type: walk.service_type || "Paid",
       };
       const { data } = await api.post("/queue/walkin", payload);
       toast.success(`Added • Token #${data.token_number}`);
-      setWalk({ name: "", phone: "", vehicle_reg_no: "", vehicle_model: "" });
+      setWalk({ name: "", phone: "", vehicle_reg_no: "", vehicle_model: "", service_type: "Paid" });
       setWalkOpen(false);
       await load();
     } catch (e) {
@@ -228,6 +229,28 @@ export default function ProviderQueue() {
                 placeholder="Vehicle model (optional)"
                 className="w-full bg-cream border border-cream-300 rounded-xl px-3 py-2.5 text-ink outline-none focus:ring-2 focus:ring-forest/20"
               />
+              <div>
+                <label className="text-[10px] uppercase tracking-wider font-bold text-ink-muted mb-1 block">
+                  Service type
+                </label>
+                <div className="grid grid-cols-2 gap-2">
+                  {["Paid", "Free"].map((mode) => (
+                    <button
+                      key={mode}
+                      type="button"
+                      data-testid={`walkin-service-type-${mode.toLowerCase()}`}
+                      onClick={() => setWalk({ ...walk, service_type: mode })}
+                      className={`py-2.5 rounded-xl text-sm font-bold border-2 transition-all ${
+                        walk.service_type === mode
+                          ? "bg-forest-faint border-forest text-forest ring-2 ring-forest/10"
+                          : "bg-white border-cream-300 text-ink-soft hover:border-forest/40"
+                      }`}
+                    >
+                      {mode}
+                    </button>
+                  ))}
+                </div>
+              </div>
               <button
                 data-testid="walkin-add-btn"
                 onClick={addWalkin}

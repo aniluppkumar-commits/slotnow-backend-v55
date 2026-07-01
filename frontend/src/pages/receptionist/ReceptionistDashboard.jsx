@@ -25,7 +25,7 @@ export default function ReceptionistDashboard() {
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState(false);
   const [walkOpen, setWalkOpen] = useState(false);
-  const [walk, setWalk] = useState({ name: "", phone: "", vehicle_reg_no: "", vehicle_model: "" });
+  const [walk, setWalk] = useState({ name: "", phone: "", vehicle_reg_no: "", vehicle_model: "", service_type: "Paid" });
 
   const load = useCallback(async () => {
     try {
@@ -70,9 +70,10 @@ export default function ReceptionistDashboard() {
         phone: walk.phone || null,
         vehicle_reg_no: walk.vehicle_reg_no || null,
         vehicle_model: walk.vehicle_model || null,
+        service_type: walk.service_type || "Paid",
       });
       toast.success(`Added • Token #${data.token_number}`);
-      setWalk({ name: "", phone: "", vehicle_reg_no: "", vehicle_model: "" });
+      setWalk({ name: "", phone: "", vehicle_reg_no: "", vehicle_model: "", service_type: "Paid" });
       setWalkOpen(false);
       await load();
     } catch (e) {
@@ -117,7 +118,7 @@ export default function ReceptionistDashboard() {
         </div>
 
         {/* Actions */}
-        <div className="grid grid-cols-2 gap-2">
+        <div className="grid grid-cols-3 gap-2">
           <button
             data-testid="receptionist-call-next-btn"
             onClick={callNext}
@@ -132,6 +133,13 @@ export default function ReceptionistDashboard() {
             className="flex items-center justify-center gap-2 bg-white border border-cream-300 text-ink py-3 rounded-xl font-bold text-sm hover:border-forest/40"
           >
             <UserPlus size={16} /> Walk-in
+          </button>
+          <button
+            data-testid="receptionist-history-btn"
+            onClick={() => (window.location.href = "/receptionist/history")}
+            className="flex items-center justify-center gap-2 bg-white border border-cream-300 text-ink py-3 rounded-xl font-bold text-sm hover:border-forest/40"
+          >
+            History
           </button>
         </div>
 
@@ -232,6 +240,28 @@ export default function ReceptionistDashboard() {
                 placeholder="Vehicle reg no (optional)"
                 className="w-full bg-cream border border-cream-300 rounded-xl px-3 py-2.5 text-ink outline-none focus:ring-2 focus:ring-forest/20 uppercase"
               />
+              <div>
+                <label className="text-[10px] uppercase tracking-wider font-bold text-ink-muted mb-1 block">
+                  Service type
+                </label>
+                <div className="grid grid-cols-2 gap-2">
+                  {["Paid", "Free"].map((mode) => (
+                    <button
+                      key={mode}
+                      type="button"
+                      data-testid={`rec-walkin-service-type-${mode.toLowerCase()}`}
+                      onClick={() => setWalk({ ...walk, service_type: mode })}
+                      className={`py-2.5 rounded-xl text-sm font-bold border-2 transition-all ${
+                        walk.service_type === mode
+                          ? "bg-forest-faint border-forest text-forest ring-2 ring-forest/10"
+                          : "bg-white border-cream-300 text-ink-soft hover:border-forest/40"
+                      }`}
+                    >
+                      {mode}
+                    </button>
+                  ))}
+                </div>
+              </div>
               <button
                 data-testid="rec-walkin-add-btn"
                 onClick={addWalkin}

@@ -162,6 +162,12 @@ export default function ProviderDashboard() {
             onClick={() => navigate("/provider/assistants")}
           />
           <Row
+            testid="provider-open-history"
+            icon={<Calendar size={16} />}
+            title="History"
+            onClick={() => navigate("/provider/history")}
+          />
+          <Row
             testid="provider-manage-capacity"
             icon={<Users2 size={16} />}
             title={`${t("daily_capacity")}${profile?.daily_slot_limit ? ` • ${profile.daily_slot_limit}` : ""}`}
