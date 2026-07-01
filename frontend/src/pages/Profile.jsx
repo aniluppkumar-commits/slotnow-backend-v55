@@ -234,7 +234,7 @@ function Field({ icon, label, children }) {
 
 function Modal({ children, onClose, title }) {
   return (
-    <div className="fixed inset-0 z-[70] bg-black/40 flex items-end sm:items-center justify-center px-4">
+    <div className="fixed inset-0 z-[70] bg-black/40 flex items-end sm:items-center justify-center px-4 pb-24 sm:pb-4">
       <div className="bg-white rounded-2xl p-5 w-full max-w-md">
         <div className="flex items-center justify-between mb-3">
           <h3 className="font-heading font-bold text-lg text-ink">{title}</h3>
