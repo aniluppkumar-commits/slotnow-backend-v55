@@ -1,0 +1,163 @@
+{
+  "theme": "LIGHT",
+  "archetype": "1 (Organic & Earthy)",
+  "context": "Booking App Marketplace (Indian Context) - Warm, trust-building, mobile-first",
+  "colors": {
+    "background": "#F9F8F6",
+    "surface": "#FFFFFF",
+    "surface_secondary": "#F3F0E9",
+    "text_primary": "#1A1A1A",
+    "text_secondary": "#5E5E5E",
+    "border": "#E5E2DA",
+    "primary_cta": {
+      "bg": "#2C3E35",
+      "text": "#FDFBF7",
+      "hover": "#1E2A24",
+      "disabled": "#A3B1A9"
+    },
+    "status": {
+      "pending": { "bg": "#FEF3C7", "text": "#92400E" },
+      "confirmed": { "bg": "#D1FAE5", "text": "#065F46" },
+      "completed": { "bg": "#E0E7FF", "text": "#3730A3" },
+      "cancelled": { "bg": "#FEE2E2", "text": "#991B1B" }
+    },
+    "category_accents": {
+      "teal": "bg-teal-50 text-teal-700 border-teal-100",
+      "amber": "bg-amber-50 text-amber-700 border-amber-100",
+      "green": "bg-emerald-50 text-emerald-700 border-emerald-100",
+      "gray": "bg-stone-50 text-stone-700 border-stone-200",
+      "red": "bg-rose-50 text-rose-700 border-rose-100",
+      "sage": "bg-[#F1F3ED] text-[#4A5D4E] border-[#E1E5DC]",
+      "blue": "bg-sky-50 text-sky-700 border-sky-100"
+    }
+  },
+  "typography": {
+    "headings": {
+      "family": "Outfit, sans-serif",
+      "weights": ["500", "600", "700", "800"],
+      "usage": "Use tracking-tight for H1/H2 to give a premium feel."
+    },
+    "body": {
+      "family": "Manrope, sans-serif",
+      "weights": ["400", "500", "600", "700"],
+      "usage": "Use for all body text, provider descriptions, and UI labels."
+    },
+    "scales": {
+      "h1": "text-3xl sm:text-4xl lg:text-5xl font-extrabold tracking-tighter text-[#1A1A1A]",
+      "h2": "text-2xl sm:text-3xl font-bold tracking-tight text-[#1A1A1A]",
+      "h3": "text-xl sm:text-2xl font-bold tracking-tight text-[#1A1A1A]",
+      "h4": "text-lg font-semibold text-[#1A1A1A]",
+      "body": "text-base text-[#1A1A1A]",
+      "body_secondary": "text-sm text-[#5E5E5E]",
+      "overline": "text-xs font-bold uppercase tracking-[0.15em] text-[#5E5E5E]"
+    }
+  },
+  "spacing_and_layout": {
+    "app_container": "max-w-md mx-auto sm:max-w-xl md:max-w-3xl lg:max-w-5xl md:px-6 relative min-h-screen bg-[#F9F8F6] md:bg-white md:shadow-2xl md:border-x border-[#E5E2DA]",
+    "padding": {
+      "mobile_page": "p-4 sm:p-6",
+      "card_internal": "p-4 sm:p-5"
+    },
+    "border_radius": {
+      "card": "rounded-2xl",
+      "button": "rounded-xl",
+      "pill": "rounded-full",
+      "image": "rounded-xl"
+    },
+    "shadows": {
+      "soft": "shadow-[0_2px_8px_rgba(26,26,26,0.04)]",
+      "hover": "shadow-[0_8px_24px_rgba(26,26,26,0.08)]",
+      "glass": "shadow-[0_4px_16px_rgba(0,0,0,0.02)]"
+    }
+  },
+  "components": {
+    "header": {
+      "style": "backdrop-blur-xl bg-[#F9F8F6]/85 border-b border-[#E5E2DA] sticky top-0 z-40 px-4 py-3 flex items-center justify-between"
+    },
+    "bottom_navigation": {
+      "style": "fixed bottom-0 left-0 right-0 bg-white border-t border-[#E5E2DA] pb-safe pt-2 px-6 flex justify-around items-center md:hidden z-50 rounded-t-2xl shadow-[0_-4px_24px_rgba(0,0,0,0.04)]",
+      "active_state": "text-[#2C3E35] flex flex-col items-center gap-1 scale-105 transition-transform",
+      "inactive_state": "text-[#A3A3A3] flex flex-col items-center gap-1 hover:text-[#5E5E5E]"
+    },
+    "provider_card": {
+      "container": "bg-white border border-[#E5E2DA] rounded-2xl p-4 flex gap-4 transition-all duration-200 hover:shadow-[0_8px_24px_rgba(26,26,26,0.08)] hover:-translate-y-0.5 cursor-pointer",
+      "image_wrapper": "w-24 h-24 shrink-0 rounded-xl overflow-hidden bg-[#F3F0E9]",
+      "content": "flex flex-col justify-center flex-1"
+    },
+    "category_card": {
+      "container": "flex flex-col items-center justify-center p-3 rounded-2xl text-center gap-2 border border-transparent transition-all hover:bg-white hover:shadow-sm hover:border-[#E5E2DA] cursor-pointer",
+      "icon_wrapper": "w-14 h-14 rounded-full flex items-center justify-center text-2xl"
+    },
+    "booking_flow": {
+      "time_slot": "border border-[#E5E2DA] text-[#1A1A1A] rounded-xl py-3 px-4 text-center cursor-pointer transition-all hover:border-[#2C3E35] bg-white",
+      "time_slot_selected": "bg-[#2C3E35] border-[#2C3E35] text-[#FDFBF7] shadow-md",
+      "service_item": "flex justify-between items-center p-4 border border-[#E5E2DA] rounded-xl bg-white",
+      "service_item_selected": "border-[#2C3E35] ring-1 ring-[#2C3E35] bg-[#F1F3ED]"
+    },
+    "forms": {
+      "input": "w-full bg-white border border-[#E5E2DA] rounded-xl px-4 py-3 text-base text-[#1A1A1A] placeholder:text-[#A3A3A3] focus:ring-2 focus:ring-[#2C3E35]/20 focus:border-[#2C3E35] outline-none transition-all",
+      "label": "block text-sm font-semibold text-[#1A1A1A] mb-1.5"
+    },
+    "live_queue": {
+      "container": "bg-[#2C3E35] text-white p-6 rounded-2xl flex flex-col items-center text-center gap-2 shadow-lg",
+      "token_text": "text-6xl font-black tracking-tighter text-[#FDFBF7]",
+      "status_pulse": "flex items-center gap-2 text-sm text-[#A3B1A9] uppercase tracking-widest font-bold",
+      "dot_pulse": "w-2.5 h-2.5 bg-emerald-400 rounded-full animate-pulse"
+    },
+    "empty_state": {
+      "container": "flex flex-col items-center justify-center py-12 px-4 text-center gap-4",
+      "icon_wrapper": "w-20 h-20 bg-[#F3F0E9] rounded-full flex items-center justify-center text-[#5E5E5E] text-3xl",
+      "title": "text-xl font-bold text-[#1A1A1A]",
+      "description": "text-[#5E5E5E] max-w-xs"
+    }
+  },
+  "icons": {
+    "library": "@phosphor-icons/react",
+    "instructions": "Use 'Regular' weight for general UI. Use 'Fill' weight for active bottom navigation icons. Use large sizes (32px+) for category icons."
+  },
+  "media": {
+    "image_urls": [
+      {
+        "url": "https://images.pexels.com/photos/13068377/pexels-photo-13068377.jpeg",
+        "category": "hero_salon",
+        "description": "Chic modern beauty salon, use for salon category headers or default provider images."
+      },
+      {
+        "url": "https://images.unsplash.com/photo-1519494026892-80bbd2d6fd0d",
+        "category": "hero_healthcare",
+        "description": "Hospital lobby reception, use for healthcare clinic headers."
+      },
+      {
+        "url": "https://images.pexels.com/photos/34404157/pexels-photo-34404157.jpeg",
+        "category": "hero_home_service",
+        "description": "Technician handling repair, use for home services."
+      }
+    ]
+  },
+  "testing": {
+    "data_testid_convention": "kebab-case, role-based",
+    "examples": [
+      "login-phone-input",
+      "login-otp-submit",
+      "home-category-btn",
+      "provider-card",
+      "booking-date-select",
+      "booking-time-slot",
+      "booking-confirm-btn",
+      "nav-home-btn",
+      "nav-bookings-btn",
+      "nav-profile-btn"
+    ]
+  },
+  "instructions_to_main_agent": [
+    "Install Google Fonts: Outfit (Headings) and Manrope (Body). Update tailwind.config.js to include them.",
+    "Install @phosphor-icons/react for iconography.",
+    "Implement a mobile-first layout. The main container should have 'max-w-md mx-auto' on desktop to simulate a mobile app view, or expand to a split view if preferred, but keep the mobile experience as the priority.",
+    "For the login screen, implement an India-focused OTP flow (+91 prefix hardcoded or default, 10-digit phone, 6-digit OTP).",
+    "Home screen categories should display Bilingual text if possible, e.g., 'Healthcare / स्वास्थ्य'.",
+    "Map the DB accent colors (teal, amber, green, gray, red, sage, blue) to the tailwind classes defined in colors.category_accents.",
+    "Use Shadcn UI for complex components like Dialogs, Calendars, but override their default styles to match the rounded-2xl, earthy aesthetic defined above.",
+    "Ensure the Live Queue token number uses the 'live_queue.token_text' massive typography.",
+    "Add the appropriate data-testid attributes to all interactive elements."
+  ]
+}
