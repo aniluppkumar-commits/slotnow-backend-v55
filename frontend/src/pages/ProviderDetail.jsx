@@ -145,11 +145,11 @@ export default function ProviderDetail() {
                   <div className="flex items-center justify-between mb-1">
                     <p className="text-sm font-semibold text-ink">{r.customer_name || "Customer"}</p>
                     <div className="flex items-center gap-0.5">
-                      {[...Array(5)].map((_, i) => (
+                      {[1, 2, 3, 4, 5].map((star) => (
                         <Star
-                          key={i}
+                          key={`review-${r.id}-star-${star}`}
                           size={11}
-                          className={i < r.rating ? "fill-amber-400 text-amber-400" : "text-cream-300"}
+                          className={star <= r.rating ? "fill-amber-400 text-amber-400" : "text-cream-300"}
                           strokeWidth={0}
                         />
                       ))}

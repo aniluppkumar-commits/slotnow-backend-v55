@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useCallback, useEffect } from "react";
+import React, { createContext, useContext, useState, useCallback, useEffect, useMemo } from "react";
 import { useAuth } from "@/context/AuthContext";
 
 const DICT = {
@@ -348,8 +348,10 @@ export function I18nProvider({ children }) {
     [lang]
   );
 
+  const value = useMemo(() => ({ lang, setLang, t }), [lang, t]);
+
   return (
-    <I18nContext.Provider value={{ lang, setLang, t }}>{children}</I18nContext.Provider>
+    <I18nContext.Provider value={value}>{children}</I18nContext.Provider>
   );
 }
 

@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import api from "@/lib/api";
 import AppShell from "@/components/AppShell";
 import { useI18n } from "@/i18n";
@@ -20,18 +20,18 @@ export default function ProviderAvailability() {
   });
   const [saving, setSaving] = useState(false);
 
-  const load = async () => {
+  const load = useCallback(async () => {
     try {
       const { data } = await api.get("/providers/me/availability");
       setRules(data || []);
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
     load();
-  }, []);
+  }, [load]);
 
   const add = async () => {
     setSaving(true);
@@ -74,7 +74,7 @@ export default function ProviderAvailability() {
             <div className="grid grid-cols-7 gap-1 mt-1">
               {weekdays.map((d, idx) => (
                 <button
-                  key={idx}
+                  key={d}
                   data-testid={`avail-day-${idx}`}
                   onClick={() => setForm({ ...form, weekday: idx })}
                   className={`py-2 rounded-lg text-xs font-bold ${

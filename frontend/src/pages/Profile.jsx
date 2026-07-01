@@ -278,7 +278,10 @@ function ReferShare({ phone, name }) {
     if (navigator.share) {
       try {
         await navigator.share({ title: "Join me on SlotNow", text: shareText, url: link });
-      } catch {}
+      } catch (err) {
+        // Web Share API throws AbortError when user cancels the share sheet — this is not an error.
+        if (err?.name !== "AbortError") console.error("Share failed:", err);
+      }
     } else {
       copy();
     }

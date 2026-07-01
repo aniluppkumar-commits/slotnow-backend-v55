@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import api from "@/lib/api";
 import AppShell from "@/components/AppShell";
 import { useI18n } from "@/i18n";
@@ -9,7 +9,7 @@ export default function Notifications() {
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  const load = async () => {
+  const load = useCallback(async () => {
     setLoading(true);
     try {
       const { data } = await api.get("/notifications");
@@ -17,17 +17,19 @@ export default function Notifications() {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
     load();
-  }, []);
+  }, [load]);
 
   const markRead = async (nid) => {
     try {
       await api.put(`/notifications/${nid}/read`);
       setItems((prev) => prev.map((n) => (n.id === nid ? { ...n, read: true } : n)));
-    } catch {}
+    } catch (err) {
+      console.error(`Failed to mark notification ${nid} as read:`, err);
+    }
   };
 
   return (

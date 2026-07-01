@@ -56,7 +56,10 @@ export default function BookingDetail() {
             params: { provider_id: b.provider_id, date: b.date },
           });
           setQueuePos(qp);
-        } catch {}
+        } catch (err) {
+          // Non-fatal — booking detail still renders, queue position UI just hides.
+          console.warn("Queue position lookup failed:", err);
+        }
       }
     } finally {
       setLoading(false);

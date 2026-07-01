@@ -20,7 +20,9 @@ export default function useLivePolling(fn, intervalMs = 5000, enabled = true) {
       if (document.visibilityState === "visible") {
         try {
           await savedFn.current();
-        } catch {}
+        } catch (err) {
+          console.warn("Live polling tick failed:", err);
+        }
       }
       timer = setTimeout(tick, intervalMs);
     };

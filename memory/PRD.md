@@ -48,6 +48,7 @@ History page (Provider + Assistant) with Call/WhatsApp/Print + Provider-only Del
 - **Iteration 10: 100%** — WhatsApp + Call + DnD + Admin controls; only 2 non-blocking design nits (native date picker on History; suspend reuses reject endpoint).
 
 ## Open Backend Recommendations (for backend team)
+- **[Security] Migrate auth token storage to httpOnly cookies.** The web frontend currently stores JWT in `localStorage` (see `src/lib/api.js:11` and `src/context/AuthContext.jsx`) because the deployed backend returns `{ token }` in JSON. localStorage is XSS-exposed. Backend must (a) issue the JWT via `Set-Cookie: HttpOnly; Secure; SameSite=Lax` on `/api/auth/verify-otp` and `/api/auth/pin-login`, (b) accept the cookie on subsequent requests, (c) add a `/api/auth/logout` that clears the cookie, and (d) enable CORS `credentials: true`. Frontend will then switch axios to `withCredentials: true` and stop reading/writing tokens client-side.
 - Add a dedicated `PUT /api/admin/providers/{id}/suspend` (+ `/unsuspend`) endpoint. Currently Suspend reuses `/reject`, which is semantically fragile.
 - Implement `GET /api/referrals/mine` returning `{ count: N }` (or add `total_refs` to `/users/me`) so the Profile progress bar shows live counts. Currently 404s; UI handles gracefully.
 - Consider a real image upload endpoint (multipart) or return a signed URL. Current approach stores base64 in Mongo which may bloat documents; fine for MVP but a proper media service would be cleaner.

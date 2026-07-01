@@ -31,8 +31,8 @@ export default function Home() {
         setCategories(catRes.data || []);
         setProviders(provRes.data || []);
         setNotifCount((notifRes.data || []).filter((n) => !n.read).length);
-      } catch (e) {
-        // silent
+      } catch (err) {
+        console.error("Home data load failed:", err);
       } finally {
         if (mounted) setLoading(false);
       }

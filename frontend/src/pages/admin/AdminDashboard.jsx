@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import api from "@/lib/api";
 import AppShell from "@/components/AppShell";
@@ -29,7 +29,7 @@ export default function AdminDashboard() {
   const [busyId, setBusyId] = useState(null);
   const [bulkBusy, setBulkBusy] = useState(false);
 
-  const load = async () => {
+  const load = useCallback(async () => {
     try {
       const [sRes, pRes] = await Promise.all([
         api.get("/admin/stats").catch(() => ({ data: null })),
@@ -41,11 +41,11 @@ export default function AdminDashboard() {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
     load();
-  }, []);
+  }, [load]);
 
   const approve = async (pid) => {
     setBusyId(pid);
@@ -113,7 +113,9 @@ export default function AdminDashboard() {
         try {
           await api.put(`/admin/providers/${pid}/approve`);
           ok += 1;
-        } catch {}
+        } catch (err) {
+          console.error(`Bulk approve failed for provider ${pid}:`, err);
+        }
       }
       toast.success(`Approved ${ok}/${pendingIds.length}`);
       await load();

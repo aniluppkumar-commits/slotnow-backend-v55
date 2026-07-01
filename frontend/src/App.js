@@ -29,6 +29,19 @@ import AdminSettings from "@/pages/admin/AdminSettings";
 import AdminRevenue from "@/pages/admin/AdminRevenue";
 import AdminReferrals from "@/pages/admin/AdminReferrals";
 
+// Static toast options — hoisted so React doesn't re-create the object on every render.
+const TOAST_OPTIONS = {
+  style: {
+    background: "#1D2E5B",
+    color: "#FFFFFF",
+    border: "none",
+    borderRadius: "12px",
+    fontFamily: "Manrope, sans-serif",
+    fontSize: "14px",
+    fontWeight: 600,
+  },
+};
+
 function RequireRole({ roles, children }) {
   const { user } = useAuth();
   if (!user) return <Navigate to="/login" replace />;
@@ -54,17 +67,7 @@ function App() {
         <I18nProvider>
           <Toaster
             position="top-center"
-            toastOptions={{
-              style: {
-                background: "#1D2E5B",
-                color: "#FFFFFF",
-                border: "none",
-                borderRadius: "12px",
-                fontFamily: "Manrope, sans-serif",
-                fontSize: "14px",
-                fontWeight: 600,
-              },
-            }}
+            toastOptions={TOAST_OPTIONS}
           />
           <Routes>
             <Route path="/login" element={<Login />} />

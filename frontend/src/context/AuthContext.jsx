@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, useCallback } from "react";
+import React, { createContext, useContext, useState, useEffect, useCallback, useMemo } from "react";
 import api from "@/lib/api";
 
 const AuthContext = createContext(null);
@@ -28,8 +28,9 @@ export function AuthProvider({ children }) {
       const { data } = await api.get("/users/me");
       setUser(data);
       localStorage.setItem("slotnow_user", JSON.stringify(data));
-    } catch (e) {
-      // ignore
+    } catch (err) {
+      // Non-fatal — cached user is still usable. Log for debugging.
+      console.warn("refreshMe failed:", err);
     }
   }, [token]);
 
@@ -101,27 +102,31 @@ export function AuthProvider({ children }) {
   const isAdmin = user?.role === "admin";
   const isReceptionist = user?.role === "receptionist";
 
+  const contextValue = useMemo(
+    () => ({
+      user,
+      token,
+      loading,
+      isProvider,
+      isCustomer,
+      isAdmin,
+      isReceptionist,
+      sendOtp,
+      verifyOtp,
+      pinLogin,
+      setPin,
+      logout,
+      updateProfile,
+      refreshMe,
+    }),
+    // sendOtp/verifyOtp/pinLogin/setPin/logout/updateProfile are stable across renders
+    // (closed over setState which React guarantees is stable); only re-memo when user/token/loading change.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [user, token, loading, refreshMe]
+  );
+
   return (
-    <AuthContext.Provider
-      value={{
-        user,
-        token,
-        loading,
-        isProvider,
-        isCustomer,
-        isAdmin,
-        isReceptionist,
-        sendOtp,
-        verifyOtp,
-        pinLogin,
-        setPin,
-        logout,
-        updateProfile,
-        refreshMe,
-      }}
-    >
-      {children}
-    </AuthContext.Provider>
+    <AuthContext.Provider value={contextValue}>{children}</AuthContext.Provider>
   );
 }
 
