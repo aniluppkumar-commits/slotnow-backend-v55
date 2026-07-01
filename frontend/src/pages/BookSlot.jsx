@@ -241,7 +241,7 @@ export default function BookSlot() {
       </div>
 
       {/* Confirm CTA */}
-      <div className="fixed bottom-16 md:bottom-14 left-1/2 -translate-x-1/2 w-full max-w-md md:max-w-2xl lg:max-w-3xl px-4 sm:px-6 z-40">
+      <div className="fixed bottom-36 md:bottom-24 left-1/2 -translate-x-1/2 w-full max-w-md md:max-w-md px-4 sm:px-6 z-40">
         <button
           data-testid="booking-confirm-btn"
           disabled={!selectedService || !selectedTime || submitting}

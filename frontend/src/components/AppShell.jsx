@@ -29,7 +29,7 @@ export function AppShell({ children, title, showBack = false, showHeader = true,
           </header>
         )}
 
-        <main className="pb-28 md:pb-24 animate-fade-up">{children}</main>
+        <main className="pb-40 md:pb-24 animate-fade-up">{children}</main>
 
         <BottomNav />
       </div>
@@ -50,7 +50,7 @@ function BottomNav() {
   ];
 
   return (
-    <nav className="fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-md md:max-w-2xl lg:max-w-3xl bg-white border-t border-cream-300 px-4 pt-2 pb-3 flex justify-around items-center z-50 rounded-t-2xl shadow-[0_-4px_24px_rgba(0,0,0,0.05)]">
+    <nav className="fixed bottom-[68px] md:bottom-3 left-1/2 -translate-x-1/2 w-[calc(100%-1.5rem)] max-w-md md:max-w-md bg-white border border-cream-300 px-3 pt-2 pb-2 flex justify-around items-center z-50 rounded-2xl shadow-[0_8px_28px_rgba(0,0,0,0.10)]">
       {items.map(({ to, label, icon: Icon, testId, exact }) => {
         const active = exact
           ? location.pathname === to
