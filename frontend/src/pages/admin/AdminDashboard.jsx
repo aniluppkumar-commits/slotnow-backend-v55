@@ -75,7 +75,7 @@ export default function AdminDashboard() {
   };
 
   const bulkApprove = async () => {
-    const pendingIds = providers.filter((p) => p.status === "pending").map((p) => p.id);
+    const pendingIds = providers.filter((p) => p.approved === false || p.status === "pending").map((p) => p.id);
     if (pendingIds.length === 0) return;
     if (!window.confirm(`Approve all ${pendingIds.length} pending providers?`)) return;
     setBulkBusy(true);
@@ -101,8 +101,9 @@ export default function AdminDashboard() {
       p.city?.toLowerCase().includes(q.toLowerCase())
   );
 
-  const pending = filtered.filter((p) => p.status === "pending");
-  const others = filtered.filter((p) => p.status !== "pending");
+  const isPending = (p) => p.approved === false || p.status === "pending";
+  const pending = filtered.filter(isPending);
+  const others = filtered.filter((p) => !isPending(p));
 
   return (
     <AppShell title="Admin Dashboard">
@@ -221,11 +222,15 @@ function QuickRow({ icon, title, onClick, testid }) {
 }
 
 function ProviderRow({ p, onApprove, onReject, busy, readOnly }) {
-  const statusPill = p.status === "approved"
+  const isPending = p.approved === false || p.status === "pending";
+  const isApproved = p.approved === true || p.status === "approved";
+  const isRejected = p.status === "rejected";
+  const statusPill = isApproved
     ? "bg-emerald-50 text-emerald-800 ring-emerald-100"
-    : p.status === "rejected"
+    : isRejected
     ? "bg-rose-50 text-rose-800 ring-rose-100"
     : "bg-amber-50 text-amber-800 ring-amber-100";
+  const statusLabel = isApproved ? "approved" : isRejected ? "rejected" : "pending";
   return (
     <div data-testid={`admin-provider-${p.id}`} className="bg-white border border-cream-300 rounded-xl p-3 flex items-center gap-3">
       <div className="w-11 h-11 rounded-xl bg-cream-200 overflow-hidden shrink-0">
@@ -235,7 +240,7 @@ function ProviderRow({ p, onApprove, onReject, busy, readOnly }) {
         <p className="text-sm font-bold text-ink truncate">{p.business_name}</p>
         <p className="text-[11px] text-ink-soft truncate">{p.city || "—"}</p>
         <span className={`inline-block mt-1 text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded ring-1 ${statusPill}`}>
-          {p.status || "unknown"}
+          {statusLabel}
         </span>
       </div>
       {!readOnly && (

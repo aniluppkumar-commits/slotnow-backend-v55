@@ -1,66 +1,64 @@
 # SlotNow Web — Product Requirements & Progress
 
 ## Problem Statement (original)
-Build a web version of SlotNow, a booking app. The backend and MongoDB already exist at https://pro-booking-21.emergent.host. Configure this web app to call that backend URL. Replicate the booking flows from the referenced Expo app (private repo → proceeded via deployed backend API spec).
+Build a web version of SlotNow, a booking app. Backend + MongoDB deployed at https://pro-booking-21.emergent.host. Frontend-only web app calls that API.
 
 ## Architecture
-- **Type:** Frontend-only web SPA (React 19 + CRA/craco + Tailwind + React Router 7)
-- **Backend:** External, deployed at `https://pro-booking-21.emergent.host` (FastAPI + MongoDB Atlas).
-- **API Base:** `REACT_APP_API_URL=https://pro-booking-21.emergent.host` in `/app/frontend/.env`.
-- **No local backend used.** MongoDB accessed only via deployed backend.
-- **No websockets on backend** → SlotNow uses page-visibility-aware polling every 4s for live queue updates.
-- **Booking is SHIFT-based** (not per-minute slots) — customer joins a shift session and receives a queue token.
+- React 19 + CRA/craco + Tailwind + React Router 7.
+- Backend external (`REACT_APP_API_URL=https://pro-booking-21.emergent.host`). No local backend.
+- No websockets → 4s visibility-aware polling for live queue.
+- Booking is SHIFT-based (`start_time == shift.start_time`).
 
-## User personas (4 roles)
-1. **Customer** — browses categories, books slots, tracks token, reviews, reschedules.
-2. **Service Provider** — self-onboards, manages services / availability / capacity / assistants, runs today's queue.
-3. **Service Assistant** (backend: `receptionist`) — created by a Provider; logs in and works the same queue on behalf of that provider.
-4. **Admin** — approves/rejects providers, browses all users & bookings, edits SMS + payment settings, sees subscription revenue.
+## Roles (4)
+1. **Customer** — browse, book, reschedule, review, refer.
+2. **Service Provider** — self-onboard, manage services + availability + capacity + assistants, run queue, view/delete history.
+3. **Service Assistant** (backend: `receptionist`) — provider-created; runs the same queue on behalf of the provider; view history (no delete).
+4. **Admin** — approve/reject providers (single + bulk), users, bookings, revenue, SMS/payment settings, referral tracking.
 
 ## Design System (matches mobile app)
-- **Primary Navy** `#1E3A8A` (forest.DEFAULT) — used for headers, section labels, secondary buttons.
-- **Accent Orange** `#F97316` (accent.DEFAULT) — used for primary CTAs (Continue, Book a slot, Confirm, Call next).
-- **Background** cream `#F5F6F8`; white cards; ink `#1D2E5B` text.
-- **Logo** — custom SVG (navy clock ring + orange checkmark tail + speed lines) rendered by `SlotNowMark`.
-- **Wordmark** — navy "Slot" + orange "Now" (`SlotNowWordmark`).
-- **Typography** Outfit (headings) + Manrope (body) + Noto Sans Devanagari (Hindi).
-- **Mobile-first** (max-w-md container) with floating pill bottom nav (bottom-[76px]) that clears the Emergent badge.
+- Navy `#1E3A8A` (forest) + Orange `#F97316` (accent) + cream `#F5F6F8` + ink `#1D2E5B`.
+- Custom SVG logo (blue clock + orange checkmark tail); navy "Slot" + orange "Now" wordmark.
+- Outfit (headings) + Manrope (body) + Noto Sans Devanagari (Hindi).
+- Mobile-first max-w-md container, floating pill bottom-nav, orange primary CTAs.
 
-## What's implemented (final)
+## What's implemented (all iterations)
 
-### Iteration 1 — Customer MVP ✅
-OTP auth, categories, providers, provider detail, booking flow, my bookings, booking detail (live token), notifications, profile, route protection.
+### Iterations 1-7 (previous)
+- Customer flow (categories, providers, booking, live token, bookings, notifications, profile).
+- Provider onboarding + dashboard + services + availability + queue + assistants.
+- Service Assistant dashboard (linked-provider queue).
+- Admin dashboard (users, bookings, revenue, SMS + payment settings, provider approval).
+- Full i18n (EN + हिं).
+- PIN re-login, booking reschedule, automobile vehicle fields.
+- Shift-based bookings + QuickWheels seeded.
 
-### Iteration 2 — 6 P1 features ✅
-Provider onboarding + dashboard + services CRUD + availability CRUD + queue + assistants; PIN re-login; booking reschedule; full i18n (EN + हिं); Automobile-specific fields; live 4s polling.
-
-### Iteration 3–5 — polish & regression fixes ✅
-Modal-badge overlap, `Array.isArray` guards, `<option>` template literals, provider re-login profile lookup, receptionist header shows business name.
-
-### Iteration 6–7 — Roles + Design + Shift booking ✅
-- **Admin dashboard** `/admin` + Users / Bookings / Revenue / SMS + Payment settings.
-- **Service Assistant** `/receptionist` — assist dashboard with Live badge, Now-serving token, Call next, Walk-in modal.
-- **Provider Assistants CRUD** `/provider/assistants` — add / block / remove.
-- **Design overhaul** — new navy + orange palette, custom SlotNow SVG logo, 2×2 role tile grid on login (Customer / Service Provider / Service Assistant / Admin), language pill top-right.
-- **Shift-based booking** — Book Slot and Reschedule show each availability window as a shift card ("9:00 AM – 6:00 PM · N booked so far"); backend expects `start_time == shift.start_time` so the frontend now sends exactly that.
-- **QuickWheels Auto Service** seeded (Automobile category, approved, 09:00–18:00 daily) to enable full end-to-end vehicle-reg required booking.
+### Iteration 8 (new)
+- **History page** (`/provider/history` + `/receptionist/history`) — date-range picker with 0/7/30/90-day presets, 4 mini-stats, Print via window.print(), per-row **Call** (tel:) + **WhatsApp** (wa.me deep link with pre-filled message) + **Delete** (Provider role only).
+- **Walk-in Paid/Free** — segmented control added to walk-in modals in ProviderQueue AND ReceptionistDashboard.
+- **Referral tracking** —
+  - `?ref=<phone>` captured on Login; sessionStorage persists across form steps.
+  - verify-otp sends `{ via_referral: true, ref: <phone> }` when ref present.
+  - Customer Profile shows orange "Refer & Share" gradient card with copyable link + Web Share (falls back to copy).
+  - `/admin/referrals` — ranked list (top 3 with trophy) grouped by `referred_by`, showing total refs + converted (has booking) + individual referred phones. Aggregation over `/admin/users` + `/admin/bookings`.
+- **Two-line shift card** — BookSlot shift cards now render `9:00 AM – 6:00 PM` / `N booked so far` / `Token on confirm` on three stacked lines with active checkmark on right.
+- **Business image URL live preview** — ProviderOnboarding image field shows 80×80 preview below the input.
+- **Bulk approve** — Admin dashboard shows `Approve all (N)` button next to the "Pending Approval" badge when N ≥ 1. Sequentially calls `/admin/providers/{id}/approve`. Confirmed working with 4 pending providers seeded in DB.
+- Bugfix: Admin dashboard now correctly reads `approved: boolean` (was reading `status: 'pending'`).
 
 ## Test coverage
-- Iteration 1: 12/12 customer flows.
-- Iteration 4: 13/14 (93%) — Assistant + Admin + design added.
-- Iteration 5: 5/7 — 3 blockers surfaced.
-- Iteration 6: 5/7 — Automobile still blocked by duplicate seed shifts.
-- **Iteration 7: 4/4 (100%)** — Automobile end-to-end passes, reschedule passes, non-auto regression passes, admin routing passes. Provider/Receptionist routing not re-run this iteration (previously verified in iteration 6, no code change).
+- Iteration 1: 12/12 customer.
+- Iteration 4: 13/14 — roles + design.
+- Iteration 7: 4/4 (100%) — Automobile end-to-end.
+- Iteration 8: 11/12 verified + 12th code-verified (bulk approve DB-gated). After seeding 4 pending providers + admin filter fix, bulk approve is UI-verified working ("Approve all (4)" visible).
 
 ## Backlog (P2)
-- Referral flow surfacing (`via_referral` + `ref` params).
-- Provider avatar & business image uploads.
-- WebSocket-based live queue (drop-in replace `useLivePolling` when backend adds WS).
-- Emergent-managed Google Auth (not requested).
-- Bulk-approve for admin, richer revenue analytics.
-- Two-line shift-card layout for very small viewports (minor UX polish flagged by testing agent).
+- Real WebSocket-based live queue.
+- Native image upload API (currently URL-based).
+- Provider avatar upload.
+- Emergent-managed Google Auth.
+- Referral rewards (credit ledger for referrer).
 
 ## Notes / Constraints
-- Backend has no websocket. Polling is 4s and page-visibility-aware.
-- Backend booking model is shift-based; the UI now matches. Sub-minute slot picking would require backend changes.
-- Iteration 7 seeded two active customer bookings (auto + non-auto) — safe to delete manually.
+- Backend uses `receptionist` internally for Service Assistant.
+- Backend has no dedicated referral endpoints — tracking is captured via `via_referral` + `ref` on OTP verify, and aggregated client-side in `/admin/referrals`.
+- Delete permissions in History are enforced client-side (assistants don't see the button); backend also enforces via the API.
