@@ -1,10 +1,11 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import api from "@/lib/api";
 import AppShell from "@/components/AppShell";
 import { useI18n } from "@/i18n";
 import { useAuth } from "@/context/AuthContext";
-import { Store, Loader2, Save } from "lucide-react";
+import { compressImageToDataURL } from "@/lib/image";
+import { Store, Loader2, Save, Upload, ImageIcon, X as XIcon } from "lucide-react";
 import { toast } from "sonner";
 
 export default function ProviderOnboarding() {
@@ -24,6 +25,25 @@ export default function ProviderOnboarding() {
   });
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [uploading, setUploading] = useState(false);
+  const fileRef = useRef(null);
+
+  const handleFile = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploading(true);
+    try {
+      const dataUrl = await compressImageToDataURL(file, { maxDim: 800, quality: 0.75 });
+      const kb = Math.round((dataUrl.length * 3) / 4 / 1024);
+      setForm((f) => ({ ...f, image: dataUrl }));
+      toast.success(`Image uploaded (~${kb} KB)`);
+    } catch (err) {
+      toast.error(err.message || "Failed to load image");
+    } finally {
+      setUploading(false);
+      if (fileRef.current) fileRef.current.value = "";
+    }
+  };
 
   useEffect(() => {
     (async () => {
@@ -133,28 +153,60 @@ export default function ProviderOnboarding() {
               className="w-full bg-transparent outline-none text-ink font-medium placeholder:text-ink-muted"
             />
           </Field>
-          <Field label="Business image URL (optional)">
-            <input
-              data-testid="onboarding-image"
-              value={form.image || ""}
-              onChange={(e) => setForm({ ...form, image: e.target.value })}
-              placeholder="https://images.unsplash.com/…"
-              className="w-full bg-transparent outline-none text-ink font-medium placeholder:text-ink-muted"
-            />
-            {form.image && (
-              <div className="mt-2 flex items-center gap-2">
-                <img
-                  src={form.image}
-                  alt="Preview"
-                  onError={(e) => (e.currentTarget.style.display = "none")}
-                  className="w-20 h-20 rounded-xl object-cover border border-cream-300"
-                  data-testid="onboarding-image-preview"
-                />
-                <p className="text-[11px] text-ink-soft">
-                  Preview — if the image doesn't load, paste a direct image URL (ends in .jpg / .png).
-                </p>
+          <Field label="Business image">
+            <div className="space-y-2">
+              {form.image && (
+                <div className="relative w-24 h-24">
+                  <img
+                    src={form.image}
+                    alt="Preview"
+                    onError={(e) => (e.currentTarget.style.display = "none")}
+                    className="w-24 h-24 rounded-xl object-cover border border-cream-300"
+                    data-testid="onboarding-image-preview"
+                  />
+                  <button
+                    type="button"
+                    data-testid="onboarding-image-clear"
+                    onClick={() => setForm({ ...form, image: "" })}
+                    className="absolute -top-2 -right-2 w-6 h-6 rounded-full bg-rose-500 text-white flex items-center justify-center shadow-md"
+                    title="Remove"
+                  >
+                    <XIcon size={12} strokeWidth={3} />
+                  </button>
+                </div>
+              )}
+              <input
+                ref={fileRef}
+                type="file"
+                accept="image/*"
+                onChange={handleFile}
+                data-testid="onboarding-image-file"
+                className="hidden"
+              />
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  data-testid="onboarding-image-upload-btn"
+                  onClick={() => fileRef.current?.click()}
+                  disabled={uploading}
+                  className="flex-1 flex items-center justify-center gap-2 bg-forest text-white text-sm font-bold py-2.5 rounded-xl hover:bg-forest-dark disabled:opacity-60"
+                >
+                  {uploading ? <Loader2 size={14} className="animate-spin" /> : <><Upload size={14} strokeWidth={2.5} /> Upload image</>}
+                </button>
               </div>
-            )}
+              <div>
+                <label className="text-[10px] uppercase tracking-wider font-bold text-ink-muted flex items-center gap-1">
+                  <ImageIcon size={10} /> Or paste an image URL
+                </label>
+                <input
+                  data-testid="onboarding-image"
+                  value={form.image && form.image.startsWith("data:") ? "" : (form.image || "")}
+                  onChange={(e) => setForm({ ...form, image: e.target.value })}
+                  placeholder="https://images.unsplash.com/…"
+                  className="w-full mt-1 bg-cream border border-cream-300 rounded-xl px-3 py-2 text-ink text-sm outline-none focus:ring-2 focus:ring-forest/20"
+                />
+              </div>
+            </div>
           </Field>
         </div>
 

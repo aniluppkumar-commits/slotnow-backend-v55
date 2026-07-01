@@ -57,9 +57,12 @@ export default function Login() {
   const homeForRole = async (u) => {
     switch (u?.role) {
       case "provider": {
-        // Check if provider has a profile — if 404, go to onboarding
+        // Force onboarding when profile is missing OR incomplete (empty business_name).
         try {
-          await api.get("/providers/me/profile");
+          const { data } = await api.get("/providers/me/profile");
+          if (!data?.business_name || String(data.business_name).trim() === "") {
+            return "/provider/onboarding";
+          }
           return "/provider";
         } catch (e) {
           if (e.response?.status === 404) return "/provider/onboarding";

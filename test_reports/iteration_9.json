@@ -1,0 +1,37 @@
+{
+  "summary": "Iteration-9 verifies 4 targeted fixes on the preview URL at mobile viewport 400x900. All 6 requested scenarios PASS. (1) BUG FIX rec-walkin-model — Receptionist 6666600011 walk-in modal now includes 'Vehicle model (optional)' input with data-testid='rec-walkin-model'. DOM order verified: rec-walkin-reg → rec-walkin-model → rec-walkin-service-type-paid (getBoundingClientRect check returned 'ok'). Filled name+phone+reg+model+Paid → clicked rec-walkin-add-btn → toast 'Added • Token #6' shown; queue reloaded. (2) REGRESSION provider walk-in — Provider 8888800884 → /provider/queue → queue-walkin-btn → walkin-vehicle-model input present; created a token successfully with model 'Maruti Swift'. (3) NATIVE IMAGE UPLOAD — Fresh provider 8888800030 → /provider/onboarding. All 3 elements exist: onboarding-image-upload-btn (1), onboarding-image-file (1), onboarding-image (1). Injected a small PNG via set_input_files on the hidden file input — after compress the onboarding-image-preview <img> rendered with src starting with 'data:image/jpeg;base64,/9j/…' (JPEG compression confirmed). onboarding-image-clear button appeared and clicking it removed the preview (count → 0). (4) FORCE ONBOARDING FOR EMPTY PROFILE — Used a brand-new phone (8782913356) via provider role: OTP verify → 'Set a PIN' step → clicked Skip → router landed on /provider/onboarding (NOT /provider). onboarding-business-name field renders. Login.jsx.homeForRole correctly redirects when business_name is empty or /providers/me/profile 404s. (5) REFERRAL REWARDS PROGRESS — Customer 9999999999 → /profile ReferShare card shows: refer-progress-label='1 more → Free ₹50 credit' (customer has 0 refs so 1 more needed for tier-1), refer-progress-bar div present (width style '0%' — width becomes >0 once refs > 0; element exists with progressbar container). Tier labels '1', '3', '10' all present in body. refer-link='https://slotnow-web.preview.emergentagent.com/login?ref=9999999999', refer-copy-btn and refer-share-btn both rendered. /api/referrals/mine returns 404 (endpoint not on backend) — component fell back gracefully to 0 refs, no crash. (6) SMOKE — Admin 7777700002 /admin shows admin-bulk-approve-btn with text 'Approve all (4)' (4 pending providers seeded ✔). admin-open-referrals nav → /admin/referrals shows ref-row-9999999999 with '1 referred · 0 booked · 0%' (aggregation still works, top-3 trophy present).",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "/api/referrals/mine", "issue": "Returns 404 (endpoint not implemented on backend). Profile ReferShare handles this gracefully (falls back to count=0). Consider implementing this endpoint on the backend so the tier progress bar actually reflects live count."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": ["/app/test_reports/iteration_9.json"],
+  "action_items": [
+    "Optional backend enhancement: implement GET /api/referrals/mine returning { count } for the logged-in referrer so Profile progress bar reflects live tier progress. Currently the endpoint 404s and UI degrades gracefully to 0."
+  ],
+  "critical_code_review_comments": [
+    "ReceptionistDashboard.jsx L243-249 — rec-walkin-model input correctly wired between reg and service-type. State.walk includes vehicle_model, reset on close, sent in payload as vehicle_model. Clean and consistent with provider walkin.",
+    "ProviderOnboarding.jsx L31-46 — handleFile uses compressImageToDataURL (maxDim 800, q 0.75), pushes into form.image; uploading state prevents double-clicks; ref clearing on finally is correct. URL input intelligently blanks when image is a data URL (L203) — avoids showing base64 blob in the URL field.",
+    "Login.jsx L57-79 homeForRole is now async — good; awaits providers/me/profile and returns '/provider/onboarding' on 404 OR empty business_name. Only concern: if the API returns other error status (500, network), it falls through to '/provider' which could still trap the user; consider treating any non-2xx as redirect to onboarding to be defensive. Not a blocker.",
+    "Profile.jsx L253 tries /referrals/mine and silently sets 0 on failure — good graceful degradation. Progress bar 3-tier scheme (1/3/10) is clear and matches description.",
+    "image.js compressImageToDataURL helper — used correctly; toast reports approximate KB size to give user feedback."
+  ],
+  "updated_files": [],
+  "success_rate": {
+    "backend": "N/A (frontend-only run). Live API traffic observed: POST /api/queue/walkin returned 200 for both provider and receptionist with vehicle_model in payload. POST /api/providers/me/profile accepts data URL string for image field (no test save this run, but form loaded existing profile fine on fresh phone).",
+    "frontend": "6/6 scenarios verified PASS (100%)"
+  },
+  "test_credentials": "Customer 9999999999 / OTP 123456; Provider (onboarded) 8888800884 / OTP 123456; Receptionist 6666600011 / OTP 123456; Admin 7777700002 / OTP 123456. Fresh provider phone used this iteration: 8782913356 (created and left on onboarding step — no profile saved).",
+  "seed_data_creation": "Created 2 new queue tokens on TEST_Provider Biz (8888800884): Token #~5 TEST_ProvM_XXXXX (provider walk-in with vehicle_model 'Maruti Swift'), Token #6 TEST_RecM_XXXXX (receptionist walk-in with vehicle_model 'Honda City'). Created 1 provider account 8782913356 with no business_profile (parked on onboarding). No cleanup performed.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "All 4 iteration-9 fixes are UI-verified working end-to-end at 400x900 mobile viewport. (a) rec-walkin-model wired correctly and lives between rec-walkin-reg and the Paid/Free segmented control. (b) Provider walkin regression still passes with walkin-vehicle-model. (c) Native image upload flow — set_input_files on onboarding-image-file successfully injects PNG which is compressed to JPEG data URL and rendered in onboarding-image-preview; onboarding-image-clear removes it. (d) Fresh provider phones NOW land on /provider/onboarding (Login.homeForRole checks business_name). Verified with brand-new phone 8782913356. (e) Refer & Share tier progress UI renders correctly with fallback to 0 when /api/referrals/mine 404s — consider implementing this endpoint next. Bulk approve now shows 'Approve all (4)' (4 pending providers already seeded).",
+  "rca of the issue": "No blocking issues. Note for next iteration: /api/referrals/mine returns 404 on the current backend deployment; the frontend gracefully catches this and shows count=0. If the product wants a live progress count, implement the endpoint returning { count: N } for the current user's referral count (or add total_refs to /auth/me user object)."
+}

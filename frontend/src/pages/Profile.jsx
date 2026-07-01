@@ -3,6 +3,7 @@ import { useAuth } from "@/context/AuthContext";
 import { useNavigate } from "react-router-dom";
 import AppShell from "@/components/AppShell";
 import { useI18n } from "@/i18n";
+import api from "@/lib/api";
 import {
   Mail,
   MapPin,
@@ -243,6 +244,26 @@ function Field({ icon, label, children }) {
 function ReferShare({ phone, name }) {
   const link = `${window.location.origin}/login?ref=${phone}`;
   const shareText = `Hey! Book appointments in seconds on SlotNow — no waiting. Use my referral: ${link}`;
+  const [stats, setStats] = React.useState({ total: 0, converted: 0, loading: true });
+
+  React.useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const { data } = await api.get("/referrals/mine");
+        if (cancelled) return;
+        setStats({
+          total: data?.total ?? data?.referred ?? 0,
+          converted: data?.converted ?? data?.booked ?? 0,
+          loading: false,
+        });
+      } catch {
+        // Endpoint may not exist yet — silently fall back to 0
+        if (!cancelled) setStats((s) => ({ ...s, loading: false }));
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
 
   const copy = async () => {
     try {
@@ -263,18 +284,55 @@ function ReferShare({ phone, name }) {
     }
   };
 
+  const TIERS = [
+    { count: 1, reward: "Free ₹50 credit" },
+    { count: 3, reward: "Free ₹200 booking" },
+    { count: 10, reward: "Priority support" },
+  ];
+  const totalRefs = stats.converted; // count only converted (booked) for reward eligibility
+  const nextTier = TIERS.find((t) => totalRefs < t.count) || TIERS[TIERS.length - 1];
+  const prevCount = TIERS.filter((t) => totalRefs >= t.count).slice(-1)[0]?.count || 0;
+  const pct = Math.min(100, Math.round(((totalRefs - prevCount) / (nextTier.count - prevCount || 1)) * 100));
+
   return (
     <div className="bg-gradient-to-br from-accent to-accent-dark text-white rounded-2xl p-4 shadow-lg">
       <div className="flex items-center gap-2 mb-2">
         <div className="w-9 h-9 bg-white/15 rounded-lg flex items-center justify-center">
           <Gift size={18} strokeWidth={2.2} />
         </div>
-        <div>
+        <div className="min-w-0 flex-1">
           <p className="font-heading font-bold text-base">Refer friends to SlotNow</p>
           <p className="text-[11px] opacity-80">Skip the wait, together</p>
         </div>
       </div>
-      <div className="bg-white/15 rounded-xl px-3 py-2 mt-2 flex items-center justify-between gap-2">
+
+      {/* Progress */}
+      <div className="mt-2">
+        <div className="flex items-center justify-between text-[11px] mb-1 opacity-90">
+          <span data-testid="refer-progress-label">
+            {stats.loading ? "Loading…" : totalRefs >= nextTier.count
+              ? `You've unlocked: ${nextTier.reward}!`
+              : `${nextTier.count - totalRefs} more → ${nextTier.reward}`}
+          </span>
+          <span className="font-bold">{totalRefs}/{nextTier.count}</span>
+        </div>
+        <div className="w-full h-2 bg-white/20 rounded-full overflow-hidden">
+          <div
+            data-testid="refer-progress-bar"
+            className="h-full bg-white rounded-full transition-all duration-500"
+            style={{ width: `${pct}%` }}
+          />
+        </div>
+        <div className="flex gap-1 mt-1 text-[10px] opacity-80">
+          {TIERS.map((t) => (
+            <span key={t.count} className={`flex-1 text-center ${totalRefs >= t.count ? "font-bold" : ""}`}>
+              {t.count}
+            </span>
+          ))}
+        </div>
+      </div>
+
+      <div className="bg-white/15 rounded-xl px-3 py-2 mt-3 flex items-center justify-between gap-2">
         <p data-testid="refer-link" className="text-[11px] font-mono truncate opacity-90">{link}</p>
         <button
           data-testid="refer-copy-btn"

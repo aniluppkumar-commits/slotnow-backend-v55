@@ -240,6 +240,13 @@ export default function ReceptionistDashboard() {
                 placeholder="Vehicle reg no (optional)"
                 className="w-full bg-cream border border-cream-300 rounded-xl px-3 py-2.5 text-ink outline-none focus:ring-2 focus:ring-forest/20 uppercase"
               />
+              <input
+                data-testid="rec-walkin-model"
+                value={walk.vehicle_model}
+                onChange={(e) => setWalk({ ...walk, vehicle_model: e.target.value })}
+                placeholder="Vehicle model (optional)"
+                className="w-full bg-cream border border-cream-300 rounded-xl px-3 py-2.5 text-ink outline-none focus:ring-2 focus:ring-forest/20"
+              />
               <div>
                 <label className="text-[10px] uppercase tracking-wider font-bold text-ink-muted mb-1 block">
                   Service type
