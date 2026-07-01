@@ -1,0 +1,71 @@
+{
+  "summary": "Validated three newly-added frontend features (WhatsApp deep-link, Call deep-link, DnD queue reorder, Admin suspend/approve controls) plus a light customer regression against the deployed backend at pro-booking-21.emergent.host. All primary flows PASS. Only design/nit findings — no functional blockers.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Provider History (/provider/history)", "issues": ["Uses the browser-native <input type=\"date\"> picker for From/To (data-testid history-start-date / history-end-date) instead of the shadcn Calendar component used elsewhere in the app — inconsistent UX."]},
+      {"screen": "Admin Dashboard – Suspend semantics", "issues": ["Suspend button reuses PUT /admin/providers/{id}/reject (see AdminDashboard.jsx line 81 comment); the pill label reads 'suspended' but underlying status returned from backend is 'rejected'. Works today because AdminDashboard.jsx treats both 'rejected' and 'suspended' as isRejected, but is semantically fragile — recommend a dedicated /suspend endpoint or an explicit action=suspend|reject flag."]},
+      {"screen": "Provider Queue vs Receptionist Dashboard", "issues": ["Rows on the provider live queue correctly show NO drag handle (queue-drag-* count = 0) — behaviour is as-designed but there is no visual hint that reorder is receptionist-only."]}
+    ]
+  },
+  "test_report_links": [],
+  "action_items": [
+    "(Nit) Consider replacing the native date input on HistoryPage with the shadcn Calendar/DateRangePicker for consistency.",
+    "(Nit) Consider adding a dedicated /admin/providers/{id}/suspend endpoint so Suspend and Reject aren't overloaded onto the same route."
+  ],
+  "critical_code_review_comments": [
+    "AdminDashboard.jsx suspend() uses PUT /admin/providers/{id}/reject with a 'Suspended' toast — misleading if a future backend distinguishes reject vs suspend states.",
+    "WhatsAppModal buildTemplates() hard-codes a preview URL in the 'invite' template (https://slotnow-web.preview.emergentagent.com/login). Should read from process.env.REACT_APP_BACKEND_URL / a configurable share link so it doesn't leak the preview host into production.",
+    "ReceptionistDashboard sends `date: new Date().toISOString().slice(0,10)` (UTC-based) for /queue/reorder — will be off-by-one in IST after 5:30am UTC/11:00pm IST rollover. Prefer server-local or explicit IST formatting.",
+    "QueueRow.jsx only renders Call & WhatsApp when `phone` is truthy — good — but rows with null phone silently disappear. Consider a disabled hint ('no phone on file') so receptionist knows why the row can't be contacted."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "not tested (external)", "frontend": "100%"},
+  "test_credentials": "Customer 9999999999 / OTP 123456; Provider 8888800002 / OTP 123456; Receptionist 6666600011 / OTP 123456; Admin 7777700002 / OTP 123456",
+  "seed_data_creation": "None new — the receptionist queue already had 6 pre-existing walk-ins from previous iterations; those were used for the drag-and-drop test.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Frontend host = https://slotnow-web.preview.emergentagent.com. Backend = https://pro-booking-21.emergent.host (external, do NOT modify). Login flow: choose role → phone → OTP=123456 → verify. IMPORTANT: after first-time OTP login the app shows a 'Set a PIN for quick login' interstitial; click the 'Skip' text button before doing any further UI action (there is no data-testid on Skip — flagging this for the main agent). Data-testids of interest: wa-modal, wa-option-<k>, wa-manual-input, wa-preview, wa-send-btn, wa-close-btn, queue-item-<id>, queue-drag-<id>, queue-call-<id>, queue-wa-<id>, history-item-<id>, history-whatsapp-<id>, history-call-<id>, admin-suspend-<id>, admin-unsuspend-<id>, admin-approve-<id>, admin-reject-<id>, admin-bulk-approve-btn. Verified findings: DnD triggers POST /api/queue/reorder with { date, ordered_ids } and the new order persists across a hard reload. window.open URL is https://wa.me/91<phone>?text=<encoded> and contains customer name, provider, service, date, time, token. Provider queue correctly does NOT render drag handles (drag_handles=0 for provider) so reorder is receptionist-only.",
+  "rca of the issue": "No functional issues found in this iteration — all three feature sets (WhatsApp deep-link + templates, tel: deep-link, DnD reorder with persistence, admin suspend/unsuspend/approve/reject/bulk) behave as specified. Two design nits (native date picker on history; suspend reuses reject endpoint) were captured as non-blocking follow-ups.",
+  "detailed_evidence": {
+    "receptionist_wa_call": {
+      "call_href_sample": "tel:+915555522222",
+      "wa_open_url_sample": "https://wa.me/915555522222?text=Hi%20TEST_WI_Jane%2C%20this%20is%20TEST_Provider%20Biz.%20We're%20confirming%20your%20appointment%20for%20Walk-in%20visit%20on%20Wed%2C%20Jul%201%2C%202026%20at%208%3A39%20AM.%20Your%20token%20is%20%231.%20See%20you%20soon!",
+      "templates_verified": ["confirmation", "reminder", "followup", "invite"],
+      "manual_mode": "textarea present, send disabled when empty (true) and enabled after typing (false)"
+    },
+    "receptionist_dnd": {
+      "rows_before_drag_first_three_ids": ["d45dcada…", "adda14c8…", "d1fd34e0…"],
+      "rows_after_drag_first_three_ids": ["adda14c8…", "d1fd34e0…", "d45dcada…"],
+      "reorder_api_call": "POST https://pro-booking-21.emergent.host/api/queue/reorder body={\"date\":\"2026-07-01\",\"ordered_ids\":[…]}",
+      "persistence_after_reload": "matches post-drag order"
+    },
+    "admin": {
+      "suspend_buttons": 14,
+      "approve_buttons": 4,
+      "reject_buttons": 4,
+      "bulk_approve_present": true
+    },
+    "provider_queue": {
+      "queue_rows": 2,
+      "wa_buttons": 2,
+      "call_buttons": 3,
+      "drag_handles": 0,
+      "wa_modal_opens": true
+    },
+    "provider_history": {
+      "items": 2,
+      "wa_buttons": 2,
+      "call_buttons": 2,
+      "wa_modal_preview_sample": "Hi Neelam, this is QuickWheels Auto Service. We're confirming your appointment for Full Service on Wed, Jul 1, 2026 at 9:00 AM. Your token is #2. …",
+      "call_href_sample": "tel:+917017332365"
+    },
+    "customer_regression": {
+      "categories_visible": 7,
+      "automobile_provider_cards": 2,
+      "provider_detail_navigated": true
+    }
+  }
+}
