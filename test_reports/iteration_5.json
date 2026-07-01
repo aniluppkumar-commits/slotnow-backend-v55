@@ -1,0 +1,47 @@
+{
+  "summary": "Iteration-5 targeted retest of 5 fixes (A–E) plus 2 regressions. FIX A+B (Receptionist header + 403 spam), FIX C (Provider re-login skips onboarding), FIX D (span-in-option warning gone) and both regressions (Admin skip-setpin + Bottom-nav reachability for customer/provider/receptionist/admin) all PASS. FIX E (Automobile end-to-end) is BLOCKED by two backend/data issues: (1) QuickWheels provider (id 3610a6f1-4cf4-4f03-94c5-b9795ccefd9b) is seeded with approved=false so it is filtered out of /api/providers?category_id=… and never appears on the Automobile category page — customer flow cannot reach it via UI; (2) Bypassing this by navigating directly to /provider/<id>, the whole book slot UI renders correctly (Full Service ₹1500 45min, 9AM–6PM grid, WED 1 Jul preselected) and Confirm-without-vehicle-reg CORRECTLY shows the toast 'Registration number' — but Confirm WITH vehicle-reg filled fails with POST /api/bookings 400 → 'Select a Service Type (Paid or Free)'. Frontend sends service_type='Two Wheeler' (Service.service_type), backend expects service_type ∈ {'Paid','Free'}. Verified via direct curl: sending service_type='Paid' creates the booking successfully (id c04541dd-8815-4561-9745-6e1690ade096). Reschedule regression could not be exercised because no booking was created through the UI. A secondary UI bug spotted on BookSlot: time-slot grid renders duplicate slot buttons (9:00 AM, 9:45 AM, 10:30 AM… appear twice) — the shift generator is double-iterating shifts.",
+  "backend_issues": {
+    "critical": [
+      {"endpoint": "GET /api/providers?category_id=333a2602-2d4a-4e16-a9da-3e004b0e14fd", "issue": "QuickWheels Auto Service (id 3610a6f1-4cf4-4f03-94c5-b9795ccefd9b) is seeded with approved=false, so it is filtered out of the category list. Customer cannot discover the provider via UI. Set approved=true on the QuickWheels row so end-to-end Automobile flow works.", "priority": "CRITICAL"},
+      {"endpoint": "POST /api/bookings (automobile)", "issue": "Backend requires payload.service_type ∈ {'Paid','Free'} (case-sensitive) but the frontend sends selectedService.service_type which is 'Two Wheeler'/'Four Wheeler'. Either broaden backend validation to accept any string / the Service.service_type value, or align the frontend to send 'Paid'/'Free'. Direct curl with service_type='Paid' succeeds (booking c04541dd-8815-4561-9745-6e1690ade096 created).", "priority": "HIGH"}
+    ],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "BookSlot time-slot grid (Automobile / QuickWheels)", "issue": "Time slots render duplicated — 9:00 AM, 9:45 AM, 10:30 AM … 5:15 PM appear once, then the same set 9:00 AM … 5:15 PM appears again below. Root cause: /providers/{id}/slots?date=… returned two entries in shifts[] (a morning and afternoon shift?) whose start_time/end_time overlap, and BookSlot.jsx timeOptions concatenates ALL shifts without dedup. Add a dedupe by start_time when building timeOptions.", "selector": "[data-testid^='booking-time-']", "priority": "MEDIUM"},
+      {"component": "BookSlot vehicle-details 'Service Type' field", "issue": "Field is a free-text INPUT with placeholder 'Service Type (optional)'. Because the /api/bookings endpoint requires 'Paid' or 'Free', the user has NO WAY to know they must type one of those exact tokens. Convert to a segmented button / <select> with two options: Paid / Free. And in handleBook (line 97) do NOT fall back to selectedService.service_type — that is the vehicle-type (Two Wheeler), not the payment mode.", "selector": "[data-testid='booking-service-type']", "priority": "HIGH"}
+    ],
+    "integration_issues": [
+      {"flow": "Customer → Automobile category → provider list", "issue": "QuickWheels missing from list because approved=false. Result: users cannot start Automobile end-to-end from the discovery UI.", "affected_selectors": ["/category/333a2602-2d4a-4e16-a9da-3e004b0e14fd"]},
+      {"flow": "Customer → Automobile → Confirm booking", "issue": "POST /api/bookings 400 'Select a Service Type (Paid or Free)' because Service.service_type ('Two Wheeler') != Booking.service_type enum ('Paid'|'Free'). See UI bug above; fix requires coordinated frontend+backend change.", "affected_selectors": ["[data-testid='booking-confirm-btn']"]}
+    ],
+    "design_issues": []
+  },
+  "test_report_links": ["/app/test_reports/iteration_5.json"],
+  "action_items": [
+    "CRITICAL (data): Set approved=true on the QuickWheels Auto Service provider row (id 3610a6f1-4cf4-4f03-94c5-b9795ccefd9b) so it appears on /api/providers?category_id=… and shows up on the Automobile category page.",
+    "HIGH (frontend+backend align): Booking service_type validation. Either (a) change the BookSlot form so the 'Service Type' field is a segmented Paid/Free control that ships payload.service_type='Paid'|'Free', OR (b) relax the backend automobile-booking validator to accept the Service.service_type value ('Two Wheeler' / 'Four Wheeler'). Also remove the fallback `serviceType || selectedService.service_type` in BookSlot.jsx line 97 which currently sends the wrong value.",
+    "MEDIUM: Dedupe time slots in BookSlot.jsx timeOptions — currently generates duplicate entries when the provider has overlapping shifts. Suggest: Array.from(new Map(times.map(t=>[t.start_time,t])).values()) after the forEach.",
+    "AFTER FIXES: Re-run the automobile end-to-end (booking creation on /bookings/:id showing token + vehicle-reg row) and the reschedule regression that was blocked this iteration."
+  ],
+  "critical_code_review_comments": [
+    "BookSlot.jsx L97 — payload.service_type = serviceType || selectedService.service_type || null; This mixes two concepts. Service.service_type on the seed row is the vehicle class (Two Wheeler / Four Wheeler) but Booking.service_type on the backend is the payment mode (Paid / Free). This misalignment blocks the automobile happy-path today; whichever direction you resolve it, remove the ambiguous fallback here.",
+    "BookSlot.jsx timeOptions generation (L70-79) blindly concatenates every shift's generated slots — if the /slots response returns overlapping shifts the grid duplicates. Add a de-duplication step keyed by start_time.",
+    "ReceptionistDashboard.jsx now correctly reads provider from /queue/today (FIX A+B verified — 'Assisting TEST_Provider Biz · Bangalore' displays and 0 x 403 responses observed).",
+    "Login.jsx homeForRole() now correctly calls /providers/me/profile and routes to /provider (FIX C verified — 8888800884 lands on /provider dashboard).",
+    "ProviderOnboarding.jsx category <option> now renders label as plain template string 'Healthcare / स्वास्थ्य' (FIX D verified — 0 span-in-option console warnings)."
+  ],
+  "updated_files": [],
+  "success_rate": {
+    "backend": "N/A (frontend-only run)",
+    "frontend": "5 of 7 requested scenarios PASS (FIX A+B, FIX C, FIX D, Admin regression, Bottom-nav regression). FIX E (Automobile end-to-end) blocked → booking POST 400. Reschedule regression indirectly blocked because no booking was created via UI. ≈ 71% pass; the two remaining fails share the same root cause (misaligned service_type semantics + un-approved provider row)."
+  },
+  "test_credentials": "Customer 9999999999 / OTP 123456. Provider 8888800884 / OTP 123456 (onboarded). Fresh provider 8888800077 / OTP 123456 was used to trigger onboarding this run. Receptionist 6666600011 / OTP 123456 (linked to TEST_Provider Biz). Admin 7777700002 / OTP 123456.",
+  "seed_data_creation": "One automobile booking was created via direct curl (id c04541dd-8815-4561-9745-6e1690ade096, customer Test User Web, provider QuickWheels 3610a6f1-4cf4-4f03-94c5-b9795ccefd9b, date 2026-07-01 09:00, service_type Paid, vehicle KA01AB1234 Swift, token #1) while investigating the 400. Main agent may want to delete it before re-testing.",
+  "retest_needed": true,
+  "should_main_agent_self_test": true,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Fixes A/B/C/D and admin+bottom-nav regressions are now solid — no need to re-verify them exhaustively next iteration; a quick smoke check is enough. Focus next iteration on: (1) QuickWheels approved=true so it shows on /category/Automobile; (2) service_type Paid/Free alignment between BookSlot form and POST /api/bookings; (3) BookSlot time-slot dedupe; (4) full customer→category→QuickWheels→BookSlot→/bookings/:id flow with vehicle-reg row visible; (5) then the reschedule regression on that fresh booking.",
+  "rca of the issue": "Automobile end-to-end failure has two independent root causes. (A) DB seed for QuickWheels sets approved=false; the provider list endpoint filters by approved=true so the tile never appears on /category/<automobile>. (B) The booking POST validation on the backend expects Booking.service_type ∈ {'Paid','Free'} (verified: sending 'Paid' → 201 booking created; sending 'Two Wheeler'/'paid'/'free' → 400 'Select a Service Type (Paid or Free)'). The frontend BookSlot.jsx sends selectedService.service_type ('Two Wheeler') by default, so the 400 fires. Fix on both sides: seed QuickWheels with approved=true, and either broaden backend validation OR ship 'Paid'|'Free' from a proper segmented control in the vehicle details form (removing the fallback selectedService.service_type)."
+}

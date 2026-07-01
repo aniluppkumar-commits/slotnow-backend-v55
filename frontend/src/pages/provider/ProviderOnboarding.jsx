@@ -102,9 +102,7 @@ export default function ProviderOnboarding() {
             >
               <option value="">— Select category —</option>
               {categories.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.name} / {c.name_hi}
-                </option>
+                <option key={c.id} value={c.id}>{`${c.name} / ${c.name_hi}`}</option>
               ))}            </select>
           </Field>
           <Field label={t("bio")}>

@@ -1,8 +1,8 @@
 import React, { useCallback, useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
 import api from "@/lib/api";
 import AppShell from "@/components/AppShell";
 import { useI18n } from "@/i18n";
+import { useAuth } from "@/context/AuthContext";
 import useLivePolling from "@/hooks/useLivePolling";
 import { StatusBadge, formatTime } from "@/lib/utils-app";
 import {
@@ -18,9 +18,10 @@ import { toast } from "sonner";
 
 export default function ReceptionistDashboard() {
   const { t } = useI18n();
-  const navigate = useNavigate();
-  const [profile, setProfile] = useState(null);
+  const { user } = useAuth();
+  const [providerInfo, setProviderInfo] = useState(null);
   const [queue, setQueue] = useState([]);
+  const [currentToken, setCurrentToken] = useState(0);
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState(false);
   const [walkOpen, setWalkOpen] = useState(false);
@@ -28,15 +29,14 @@ export default function ReceptionistDashboard() {
 
   const load = useCallback(async () => {
     try {
-      const [pRes, qRes] = await Promise.all([
-        api.get("/providers/me/profile").catch(() => ({ data: null })),
-        api.get("/queue/today").catch(() => ({ data: [] })),
-      ]);
-      setProfile(pRes.data);
-      const arr = Array.isArray(qRes.data)
-        ? qRes.data
-        : qRes.data?.queue || qRes.data?.items || qRes.data?.bookings || [];
+      const { data } = await api.get("/queue/today");
+      // Backend returns { date, provider, current_token, last_assigned, items }
+      const arr = Array.isArray(data)
+        ? data
+        : data?.items || data?.queue || data?.bookings || [];
       setQueue(arr);
+      if (data?.provider) setProviderInfo(data.provider);
+      if (data?.current_token != null) setCurrentToken(data.current_token);
     } finally {
       setLoading(false);
     }
@@ -84,6 +84,9 @@ export default function ReceptionistDashboard() {
 
   const active = queue.filter((b) => !["completed", "cancelled"].includes(b.status));
 
+  const businessName = providerInfo?.business_name || user?.designation || "your provider";
+  const city = providerInfo?.city;
+
   return (
     <AppShell
       title="Assistant Desk"
@@ -102,8 +105,15 @@ export default function ReceptionistDashboard() {
           </div>
           <div className="min-w-0">
             <p className="text-[11px] uppercase tracking-widest opacity-70">Assisting</p>
-            <p className="font-heading font-bold truncate">{profile?.business_name || "—"}</p>
+            <p data-testid="receptionist-provider-name" className="font-heading font-bold truncate">{businessName}</p>
+            {city && <p className="text-[11px] opacity-70 truncate">{city}</p>}
           </div>
+          {currentToken != null && (
+            <div className="ml-auto text-right">
+              <p className="text-[10px] uppercase tracking-widest opacity-70">Now serving</p>
+              <p className="font-heading font-black text-2xl">#{currentToken}</p>
+            </div>
+          )}
         </div>
 
         {/* Actions */}

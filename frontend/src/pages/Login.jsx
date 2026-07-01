@@ -3,6 +3,7 @@ import { useNavigate, useLocation } from "react-router-dom";
 import { useAuth } from "@/context/AuthContext";
 import { useI18n } from "@/i18n";
 import { SlotNowMark } from "@/components/SlotNowLogo";
+import api from "@/lib/api";
 import {
   Phone,
   KeyRound,
@@ -45,10 +46,18 @@ export default function Login() {
 
   const validPhone = /^\d{10}$/.test(phone);
 
-  const homeForRole = (u) => {
+  const homeForRole = async (u) => {
     switch (u?.role) {
-      case "provider":
-        return u?.linked_provider_id ? "/provider" : "/provider/onboarding";
+      case "provider": {
+        // Check if provider has a profile — if 404, go to onboarding
+        try {
+          await api.get("/providers/me/profile");
+          return "/provider";
+        } catch (e) {
+          if (e.response?.status === 404) return "/provider/onboarding";
+          return "/provider";
+        }
+      }
       case "admin":
         return "/admin";
       case "receptionist":
@@ -58,8 +67,8 @@ export default function Login() {
     }
   };
 
-  const navigateAfter = (u) => {
-    const target = homeForRole(u);
+  const navigateAfter = async (u) => {
+    const target = await homeForRole(u);
     if (from && from !== "/login") navigate(from, { replace: true });
     else navigate(target, { replace: true });
   };
@@ -90,7 +99,7 @@ export default function Login() {
       if (!res.user?.has_pin && res.user?.role !== "admin") {
         setStep(3);
       } else {
-        navigateAfter(res.user);
+        await navigateAfter(res.user);
       }
     } catch (err) {
       toast.error(err.response?.data?.detail || "Invalid OTP");
@@ -107,7 +116,7 @@ export default function Login() {
     try {
       const res = await pinLogin(phone, pin, role);
       toast.success("Welcome back");
-      const target = homeForRole(res.user);
+      const target = await homeForRole(res.user);
       navigate(target, { replace: true });
     } catch (err) {
       toast.error(err.response?.data?.detail || "Invalid PIN");
@@ -124,7 +133,7 @@ export default function Login() {
       await setPinApi(newPin);
       toast.success("PIN set");
       const u = JSON.parse(localStorage.getItem("slotnow_user") || "{}");
-      navigateAfter(u);
+      await navigateAfter(u);
     } catch (err) {
       toast.error(err.response?.data?.detail || "Failed to set PIN");
     } finally {
@@ -132,9 +141,9 @@ export default function Login() {
     }
   };
 
-  const skipSetPin = () => {
+  const skipSetPin = async () => {
     const u = JSON.parse(localStorage.getItem("slotnow_user") || "{}");
-    navigateAfter(u);
+    await navigateAfter(u);
   };
 
   return (
