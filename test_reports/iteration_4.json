@@ -1,0 +1,42 @@
+{
+  "summary": "Iteration-4 frontend retest for SlotNow web app after full visual redesign (navy #1E3A8A + orange #F97316 + cream), new roles (Admin, Service Assistant/Receptionist) and 4-role 2x2 login grid. 13 of 14 requested flows verified PASS; 1 flow partially verified (reschedule button reachable but no free slots after first booking, so 'Booking updated' toast could not be re-observed in this iter — the flow itself is unchanged since iteration 3 where it passed end-to-end). All new admin + receptionist + provider-assistants pages render cleanly; bottom-nav overlap fix continues to hold; login redesign matches the mobile-app spec (SVG clock+pin logo, navy Slot + orange Now wordmark, 2x2 role tiles, orange Continue CTA, top-right EN/हिं language pill). Minor issues: (a) Receptionist header shows 'Assisting —' (business name empty), (b) 4x 403 responses during receptionist bootstrap (non-blocking), (c) ProviderOnboarding <span> in <option> hydration warning still present.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "ReceptionistDashboard header", "issue": "Header renders 'ASSISTING —' with an em-dash instead of the linked provider's business name. Likely a missing field in /api/receptionists/me or frontend using an empty fallback. Spec required 'Assisting <business name>'.", "selector": "[data-testid=\"receptionist-walkin-btn\"] preceding container", "priority": "MEDIUM"},
+      {"component": "ProviderOnboarding category <option>", "issue": "React hydration warning '<span> cannot be a child of <option>' (carry-over from iter 2 and 3). Non-blocking.", "selector": "[data-testid=\"onboarding-category\"] option > span", "priority": "LOW"},
+      {"component": "Automobile category seed data", "issue": "Nandi auto mobiles (c0c3cc13-bb9a-43d9-9211-a493717fb017) still has 0 open slots on all 14 upcoming dates. Vehicle field UI (booking-vehicle-reg / -model / -service-type) confirmed rendering fine (already verified iter 3), but end-to-end booking creation for automobile category cannot be exercised until availability slots are seeded.", "selector": "route /book/<automobile-provider-id>", "priority": "MEDIUM"}
+    ],
+    "integration_issues": [
+      {"flow": "Receptionist bootstrap", "issue": "Four HTTP 403 responses observed on receptionist landing/refresh — likely calls to endpoints that require provider or admin scope (e.g., /api/queue/my-position, /api/bookings) being called by shared components for the receptionist role. Non-blocking (dashboard still functions), but noisy console errors + unnecessary requests.", "affected_selectors": ["route /receptionist"]},
+      {"flow": "Provider re-login after localStorage.clear()", "issue": "Logging in as provider 8888800884 after clearing localStorage redirected to /provider/onboarding instead of /provider (previously onboarded in iter 2 tests). Onboarding likely uses linked_provider_id from server; verify /api/providers/me returns the previously onboarded record so login goes straight to /provider dashboard. This did not block testing (Assistants CRUD still worked — the provider-manage-assistants CTA is present on the onboarding page too).", "affected_selectors": ["/provider"]}
+    ],
+    "design_issues": []
+  },
+  "test_report_links": ["/app/test_reports/iteration_4.json"],
+  "action_items": [
+    "MEDIUM: Populate the linked-provider business_name on ReceptionistDashboard header so it reads 'Assisting <business name>' (currently 'Assisting —').",
+    "MEDIUM: Investigate the 4x 403 API calls fired on the /receptionist route — either gate those hooks behind role checks or update endpoints to accept receptionist scope.",
+    "MEDIUM (product/data): Seed at least one availability slot for the Automobile provider (Nandi auto mobiles) or add a second automobile provider so end-to-end vehicle-reg booking can be validated.",
+    "MEDIUM: Provider 8888800884 was previously onboarded (iter 2) but after localStorage.clear() and re-login the app routes to /provider/onboarding rather than /provider. Verify /api/providers/me returns the persisted provider and that AuthContext.linked_provider_id is re-hydrated on OTP verify for existing providers.",
+    "LOW: Fix ProviderOnboarding category <option> to render the translated label without a <span> wrapper (React hydration warning)."
+  ],
+  "critical_code_review_comments": [
+    "Login.jsx role tile styling reads 'bg-forest-faint border-forest ring-forest/10' — the tokens are still named 'forest' although visually they now render navy blue (#1E3A8A). Consider renaming Tailwind tokens to 'navy' for readability, or ensure a single semantic naming convention is used across the codebase after the redesign.",
+    "Login.jsx handlePinLogin now explicitly calls navigate(homeForRole(res.user)) (ignoring location.state.from) — this matches spec (customer PIN login lands on /). Nice fix vs iter 3.",
+    "ReceptionistDashboard.jsx should probably fetch and display the provider business_name (currently blank/dash). Consider requesting it from the /api/receptionists/me or /api/providers/mine endpoint on mount.",
+    "AppShell.jsx bottom-nav overlap fix (bottom-[76px], max-w-[360px]) continues to hold for all 4 role variants (customer / provider / receptionist / admin) — elementFromPoint returns the SVG child for every nav pill.",
+    "Provider Assistants CRUD is clean; block/remove data-testids follow assistant-<action>-<id> pattern."
+  ],
+  "updated_files": [],
+  "success_rate": {
+    "backend": "N/A (frontend-only run)",
+    "frontend": "13 of 14 requested scenarios fully passing (~93%). Reschedule flow's confirm-toast could not be re-observed only because no additional free slots remained after the fresh booking; the reschedule button, date picker and confirm CTA all render/behave correctly. Automobile end-to-end still blocked by seed data (known)."
+  },
+  "test_credentials": "Customer 9999999999 / OTP 123456 / PIN 1234. Provider 8888800884 / OTP 123456 (currently re-onboarding required after localStorage clear). Admin: any phone incl. 7777700002 / OTP 123456. Receptionist: 6666600011 / OTP 123456 (added during this run as TEST_Assist under provider 8888800884).",
+  "seed_data_creation": "1) Added service assistant TEST_Assist (phone 6666600011, designation Receptionist) under provider 8888800884. 2) Created customer booking 54f42bb1-9745-44c3-b0be-f2d5cc2a1910 for Sharma-clinic-like provider a6aaaf96-... 3) Added walk-in token #2 'TEST_WI_Jane' (phone 5555522222, reg KA02CD5678) via receptionist walk-in modal.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "All P0 flows pass. Two open UX items worth fixing next: (a) 'Assisting —' on receptionist header (missing business_name), (b) 403 spam on receptionist route. Provider 8888800884 currently reads as 'un-onboarded' after localStorage clear — check that /api/providers/me returns the row created in iter 2; if the record was wiped, either re-seed it or update the test doc. Automobile end-to-end still needs an availability slot on Nandi auto mobiles. All login/role-selection UI verified against the mobile-app spec (navy+orange+cream, SVG logo, 2x2 grid, orange Continue, EN/हिं pill). Bottom-nav overlap resolved for all 4 role variants."
+}

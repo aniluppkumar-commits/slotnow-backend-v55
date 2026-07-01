@@ -156,6 +156,12 @@ export default function ProviderDashboard() {
             onClick={() => navigate("/provider/availability")}
           />
           <Row
+            testid="provider-manage-assistants"
+            icon={<Users2 size={16} />}
+            title="Service Assistants"
+            onClick={() => navigate("/provider/assistants")}
+          />
+          <Row
             testid="provider-manage-capacity"
             icon={<Users2 size={16} />}
             title={`${t("daily_capacity")}${profile?.daily_slot_limit ? ` • ${profile.daily_slot_limit}` : ""}`}

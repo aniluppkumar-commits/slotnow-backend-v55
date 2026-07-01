@@ -11,21 +11,29 @@ module.exports = {
       },
       colors: {
         ink: {
-          DEFAULT: '#1A1A1A',
-          soft: '#5E5E5E',
-          muted: '#A3A3A3',
+          DEFAULT: '#1D2E5B',
+          soft: '#4C5D82',
+          muted: '#8896B4',
         },
         cream: {
-          DEFAULT: '#F9F8F6',
-          100: '#FDFBF7',
-          200: '#F3F0E9',
-          300: '#E5E2DA',
+          DEFAULT: '#F5F6F8',
+          100: '#FFFFFF',
+          200: '#EEF0F5',
+          300: '#DEE2EC',
         },
+        // Primary brand navy blue (from mobile logo "Slot")
         forest: {
-          DEFAULT: '#2C3E35',
-          dark: '#1E2A24',
-          soft: '#4A5D4E',
-          faint: '#F1F3ED',
+          DEFAULT: '#1E3A8A',
+          dark: '#152B65',
+          soft: '#3B4E86',
+          faint: '#EEF2FF',
+        },
+        // Accent orange (from mobile logo "Now" + Continue button)
+        accent: {
+          DEFAULT: '#F97316',
+          dark: '#EA580C',
+          soft: '#FDBA74',
+          faint: '#FFF7ED',
         },
       },
       keyframes: {

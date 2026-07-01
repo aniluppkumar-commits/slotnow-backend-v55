@@ -2,19 +2,40 @@ import React, { useState } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { useAuth } from "@/context/AuthContext";
 import { useI18n } from "@/i18n";
-import { Phone, KeyRound, ArrowRight, Sparkles, Loader2, LockKeyhole, ShieldCheck, X } from "lucide-react";
+import { SlotNowMark } from "@/components/SlotNowLogo";
+import {
+  Phone,
+  KeyRound,
+  ArrowRight,
+  Loader2,
+  LockKeyhole,
+  ShieldCheck,
+  X,
+  User,
+  Store,
+  UserCog,
+  ShieldQuestion,
+  Languages,
+} from "lucide-react";
 import { toast } from "sonner";
+
+const ROLE_TILES = [
+  { k: "customer", labelKey: "role_customer", Icon: User },
+  { k: "provider", labelKey: "role_provider", Icon: Store },
+  { k: "receptionist", labelKey: "role_assistant", Icon: UserCog },
+  { k: "admin", labelKey: "role_admin", Icon: ShieldQuestion },
+];
 
 export default function Login() {
   const { sendOtp, verifyOtp, pinLogin, setPin: setPinApi } = useAuth();
-  const { t } = useI18n();
+  const { t, lang, setLang } = useI18n();
   const navigate = useNavigate();
   const location = useLocation();
   const from = location.state?.from?.pathname;
 
   const [role, setRole] = useState("customer");
-  const [mode, setMode] = useState("otp"); // 'otp' | 'pin'
-  const [step, setStep] = useState(1); // 1=phone, 2=otp/pin, 3=setPinPrompt
+  const [mode, setMode] = useState("otp");
+  const [step, setStep] = useState(1);
   const [phone, setPhone] = useState("");
   const [otp, setOtp] = useState("");
   const [pin, setPin] = useState("");
@@ -24,14 +45,25 @@ export default function Login() {
 
   const validPhone = /^\d{10}$/.test(phone);
 
-  const navigateAfter = (u) => {
-    if (from && from !== "/login") return navigate(from, { replace: true });
-    if (u?.role === "provider") {
-      navigate(u.linked_provider_id ? "/provider" : "/provider/onboarding", { replace: true });
-    } else {
-      navigate("/", { replace: true });
+  const homeForRole = (u) => {
+    switch (u?.role) {
+      case "provider":
+        return u?.linked_provider_id ? "/provider" : "/provider/onboarding";
+      case "admin":
+        return "/admin";
+      case "receptionist":
+        return "/receptionist";
+      default:
+        return "/";
     }
   };
+
+  const navigateAfter = (u) => {
+    const target = homeForRole(u);
+    if (from && from !== "/login") navigate(from, { replace: true });
+    else navigate(target, { replace: true });
+  };
+
   const handleSendOtp = async (e) => {
     e.preventDefault();
     if (!validPhone) return toast.error("Enter a valid 10-digit phone");
@@ -55,8 +87,7 @@ export default function Login() {
     try {
       const res = await verifyOtp(phone, otp, role);
       toast.success("Welcome to SlotNow");
-      // Prompt to set PIN if not yet set
-      if (!res.user?.has_pin) {
+      if (!res.user?.has_pin && res.user?.role !== "admin") {
         setStep(3);
       } else {
         navigateAfter(res.user);
@@ -76,13 +107,15 @@ export default function Login() {
     try {
       const res = await pinLogin(phone, pin, role);
       toast.success("Welcome back");
-      navigateAfter(res.user);
+      const target = homeForRole(res.user);
+      navigate(target, { replace: true });
     } catch (err) {
       toast.error(err.response?.data?.detail || "Invalid PIN");
     } finally {
       setLoading(false);
     }
   };
+
   const handleSetPin = async (e) => {
     e.preventDefault();
     if (!/^\d{4,6}$/.test(newPin)) return toast.error("PIN must be 4-6 digits");
@@ -107,50 +140,68 @@ export default function Login() {
   return (
     <div className="min-h-screen bg-cream flex items-center justify-center px-4 py-8">
       <div className="w-full max-w-md">
-        {/* Brand */}
-        <div className="text-center mb-8">
-          <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-forest-faint text-forest rounded-full text-xs font-bold uppercase tracking-widest mb-6">
-            <Sparkles size={14} strokeWidth={2.5} />
-            SlotNow
-          </div>
-          <h1 className="font-heading text-4xl sm:text-5xl font-extrabold tracking-tighter text-ink leading-tight">
-            {t("app_tagline")}
-          </h1>
-          <p className="mt-3 text-ink-soft text-base">{t("app_subtitle")}</p>
-        </div>
+        <div className="bg-white border border-cream-300 rounded-3xl p-6 sm:p-8 shadow-[0_4px_24px_rgba(29,46,91,0.06)] relative">
+          {/* Language toggle top-right */}
+          <button
+            data-testid="login-lang-toggle"
+            onClick={() => setLang(lang === "hi" ? "en" : "hi")}
+            className="absolute top-4 right-4 flex items-center gap-1 bg-cream-200 hover:bg-cream-300 text-ink text-xs font-bold px-2.5 py-1.5 rounded-full transition-colors"
+          >
+            <Languages size={12} strokeWidth={2.5} />
+            {lang === "hi" ? "हिं" : "EN"}
+          </button>
 
-        {/* Role toggle */}
-        {step === 1 && (
-          <div className="mb-4">
-            <label className="block text-[10px] uppercase tracking-widest font-bold text-ink-soft text-center mb-2">
-              {t("im_a")}
-            </label>
-            <div className="flex gap-1 bg-cream-200 rounded-xl p-1">
-              {[
-                { k: "customer", label: t("role_customer") },
-                { k: "provider", label: t("role_provider") },
-              ].map(({ k, label }) => (
-                <button
-                  key={k}
-                  data-testid={`login-role-${k}`}
-                  type="button"
-                  onClick={() => setRole(k)}
-                  className={`flex-1 py-2.5 rounded-lg text-sm font-bold transition-all ${
-                    role === k ? "bg-white text-forest shadow-sm" : "text-ink-soft"
-                  }`}
-                >
-                  {label}
-                </button>
-              ))}
-            </div>
+          {/* Logo lockup */}
+          <div className="flex flex-col items-center gap-1 mb-6">
+            <SlotNowMark size={72} />
+            <span className="font-heading font-extrabold tracking-tight text-3xl mt-1">
+              <span className="text-forest">Slot</span>
+              <span className="text-accent">Now</span>
+            </span>
+            <p className="text-sm text-ink-soft">{t("book_appointments_seconds")}</p>
+            <p className="text-[11px] text-ink-muted">{t("by_saving_plus")}</p>
           </div>
-        )}
 
-        <div className="bg-white border border-cream-300 rounded-2xl p-6 shadow-[0_4px_16px_rgba(0,0,0,0.03)]">
           {step === 1 && (
             <>
-              <form onSubmit={mode === "otp" ? handleSendOtp : handlePinLogin} className="space-y-4">
-                <label className="block text-sm font-semibold text-ink mb-1.5">
+              {/* Role tiles - 2x2 grid */}
+              <div className="mb-5">
+                <p className="text-sm font-bold text-ink mb-2">{t("im_a")}</p>
+                <div className="grid grid-cols-2 gap-2">
+                  {ROLE_TILES.map(({ k, labelKey, Icon }) => {
+                    const active = role === k;
+                    return (
+                      <button
+                        key={k}
+                        data-testid={`login-role-${k}`}
+                        type="button"
+                        onClick={() => setRole(k)}
+                        className={`flex flex-col items-center gap-1.5 rounded-2xl py-3.5 px-2 border-2 transition-all ${
+                          active
+                            ? "bg-forest-faint border-forest ring-2 ring-forest/10"
+                            : "bg-cream-200 border-transparent hover:border-cream-300"
+                        }`}
+                      >
+                        <Icon
+                          size={20}
+                          strokeWidth={2}
+                          className={active ? "text-forest" : "text-ink-soft"}
+                        />
+                        <span
+                          className={`text-xs font-bold text-center leading-tight ${
+                            active ? "text-forest" : "text-ink-soft"
+                          }`}
+                        >
+                          {t(labelKey)}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <form onSubmit={mode === "otp" ? handleSendOtp : handlePinLogin} className="space-y-3">
+                <label className="block text-sm font-semibold text-ink">
                   {t("mobile_number")}
                 </label>
                 <div className="relative">
@@ -165,19 +216,18 @@ export default function Login() {
                     placeholder={t("ten_digit")}
                     value={phone}
                     onChange={(e) => setPhone(e.target.value.replace(/\D/g, "").slice(0, 10))}
-                    className="w-full bg-white border border-cream-300 rounded-xl pl-24 pr-4 py-3.5 text-base text-ink placeholder:text-ink-muted focus:ring-2 focus:ring-forest/20 focus:border-forest outline-none transition-all font-medium"
+                    className="w-full bg-white border border-cream-300 rounded-xl pl-24 pr-4 py-3.5 text-base text-ink placeholder:text-ink-muted focus:ring-2 focus:ring-forest/20 focus:border-forest outline-none font-medium"
                     autoFocus
                   />
                 </div>
 
                 {mode === "pin" && (
                   <>
-                    <label className="block text-sm font-semibold text-ink mb-1.5">{t("enter_pin")}</label>
+                    <label className="block text-sm font-semibold text-ink pt-1">
+                      {t("enter_pin")}
+                    </label>
                     <div className="relative">
-                      <LockKeyhole
-                        size={16}
-                        className="absolute left-3 top-1/2 -translate-y-1/2 text-ink-soft"
-                      />
+                      <LockKeyhole size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-ink-soft" />
                       <input
                         data-testid="login-pin-input"
                         type="password"
@@ -185,7 +235,7 @@ export default function Login() {
                         placeholder="••••"
                         value={pin}
                         onChange={(e) => setPin(e.target.value.replace(/\D/g, "").slice(0, 6))}
-                        className="w-full bg-white border border-cream-300 rounded-xl pl-10 pr-4 py-3.5 text-lg tracking-[0.4em] font-bold text-ink placeholder:text-ink-muted placeholder:tracking-normal focus:ring-2 focus:ring-forest/20 focus:border-forest outline-none transition-all"
+                        className="w-full bg-white border border-cream-300 rounded-xl pl-10 pr-4 py-3.5 text-lg tracking-[0.4em] font-bold text-ink placeholder:text-ink-muted placeholder:tracking-normal focus:ring-2 focus:ring-forest/20 focus:border-forest outline-none"
                       />
                     </div>
                   </>
@@ -195,7 +245,7 @@ export default function Login() {
                   data-testid={mode === "otp" ? "login-send-otp-btn" : "login-pin-submit-btn"}
                   type="submit"
                   disabled={loading || !validPhone || (mode === "pin" && pin.length < 4)}
-                  className="w-full flex items-center justify-center gap-2 bg-forest hover:bg-forest-dark disabled:bg-forest/40 text-cream-100 py-3.5 rounded-xl font-bold transition-colors"
+                  className="w-full flex items-center justify-center gap-2 bg-accent hover:bg-accent-dark disabled:bg-accent/40 text-white py-3.5 rounded-xl font-bold transition-colors shadow-[0_6px_20px_rgba(249,115,22,0.25)]"
                 >
                   {loading ? (
                     <Loader2 size={18} className="animate-spin" />
@@ -252,12 +302,9 @@ export default function Login() {
                 </div>
               )}
 
-              <label className="block text-sm font-semibold text-ink mb-1.5">{t("enter_otp")}</label>
+              <label className="block text-sm font-semibold text-ink">{t("enter_otp")}</label>
               <div className="relative">
-                <KeyRound
-                  size={16}
-                  className="absolute left-3 top-1/2 -translate-y-1/2 text-ink-soft"
-                />
+                <KeyRound size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-ink-soft" />
                 <input
                   data-testid="login-otp-input"
                   type="text"
@@ -265,7 +312,7 @@ export default function Login() {
                   placeholder="123456"
                   value={otp}
                   onChange={(e) => setOtp(e.target.value.replace(/\D/g, "").slice(0, 6))}
-                  className="w-full bg-white border border-cream-300 rounded-xl pl-10 pr-4 py-3.5 text-lg tracking-[0.4em] text-ink placeholder:text-ink-muted placeholder:tracking-normal font-bold focus:ring-2 focus:ring-forest/20 focus:border-forest outline-none transition-all"
+                  className="w-full bg-white border border-cream-300 rounded-xl pl-10 pr-4 py-3.5 text-lg tracking-[0.4em] text-ink placeholder:text-ink-muted placeholder:tracking-normal font-bold focus:ring-2 focus:ring-forest/20 focus:border-forest outline-none"
                   autoFocus
                 />
               </div>
@@ -273,7 +320,7 @@ export default function Login() {
                 data-testid="login-verify-otp-btn"
                 type="submit"
                 disabled={loading || otp.length < 4}
-                className="w-full flex items-center justify-center gap-2 bg-forest hover:bg-forest-dark disabled:bg-forest/40 text-cream-100 py-3.5 rounded-xl font-bold transition-colors"
+                className="w-full flex items-center justify-center gap-2 bg-accent hover:bg-accent-dark disabled:bg-accent/40 text-white py-3.5 rounded-xl font-bold transition-colors shadow-[0_6px_20px_rgba(249,115,22,0.25)]"
               >
                 {loading ? <Loader2 size={18} className="animate-spin" /> : t("verify_login")}
               </button>
@@ -310,7 +357,7 @@ export default function Login() {
                   placeholder="4-6 digit PIN"
                   value={newPin}
                   onChange={(e) => setNewPin(e.target.value.replace(/\D/g, "").slice(0, 6))}
-                  className="w-full bg-white border border-cream-300 rounded-xl pl-10 pr-4 py-3.5 text-lg tracking-[0.4em] font-bold text-ink placeholder:text-ink-muted placeholder:tracking-normal focus:ring-2 focus:ring-forest/20 focus:border-forest outline-none transition-all"
+                  className="w-full bg-white border border-cream-300 rounded-xl pl-10 pr-4 py-3.5 text-lg tracking-[0.4em] font-bold text-ink placeholder:text-ink-muted placeholder:tracking-normal focus:ring-2 focus:ring-forest/20 focus:border-forest outline-none"
                   autoFocus
                 />
               </div>
@@ -327,7 +374,7 @@ export default function Login() {
                   data-testid="setpin-save-btn"
                   type="submit"
                   disabled={loading || newPin.length < 4}
-                  className="flex-1 bg-forest hover:bg-forest-dark disabled:bg-forest/40 text-cream-100 py-3 rounded-xl font-bold"
+                  className="flex-1 bg-accent hover:bg-accent-dark disabled:bg-accent/40 text-white py-3 rounded-xl font-bold"
                 >
                   {loading ? <Loader2 size={18} className="animate-spin mx-auto" /> : t("save_pin")}
                 </button>

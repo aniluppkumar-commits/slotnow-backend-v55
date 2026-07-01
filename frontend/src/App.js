@@ -19,12 +19,28 @@ import ProviderDashboard from "@/pages/provider/ProviderDashboard";
 import ProviderServices from "@/pages/provider/ProviderServices";
 import ProviderAvailability from "@/pages/provider/ProviderAvailability";
 import ProviderQueue from "@/pages/provider/ProviderQueue";
+import ProviderAssistants from "@/pages/provider/ProviderAssistants";
+import ReceptionistDashboard from "@/pages/receptionist/ReceptionistDashboard";
+import AdminDashboard from "@/pages/admin/AdminDashboard";
+import AdminUsers from "@/pages/admin/AdminUsers";
+import AdminBookings from "@/pages/admin/AdminBookings";
+import AdminSettings from "@/pages/admin/AdminSettings";
+import AdminRevenue from "@/pages/admin/AdminRevenue";
 
-function RequireRole({ role, children }) {
+function RequireRole({ roles, children }) {
   const { user } = useAuth();
   if (!user) return <Navigate to="/login" replace />;
-  if (user.role !== role) {
-    return <Navigate to={user.role === "provider" ? "/provider" : "/"} replace />;
+  const allowed = Array.isArray(roles) ? roles : [roles];
+  if (!allowed.includes(user.role)) {
+    const home =
+      user.role === "provider"
+        ? "/provider"
+        : user.role === "admin"
+        ? "/admin"
+        : user.role === "receptionist"
+        ? "/receptionist"
+        : "/";
+    return <Navigate to={home} replace />;
   }
   return children;
 }
@@ -38,8 +54,8 @@ function App() {
             position="top-center"
             toastOptions={{
               style: {
-                background: "#1E2A24",
-                color: "#FDFBF7",
+                background: "#1D2E5B",
+                color: "#FFFFFF",
                 border: "none",
                 borderRadius: "12px",
                 fontFamily: "Manrope, sans-serif",
@@ -51,24 +67,36 @@ function App() {
           <Routes>
             <Route path="/login" element={<Login />} />
 
-            {/* Customer routes */}
-            <Route path="/" element={<RequireAuth><RequireRole role="customer"><Home /></RequireRole></RequireAuth>} />
-            <Route path="/category/:id" element={<RequireAuth><RequireRole role="customer"><CategoryPage /></RequireRole></RequireAuth>} />
-            <Route path="/provider/:id" element={<RequireAuth><RequireRole role="customer"><ProviderDetail /></RequireRole></RequireAuth>} />
-            <Route path="/book/:providerId" element={<RequireAuth><RequireRole role="customer"><BookSlot /></RequireRole></RequireAuth>} />
-            <Route path="/bookings" element={<RequireAuth><RequireRole role="customer"><MyBookings /></RequireRole></RequireAuth>} />
-            <Route path="/bookings/:id" element={<RequireAuth><RequireRole role="customer"><BookingDetail /></RequireRole></RequireAuth>} />
+            {/* Customer */}
+            <Route path="/" element={<RequireAuth><RequireRole roles="customer"><Home /></RequireRole></RequireAuth>} />
+            <Route path="/category/:id" element={<RequireAuth><RequireRole roles="customer"><CategoryPage /></RequireRole></RequireAuth>} />
+            <Route path="/provider/:id" element={<RequireAuth><RequireRole roles="customer"><ProviderDetail /></RequireRole></RequireAuth>} />
+            <Route path="/book/:providerId" element={<RequireAuth><RequireRole roles="customer"><BookSlot /></RequireRole></RequireAuth>} />
+            <Route path="/bookings" element={<RequireAuth><RequireRole roles="customer"><MyBookings /></RequireRole></RequireAuth>} />
+            <Route path="/bookings/:id" element={<RequireAuth><RequireRole roles="customer"><BookingDetail /></RequireRole></RequireAuth>} />
 
-            {/* Provider routes */}
-            <Route path="/provider" element={<RequireAuth><RequireRole role="provider"><ProviderDashboard /></RequireRole></RequireAuth>} />
-            <Route path="/provider/onboarding" element={<RequireAuth><RequireRole role="provider"><ProviderOnboarding /></RequireRole></RequireAuth>} />
-            <Route path="/provider/services" element={<RequireAuth><RequireRole role="provider"><ProviderServices /></RequireRole></RequireAuth>} />
-            <Route path="/provider/availability" element={<RequireAuth><RequireRole role="provider"><ProviderAvailability /></RequireRole></RequireAuth>} />
-            <Route path="/provider/queue" element={<RequireAuth><RequireRole role="provider"><ProviderQueue /></RequireRole></RequireAuth>} />
+            {/* Provider */}
+            <Route path="/provider" element={<RequireAuth><RequireRole roles="provider"><ProviderDashboard /></RequireRole></RequireAuth>} />
+            <Route path="/provider/onboarding" element={<RequireAuth><RequireRole roles="provider"><ProviderOnboarding /></RequireRole></RequireAuth>} />
+            <Route path="/provider/services" element={<RequireAuth><RequireRole roles="provider"><ProviderServices /></RequireRole></RequireAuth>} />
+            <Route path="/provider/availability" element={<RequireAuth><RequireRole roles="provider"><ProviderAvailability /></RequireRole></RequireAuth>} />
+            <Route path="/provider/queue" element={<RequireAuth><RequireRole roles="provider"><ProviderQueue /></RequireRole></RequireAuth>} />
+            <Route path="/provider/assistants" element={<RequireAuth><RequireRole roles="provider"><ProviderAssistants /></RequireRole></RequireAuth>} />
 
-            {/* Shared routes */}
+            {/* Receptionist */}
+            <Route path="/receptionist" element={<RequireAuth><RequireRole roles="receptionist"><ReceptionistDashboard /></RequireRole></RequireAuth>} />
+
+            {/* Admin */}
+            <Route path="/admin" element={<RequireAuth><RequireRole roles="admin"><AdminDashboard /></RequireRole></RequireAuth>} />
+            <Route path="/admin/users" element={<RequireAuth><RequireRole roles="admin"><AdminUsers /></RequireRole></RequireAuth>} />
+            <Route path="/admin/bookings" element={<RequireAuth><RequireRole roles="admin"><AdminBookings /></RequireRole></RequireAuth>} />
+            <Route path="/admin/settings/:kind" element={<RequireAuth><RequireRole roles="admin"><AdminSettings /></RequireRole></RequireAuth>} />
+            <Route path="/admin/revenue" element={<RequireAuth><RequireRole roles="admin"><AdminRevenue /></RequireRole></RequireAuth>} />
+
+            {/* Shared */}
             <Route path="/profile" element={<RequireAuth><Profile /></RequireAuth>} />
             <Route path="/notifications" element={<RequireAuth><Notifications /></RequireAuth>} />
+
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </I18nProvider>

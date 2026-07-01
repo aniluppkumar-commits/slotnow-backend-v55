@@ -169,7 +169,7 @@ export default function ProviderDetail() {
           data-testid="provider-book-btn"
           disabled={!has_availability || services?.length === 0}
           onClick={() => navigate(`/book/${provider.id}`)}
-          className="w-full bg-forest hover:bg-forest-dark disabled:bg-ink-muted text-cream-100 py-4 rounded-2xl font-bold text-base shadow-[0_10px_30px_rgba(44,62,53,0.25)] transition-colors flex items-center justify-center gap-2"
+          className="w-full bg-accent hover:bg-accent-dark disabled:bg-ink-muted text-white py-4 rounded-2xl font-bold text-base shadow-[0_10px_30px_rgba(249,115,22,0.35)] transition-colors flex items-center justify-center gap-2"
         >
           {has_availability && services?.length > 0
             ? `Book a slot • from ₹${provider.starting_price}`

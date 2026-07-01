@@ -95,6 +95,9 @@ export function AuthProvider({ children }) {
   };
 
   const isProvider = user?.role === "provider";
+  const isCustomer = user?.role === "customer";
+  const isAdmin = user?.role === "admin";
+  const isReceptionist = user?.role === "receptionist";
 
   return (
     <AuthContext.Provider
@@ -103,6 +106,9 @@ export function AuthProvider({ children }) {
         token,
         loading,
         isProvider,
+        isCustomer,
+        isAdmin,
+        isReceptionist,
         sendOtp,
         verifyOtp,
         pinLogin,

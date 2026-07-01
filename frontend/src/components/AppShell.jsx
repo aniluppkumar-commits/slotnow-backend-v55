@@ -8,7 +8,8 @@ import {
   ChevronLeft,
   LayoutDashboard,
   Users,
-  Settings,
+  ShieldCheck,
+  UserCog,
 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { useI18n } from "@/i18n";
@@ -48,7 +49,7 @@ export function AppShell({ children, title, showBack = false, showHeader = true,
 }
 
 function BottomNav() {
-  const { user, isProvider } = useAuth();
+  const { user, isProvider, isAdmin, isReceptionist } = useAuth();
   const { t } = useI18n();
   const location = useLocation();
   if (!user) return null;
@@ -67,14 +68,31 @@ function BottomNav() {
     { to: "/profile", label: "Profile", icon: User, testId: "nav-profile-btn" },
   ];
 
-  const items = isProvider ? providerItems : customerItems;
+  const receptionistItems = [
+    { to: "/receptionist", label: "Queue", icon: UserCog, testId: "nav-receptionist-btn", exact: true },
+    { to: "/notifications", label: "Alerts", icon: Bell, testId: "nav-notifications-btn" },
+    { to: "/profile", label: "Profile", icon: User, testId: "nav-profile-btn" },
+  ];
+
+  const adminItems = [
+    { to: "/admin", label: "Overview", icon: ShieldCheck, testId: "nav-admin-btn", exact: true },
+    { to: "/admin/users", label: "Users", icon: Users, testId: "nav-admin-users-btn" },
+    { to: "/admin/bookings", label: "Bookings", icon: CalendarCheck, testId: "nav-admin-bookings-btn" },
+    { to: "/profile", label: "Profile", icon: User, testId: "nav-profile-btn" },
+  ];
+
+  const items = isAdmin
+    ? adminItems
+    : isReceptionist
+    ? receptionistItems
+    : isProvider
+    ? providerItems
+    : customerItems;
 
   return (
-    <nav className="fixed bottom-[76px] md:bottom-3 left-1/2 -translate-x-1/2 w-[calc(100%-1.5rem)] max-w-[360px] md:max-w-md bg-white border border-cream-300 px-3 pt-2 pb-2 flex justify-around items-center z-50 rounded-2xl shadow-[0_8px_28px_rgba(0,0,0,0.10)]">
+    <nav className="fixed bottom-[76px] md:bottom-3 left-1/2 -translate-x-1/2 w-[calc(100%-1.5rem)] max-w-[360px] md:max-w-md bg-white border border-cream-300 px-3 pt-2 pb-2 flex justify-around items-center z-50 rounded-2xl shadow-[0_8px_28px_rgba(29,46,91,0.12)]">
       {items.map(({ to, label, icon: Icon, testId, exact }) => {
-        const active = exact
-          ? location.pathname === to
-          : location.pathname.startsWith(to);
+        const active = exact ? location.pathname === to : location.pathname.startsWith(to);
         return (
           <NavLink
             key={to}

@@ -295,7 +295,7 @@ export default function BookSlot() {
           data-testid="booking-confirm-btn"
           disabled={!selectedService || !selectedTime || submitting}
           onClick={handleBook}
-          className="w-full bg-forest hover:bg-forest-dark disabled:bg-ink-muted text-cream-100 py-4 rounded-2xl font-bold shadow-[0_10px_30px_rgba(44,62,53,0.25)] transition-colors flex items-center justify-center gap-2"
+          className="w-full bg-accent hover:bg-accent-dark disabled:bg-ink-muted text-white py-4 rounded-2xl font-bold shadow-[0_10px_30px_rgba(249,115,22,0.35)] transition-colors flex items-center justify-center gap-2"
         >
           {submitting ? (
             <Loader2 size={18} className="animate-spin" />
