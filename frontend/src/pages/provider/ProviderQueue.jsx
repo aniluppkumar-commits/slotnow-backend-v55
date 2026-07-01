@@ -3,8 +3,8 @@ import api from "@/lib/api";
 import AppShell from "@/components/AppShell";
 import { useI18n } from "@/i18n";
 import useLivePolling from "@/hooks/useLivePolling";
-import { StatusBadge, formatTime } from "@/lib/utils-app";
-import { Loader2, Clock, User2, ChevronRight, UserPlus, RotateCcw, X, Phone as PhoneIcon, Radio } from "lucide-react";
+import QueueRow from "@/components/QueueRow";
+import { Loader2, ChevronRight, UserPlus, RotateCcw, X } from "lucide-react";
 import { toast } from "sonner";
 
 export default function ProviderQueue() {
@@ -142,45 +142,7 @@ export default function ProviderQueue() {
         ) : (
           <div className="space-y-2">
             {queue.map((b) => (
-              <div
-                key={b.id}
-                data-testid={`queue-item-${b.id}`}
-                className={`bg-white border border-cream-300 rounded-xl p-3 flex items-center gap-3 ${
-                  b.status === "in_progress" ? "ring-2 ring-forest bg-forest-faint" : ""
-                }`}
-              >
-                <div className={`w-11 h-11 rounded-xl flex items-center justify-center font-black text-sm shrink-0 ${
-                  b.status === "in_progress" ? "bg-forest text-cream-100" :
-                  b.status === "completed" ? "bg-cream-200 text-ink-muted line-through" :
-                  "bg-forest-faint text-forest"
-                }`}>
-                  #{b.token_number}
-                </div>
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-2">
-                    <p className="text-sm font-bold text-ink truncate">
-                      {b.customer_name || b.customer?.name || "Customer"}
-                    </p>
-                    {b.is_walkin && (
-                      <span className="text-[9px] font-bold px-1.5 py-0.5 bg-amber-100 text-amber-800 rounded uppercase tracking-wider">Walk-in</span>
-                    )}
-                  </div>
-                  <div className="flex items-center gap-2 text-xs text-ink-soft mt-0.5">
-                    <span className="flex items-center gap-0.5"><Clock size={11} />{formatTime(b.start_time)}</span>
-                    <span>·</span>
-                    <span className="truncate">{b.service_name}</span>
-                  </div>
-                  {b.customer_phone && (
-                    <a
-                      href={`tel:${b.customer_phone}`}
-                      className="text-[11px] text-forest font-semibold flex items-center gap-1 mt-0.5"
-                    >
-                      <PhoneIcon size={10} /> {b.customer_phone}
-                    </a>
-                  )}
-                </div>
-                <StatusBadge status={b.status} />
-              </div>
+              <QueueRow key={b.id} booking={b} />
             ))}
           </div>
         )}

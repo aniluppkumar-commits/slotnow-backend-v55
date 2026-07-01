@@ -4,17 +4,49 @@ import AppShell from "@/components/AppShell";
 import { useI18n } from "@/i18n";
 import { useAuth } from "@/context/AuthContext";
 import useLivePolling from "@/hooks/useLivePolling";
-import { StatusBadge, formatTime } from "@/lib/utils-app";
+import QueueRow from "@/components/QueueRow";
+import {
+  DndContext,
+  closestCenter,
+  PointerSensor,
+  KeyboardSensor,
+  useSensor,
+  useSensors,
+} from "@dnd-kit/core";
+import {
+  SortableContext,
+  verticalListSortingStrategy,
+  useSortable,
+  arrayMove,
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
 import {
   Loader2,
-  Clock,
   ChevronRight,
   UserPlus,
-  Phone as PhoneIcon,
   X,
   UserCog,
+  GripVertical,
 } from "lucide-react";
 import { toast } from "sonner";
+
+function SortableItem({ booking, providerName }) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: booking.id });
+  return (
+    <QueueRow
+      booking={booking}
+      providerName={providerName}
+      dragRef={setNodeRef}
+      style={{
+        transform: CSS.Transform.toString(transform),
+        transition,
+        opacity: isDragging ? 0.7 : 1,
+        zIndex: isDragging ? 20 : "auto",
+      }}
+      dragHandleProps={{ ...attributes, ...listeners }}
+    />
+  );
+}
 
 export default function ReceptionistDashboard() {
   const { t } = useI18n();
@@ -85,6 +117,32 @@ export default function ReceptionistDashboard() {
 
   const active = queue.filter((b) => !["completed", "cancelled"].includes(b.status));
 
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
+    useSensor(KeyboardSensor)
+  );
+
+  const handleDragEnd = async (event) => {
+    const { active: dragged, over } = event;
+    if (!dragged || !over || dragged.id === over.id) return;
+    const oldIdx = queue.findIndex((b) => b.id === dragged.id);
+    const newIdx = queue.findIndex((b) => b.id === over.id);
+    if (oldIdx < 0 || newIdx < 0) return;
+    const reordered = arrayMove(queue, oldIdx, newIdx);
+    setQueue(reordered);
+    try {
+      const activeIds = reordered
+        .filter((b) => !["completed", "cancelled"].includes(b.status))
+        .map((b) => b.id);
+      const today = new Date().toISOString().slice(0, 10);
+      await api.post("/queue/reorder", { date: today, ordered_ids: activeIds });
+      toast.success("Queue reordered");
+    } catch (e) {
+      toast.error(e.response?.data?.detail || "Failed to reorder");
+      await load();
+    }
+  };
+
   const businessName = providerInfo?.business_name || user?.designation || "your provider";
   const city = providerInfo?.city;
 
@@ -143,7 +201,7 @@ export default function ReceptionistDashboard() {
           </button>
         </div>
 
-        {/* Queue */}
+        {/* Queue with drag-drop */}
         {loading ? (
           <div className="flex justify-center py-12">
             <Loader2 className="animate-spin text-forest" />
@@ -151,57 +209,20 @@ export default function ReceptionistDashboard() {
         ) : queue.length === 0 ? (
           <p className="text-sm text-ink-soft italic text-center py-12">{t("no_bookings_today")}</p>
         ) : (
-          <div className="space-y-2">
-            {queue.map((b) => (
-              <div
-                key={b.id}
-                data-testid={`receptionist-queue-${b.id}`}
-                className={`bg-white border border-cream-300 rounded-xl p-3 flex items-center gap-3 ${
-                  b.status === "in_progress" ? "ring-2 ring-forest bg-forest-faint" : ""
-                }`}
-              >
-                <div
-                  className={`w-11 h-11 rounded-xl flex items-center justify-center font-black text-sm shrink-0 ${
-                    b.status === "in_progress"
-                      ? "bg-forest text-white"
-                      : b.status === "completed"
-                      ? "bg-cream-200 text-ink-muted line-through"
-                      : "bg-forest-faint text-forest"
-                  }`}
-                >
-                  #{b.token_number}
+          <>
+            <p className="text-[10px] uppercase tracking-widest font-bold text-ink-muted flex items-center gap-1">
+              <GripVertical size={11} /> Drag to reorder
+            </p>
+            <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+              <SortableContext items={queue.map((b) => b.id)} strategy={verticalListSortingStrategy}>
+                <div className="space-y-2">
+                  {queue.map((b) => (
+                    <SortableItem key={b.id} booking={b} providerName={providerInfo?.business_name} />
+                  ))}
                 </div>
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-2">
-                    <p className="text-sm font-bold text-ink truncate">
-                      {b.customer_name || b.customer?.name || "Customer"}
-                    </p>
-                    {b.is_walkin && (
-                      <span className="text-[9px] font-bold px-1.5 py-0.5 bg-amber-100 text-amber-800 rounded uppercase tracking-wider">
-                        Walk-in
-                      </span>
-                    )}
-                  </div>
-                  <div className="flex items-center gap-2 text-xs text-ink-soft mt-0.5">
-                    <span className="flex items-center gap-0.5">
-                      <Clock size={11} /> {formatTime(b.start_time)}
-                    </span>
-                    <span>·</span>
-                    <span className="truncate">{b.service_name}</span>
-                  </div>
-                  {b.customer_phone && (
-                    <a
-                      href={`tel:${b.customer_phone}`}
-                      className="text-[11px] text-forest font-semibold flex items-center gap-1 mt-0.5"
-                    >
-                      <PhoneIcon size={10} /> {b.customer_phone}
-                    </a>
-                  )}
-                </div>
-                <StatusBadge status={b.status} />
-              </div>
-            ))}
-          </div>
+              </SortableContext>
+            </DndContext>
+          </>
         )}
       </div>
 

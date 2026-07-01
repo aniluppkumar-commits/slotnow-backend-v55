@@ -4,6 +4,7 @@ import AppShell from "@/components/AppShell";
 import { useI18n } from "@/i18n";
 import { useAuth } from "@/context/AuthContext";
 import { StatusBadge, formatDate, formatTime } from "@/lib/utils-app";
+import WhatsAppModal from "@/components/WhatsAppModal";
 import {
   Loader2,
   Calendar,
@@ -11,7 +12,6 @@ import {
   MessageCircle,
   Printer,
   Trash2,
-  FilterX,
   History as HistoryIcon,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -34,6 +34,7 @@ export default function HistoryPage() {
   const [start, setStart] = useState(daysAgoISO(30));
   const [end, setEnd] = useState(toISO(new Date()));
   const [deletingId, setDeletingId] = useState(null);
+  const [waTarget, setWaTarget] = useState(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -182,11 +183,25 @@ export default function HistoryPage() {
                 canDelete={isProvider}
                 busy={deletingId === b.id}
                 onDelete={() => remove(b)}
+                onWhatsApp={() => setWaTarget(b)}
               />
             ))}
           </div>
         )}
       </div>
+
+      {/* WhatsApp modal */}
+      <WhatsAppModal
+        open={!!waTarget}
+        onClose={() => setWaTarget(null)}
+        phone={waTarget?.customer_phone}
+        name={waTarget?.customer_name || waTarget?.customer?.name || "Customer"}
+        token={waTarget?.token_number}
+        provider={waTarget?.provider?.business_name}
+        service={waTarget?.service_name}
+        date={waTarget?.date ? formatDate(waTarget.date) : ""}
+        time={waTarget?.start_time ? formatTime(waTarget.start_time) : ""}
+      />
 
       {/* Print CSS scope */}
       <style>{`
@@ -209,13 +224,9 @@ function MiniStat({ label, value, accent = "text-ink", testid }) {
   );
 }
 
-function HistoryRow({ b, canDelete, busy, onDelete }) {
+function HistoryRow({ b, canDelete, busy, onDelete, onWhatsApp }) {
   const phone = b.customer_phone;
   const name = b.customer_name || b.customer?.name || "Customer";
-  const waNumber = phone ? `91${phone}` : null;
-  const waText = encodeURIComponent(
-    `Hi ${name}, this is regarding your booking #${b.token_number} at ${b.provider?.business_name || "SlotNow"} on ${formatDate(b.date)}.`
-  );
 
   return (
     <div
@@ -254,15 +265,13 @@ function HistoryRow({ b, canDelete, busy, onDelete }) {
                 </a>
               )}
               {phone && (
-                <a
+                <button
                   data-testid={`history-whatsapp-${b.id}`}
-                  href={`https://wa.me/${waNumber}?text=${waText}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
+                  onClick={onWhatsApp}
                   className="flex items-center gap-1 text-[11px] font-bold bg-[#E7F8EC] text-[#128C7E] px-2.5 py-1.5 rounded-lg hover:bg-[#D0F0DA]"
                 >
                   <MessageCircle size={12} strokeWidth={2.5} /> WhatsApp
-                </a>
+                </button>
               )}
             </div>
             {canDelete && (

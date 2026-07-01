@@ -16,6 +16,7 @@ import {
   X,
   Calendar,
   Settings2,
+  ShieldAlert,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -100,6 +101,44 @@ export default function ProviderDashboard() {
   return (
     <AppShell title={t("provider_dashboard")}>
       <div className="px-4 sm:px-6 pt-4 space-y-5">
+        {/* Approval banner */}
+        {profile?.approved === false && (
+          <div
+            data-testid="provider-pending-banner"
+            className="bg-amber-50 border-2 border-amber-200 rounded-2xl p-4 flex items-start gap-3"
+          >
+            <div className="w-9 h-9 rounded-lg bg-amber-100 flex items-center justify-center text-amber-800 shrink-0">
+              <ShieldAlert size={18} />
+            </div>
+            <div>
+              <p className="text-sm font-heading font-bold text-amber-900">
+                Pending admin approval
+              </p>
+              <p className="text-xs text-amber-800 mt-0.5">
+                Your business is under review. You'll be listed to customers once an
+                administrator approves your registration.
+              </p>
+            </div>
+          </div>
+        )}
+
+        {profile?.status === "suspended" || (profile?.approved === false && profile?.was_approved) ? (
+          <div
+            data-testid="provider-suspended-banner"
+            className="bg-rose-50 border-2 border-rose-200 rounded-2xl p-4 flex items-start gap-3"
+          >
+            <div className="w-9 h-9 rounded-lg bg-rose-100 flex items-center justify-center text-rose-800 shrink-0">
+              <ShieldAlert size={18} />
+            </div>
+            <div>
+              <p className="text-sm font-heading font-bold text-rose-900">Account suspended</p>
+              <p className="text-xs text-rose-800 mt-0.5">
+                Please contact SlotNow support to restore your account.
+              </p>
+            </div>
+          </div>
+        ) : null}
+
         {/* Profile card */}
         <div className="bg-white border border-cream-300 rounded-2xl p-4 flex items-center gap-3">
           <div className="w-14 h-14 rounded-xl overflow-hidden bg-cream-200 shrink-0">

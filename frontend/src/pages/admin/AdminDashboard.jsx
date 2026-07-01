@@ -74,6 +74,34 @@ export default function AdminDashboard() {
     }
   };
 
+  const suspend = async (pid) => {
+    if (!window.confirm("Suspend this provider? They will not receive new bookings until you re-approve.")) return;
+    setBusyId(pid);
+    try {
+      // Backend uses /reject to mark as unavailable (no dedicated /suspend endpoint)
+      await api.put(`/admin/providers/${pid}/reject`);
+      toast.success("Suspended");
+      await load();
+    } catch (e) {
+      toast.error(e.response?.data?.detail || "Failed");
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  const unsuspend = async (pid) => {
+    setBusyId(pid);
+    try {
+      await api.put(`/admin/providers/${pid}/approve`);
+      toast.success("Re-approved");
+      await load();
+    } catch (e) {
+      toast.error(e.response?.data?.detail || "Failed");
+    } finally {
+      setBusyId(null);
+    }
+  };
+
   const bulkApprove = async () => {
     const pendingIds = providers.filter((p) => p.approved === false || p.status === "pending").map((p) => p.id);
     if (pendingIds.length === 0) return;
@@ -185,7 +213,15 @@ export default function AdminDashboard() {
 
           <div className="space-y-2">
             {others.map((p) => (
-              <ProviderRow key={p.id} p={p} onApprove={() => approve(p.id)} onReject={() => reject(p.id)} busy={busyId === p.id} readOnly />
+              <ProviderRow
+                key={p.id}
+                p={p}
+                onApprove={() => approve(p.id)}
+                onReject={() => reject(p.id)}
+                onSuspend={() => suspend(p.id)}
+                onUnsuspend={() => unsuspend(p.id)}
+                busy={busyId === p.id}
+              />
             ))}
           </div>
         </div>
@@ -221,16 +257,16 @@ function QuickRow({ icon, title, onClick, testid }) {
   );
 }
 
-function ProviderRow({ p, onApprove, onReject, busy, readOnly }) {
+function ProviderRow({ p, onApprove, onReject, onSuspend, onUnsuspend, busy, readOnly }) {
   const isPending = p.approved === false || p.status === "pending";
   const isApproved = p.approved === true || p.status === "approved";
-  const isRejected = p.status === "rejected";
+  const isRejected = p.status === "rejected" || p.status === "suspended";
   const statusPill = isApproved
     ? "bg-emerald-50 text-emerald-800 ring-emerald-100"
     : isRejected
     ? "bg-rose-50 text-rose-800 ring-rose-100"
     : "bg-amber-50 text-amber-800 ring-amber-100";
-  const statusLabel = isApproved ? "approved" : isRejected ? "rejected" : "pending";
+  const statusLabel = isApproved ? "approved" : isRejected ? "suspended" : "pending";
   return (
     <div data-testid={`admin-provider-${p.id}`} className="bg-white border border-cream-300 rounded-xl p-3 flex items-center gap-3">
       <div className="w-11 h-11 rounded-xl bg-cream-200 overflow-hidden shrink-0">
@@ -245,22 +281,50 @@ function ProviderRow({ p, onApprove, onReject, busy, readOnly }) {
       </div>
       {!readOnly && (
         <div className="flex gap-1 shrink-0">
-          <button
-            data-testid={`admin-approve-${p.id}`}
-            onClick={onApprove}
-            disabled={busy}
-            className="p-2 rounded-lg bg-emerald-50 text-emerald-700 hover:bg-emerald-100 disabled:opacity-50"
-          >
-            <CheckCircle2 size={16} />
-          </button>
-          <button
-            data-testid={`admin-reject-${p.id}`}
-            onClick={onReject}
-            disabled={busy}
-            className="p-2 rounded-lg bg-rose-50 text-rose-700 hover:bg-rose-100 disabled:opacity-50"
-          >
-            <XCircle size={16} />
-          </button>
+          {isPending && (
+            <>
+              <button
+                data-testid={`admin-approve-${p.id}`}
+                onClick={onApprove}
+                disabled={busy}
+                className="p-2 rounded-lg bg-emerald-50 text-emerald-700 hover:bg-emerald-100 disabled:opacity-50"
+                title="Approve"
+              >
+                <CheckCircle2 size={16} />
+              </button>
+              <button
+                data-testid={`admin-reject-${p.id}`}
+                onClick={onReject}
+                disabled={busy}
+                className="p-2 rounded-lg bg-rose-50 text-rose-700 hover:bg-rose-100 disabled:opacity-50"
+                title="Reject"
+              >
+                <XCircle size={16} />
+              </button>
+            </>
+          )}
+          {isApproved && (
+            <button
+              data-testid={`admin-suspend-${p.id}`}
+              onClick={onSuspend}
+              disabled={busy}
+              className="px-2 py-1 rounded-lg bg-amber-50 text-amber-800 hover:bg-amber-100 disabled:opacity-50 text-[11px] font-bold"
+              title="Suspend"
+            >
+              Suspend
+            </button>
+          )}
+          {isRejected && (
+            <button
+              data-testid={`admin-unsuspend-${p.id}`}
+              onClick={onUnsuspend}
+              disabled={busy}
+              className="px-2 py-1 rounded-lg bg-emerald-50 text-emerald-800 hover:bg-emerald-100 disabled:opacity-50 text-[11px] font-bold"
+              title="Re-approve"
+            >
+              Re-approve
+            </button>
+          )}
         </div>
       )}
     </div>
