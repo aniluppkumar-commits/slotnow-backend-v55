@@ -1,64 +1,59 @@
 # SlotNow Web — Product Requirements & Progress
 
-## Problem Statement (original)
-Build a web version of SlotNow, a booking app. Backend + MongoDB deployed at https://pro-booking-21.emergent.host. Frontend-only web app calls that API.
-
 ## Architecture
 - React 19 + CRA/craco + Tailwind + React Router 7.
-- Backend external (`REACT_APP_API_URL=https://pro-booking-21.emergent.host`). No local backend.
-- No websockets → 4s visibility-aware polling for live queue.
+- Backend external at `https://pro-booking-21.emergent.host` (no local backend).
 - Booking is SHIFT-based (`start_time == shift.start_time`).
+- No websockets → 4s visibility-aware polling.
 
 ## Roles (4)
-1. **Customer** — browse, book, reschedule, review, refer.
-2. **Service Provider** — self-onboard, manage services + availability + capacity + assistants, run queue, view/delete history.
-3. **Service Assistant** (backend: `receptionist`) — provider-created; runs the same queue on behalf of the provider; view history (no delete).
-4. **Admin** — approve/reject providers (single + bulk), users, bookings, revenue, SMS/payment settings, referral tracking.
+1. **Customer** — browse, book, reschedule, review, refer (with rewards).
+2. **Service Provider** — self-onboard (with image upload), services + availability + capacity + assistants, queue, history w/ delete.
+3. **Service Assistant** (backend: `receptionist`) — linked-provider queue, walk-ins (with vehicle model), history w/o delete.
+4. **Admin** — approve providers (single + bulk), users, bookings, revenue, SMS+payment settings, referral tracking.
 
-## Design System (matches mobile app)
-- Navy `#1E3A8A` (forest) + Orange `#F97316` (accent) + cream `#F5F6F8` + ink `#1D2E5B`.
-- Custom SVG logo (blue clock + orange checkmark tail); navy "Slot" + orange "Now" wordmark.
-- Outfit (headings) + Manrope (body) + Noto Sans Devanagari (Hindi).
-- Mobile-first max-w-md container, floating pill bottom-nav, orange primary CTAs.
+## Design (matches mobile app)
+- Navy `#1E3A8A` + Orange `#F97316` + cream `#F5F6F8`.
+- Custom SVG logo (blue clock + orange checkmark).
+- Outfit + Manrope + Noto Sans Devanagari.
 
-## What's implemented (all iterations)
+## All shipped features
 
-### Iterations 1-7 (previous)
-- Customer flow (categories, providers, booking, live token, bookings, notifications, profile).
-- Provider onboarding + dashboard + services + availability + queue + assistants.
-- Service Assistant dashboard (linked-provider queue).
-- Admin dashboard (users, bookings, revenue, SMS + payment settings, provider approval).
-- Full i18n (EN + हिं).
-- PIN re-login, booking reschedule, automobile vehicle fields.
-- Shift-based bookings + QuickWheels seeded.
+### Iterations 1–7 — Core + roles + design
+Customer flow, provider suite, receptionist suite, admin suite, i18n (EN + हिं), PIN re-login, reschedule, automobile vehicle fields, shift-based booking, live polling.
 
-### Iteration 8 (new)
-- **History page** (`/provider/history` + `/receptionist/history`) — date-range picker with 0/7/30/90-day presets, 4 mini-stats, Print via window.print(), per-row **Call** (tel:) + **WhatsApp** (wa.me deep link with pre-filled message) + **Delete** (Provider role only).
-- **Walk-in Paid/Free** — segmented control added to walk-in modals in ProviderQueue AND ReceptionistDashboard.
-- **Referral tracking** —
-  - `?ref=<phone>` captured on Login; sessionStorage persists across form steps.
-  - verify-otp sends `{ via_referral: true, ref: <phone> }` when ref present.
-  - Customer Profile shows orange "Refer & Share" gradient card with copyable link + Web Share (falls back to copy).
-  - `/admin/referrals` — ranked list (top 3 with trophy) grouped by `referred_by`, showing total refs + converted (has booking) + individual referred phones. Aggregation over `/admin/users` + `/admin/bookings`.
-- **Two-line shift card** — BookSlot shift cards now render `9:00 AM – 6:00 PM` / `N booked so far` / `Token on confirm` on three stacked lines with active checkmark on right.
-- **Business image URL live preview** — ProviderOnboarding image field shows 80×80 preview below the input.
-- **Bulk approve** — Admin dashboard shows `Approve all (N)` button next to the "Pending Approval" badge when N ≥ 1. Sequentially calls `/admin/providers/{id}/approve`. Confirmed working with 4 pending providers seeded in DB.
-- Bugfix: Admin dashboard now correctly reads `approved: boolean` (was reading `status: 'pending'`).
+### Iteration 8 — History + walk-in Paid/Free + referral + polish
+History page (Provider + Assistant) with Call/WhatsApp/Print + Provider-only Delete. Walk-in Paid/Free segmented control (Provider + Receptionist). Referral tracking via `?ref=`, Admin `/admin/referrals` aggregation. Two-line shift card. Bulk-approve. Image URL preview.
 
-## Test coverage
+### Iteration 9 — Bugfix + 3 P2 enhancements (100% pass)
+- **BUG FIX**: `rec-walkin-model` — added Vehicle Model input to Receptionist walk-in modal (was missing, blocking automobile walk-in bookings).
+- **Native image upload**: ProviderOnboarding now has an `Upload image` button that reads any local image file, compresses it (max 800px, JPEG q=0.75) to a base64 data URL via `compressImageToDataURL` helper, and stores it in the profile. Preview + Clear button included. URL paste still supported as fallback.
+- **Force onboarding for empty profile**: `Login.homeForRole` now checks both `/providers/me/profile` 404 AND empty `business_name` → routes to `/provider/onboarding`. Verified: brand-new provider phone 8782913356 lands on onboarding, not dashboard.
+- **Referral rewards progress**: Customer Profile Refer & Share card now shows a 3-tier progress bar (1 = ₹50 credit, 3 = ₹200 booking, 10 = priority support). Tries `GET /api/referrals/mine` for live count, falls back to 0 gracefully when backend doesn't expose the endpoint (currently 404s).
+
+## Test coverage summary
 - Iteration 1: 12/12 customer.
 - Iteration 4: 13/14 — roles + design.
 - Iteration 7: 4/4 (100%) — Automobile end-to-end.
-- Iteration 8: 11/12 verified + 12th code-verified (bulk approve DB-gated). After seeding 4 pending providers + admin filter fix, bulk approve is UI-verified working ("Approve all (4)" visible).
+- Iteration 8: 11/12 + UI-verified bulk approve.
+- **Iteration 9: 6/6 (100%)** — all P2 items + bug fix verified.
 
-## Backlog (P2)
+## Open Backend Recommendations (for backend team)
+- Implement `GET /api/referrals/mine` returning `{ count: N }` (or add `total_refs` to `/users/me`) so the Profile progress bar shows live counts. Currently 404s; UI handles gracefully.
+- Consider a real image upload endpoint (multipart) or return a signed URL. Current approach stores base64 in Mongo which may bloat documents; fine for MVP but a proper media service would be cleaner.
+- Consider explicit `approved: false` on freshly-onboarded providers so they enter the admin approval funnel.
+
+## Backlog (P2/P3)
 - Real WebSocket-based live queue.
-- Native image upload API (currently URL-based).
-- Provider avatar upload.
 - Emergent-managed Google Auth.
-- Referral rewards (credit ledger for referrer).
+- Provider avatar upload (currently business image only).
+- Referral rewards ledger (backend needs schema + rules).
 
-## Notes / Constraints
-- Backend uses `receptionist` internally for Service Assistant.
-- Backend has no dedicated referral endpoints — tracking is captured via `via_referral` + `ref` on OTP verify, and aggregated client-side in `/admin/referrals`.
-- Delete permissions in History are enforced client-side (assistants don't see the button); backend also enforces via the API.
+## Test credentials
+- Customer: `9999999999` / OTP `123456` / PIN `1234`
+- Provider (onboarded): `8888800884` / OTP `123456`
+- Provider (QuickWheels, Automobile, approved): `8888800002` / OTP `123456`
+- Service Assistant: `6666600011` / OTP `123456`
+- Admin: `7777700002` / OTP `123456`
+- Fresh provider (parked on onboarding): `8782913356` / OTP `123456`
+- Pending providers for bulk-approve demo: `91111001`, `91111002`, `91111003`
