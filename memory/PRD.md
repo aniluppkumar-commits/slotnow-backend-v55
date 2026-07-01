@@ -1,66 +1,66 @@
 # SlotNow Web — Product Requirements & Progress
 
 ## Problem Statement (original)
-Build a web version of SlotNow, a booking app. The backend and MongoDB already exist at https://pro-booking-21.emergent.host. Configure this web app to call that backend URL. Replicate the booking flows from the referenced Expo app (repo private → agreed to proceed using deployed backend API spec only).
+Build a web version of SlotNow, a booking app. The backend and MongoDB already exist at https://pro-booking-21.emergent.host. Configure this web app to call that backend URL. Replicate the booking flows from the referenced Expo app (private repo → proceeded via deployed backend API spec).
 
 ## Architecture
 - **Type:** Frontend-only web SPA (React 19 + CRA/craco + Tailwind + React Router 7)
 - **Backend:** External, deployed at `https://pro-booking-21.emergent.host` (FastAPI + MongoDB Atlas).
-- **API Base:** `REACT_APP_API_URL=https://pro-booking-21.emergent.host` in `/app/frontend/.env`; axios client at `src/lib/api.js`.
+- **API Base:** `REACT_APP_API_URL=https://pro-booking-21.emergent.host` in `/app/frontend/.env`.
 - **No local backend used.** MongoDB accessed only via deployed backend.
-- **No websockets available on backend** → SlotNow uses page-visibility-aware polling every 4s for live queue updates.
+- **No websockets on backend** → SlotNow uses page-visibility-aware polling every 4s for live queue updates.
+- **Booking is SHIFT-based** (not per-minute slots) — customer joins a shift session and receives a queue token.
 
-## User personas
+## User personas (4 roles)
 1. **Customer** — browses categories, books slots, tracks token, reviews, reschedules.
-2. **Provider** — self-onboards, manages services & availability, runs today's queue (call-next / walk-in / reset).
+2. **Service Provider** — self-onboards, manages services / availability / capacity / assistants, runs today's queue.
+3. **Service Assistant** (backend: `receptionist`) — created by a Provider; logs in and works the same queue on behalf of that provider.
+4. **Admin** — approves/rejects providers, browses all users & bookings, edits SMS + payment settings, sees subscription revenue.
 
-## Design System (see `/app/design_guidelines.json`)
-- Cream `#F9F8F6` background, forest `#2C3E35` primary.
-- Outfit (headings) + Manrope (body) + Noto Sans Devanagari (Hindi).
-- Mobile-first (max-w-md container), floating pill bottom nav (bottom-[76px]) above the Emergent badge.
-- Icons: lucide-react.
+## Design System (matches mobile app)
+- **Primary Navy** `#1E3A8A` (forest.DEFAULT) — used for headers, section labels, secondary buttons.
+- **Accent Orange** `#F97316` (accent.DEFAULT) — used for primary CTAs (Continue, Book a slot, Confirm, Call next).
+- **Background** cream `#F5F6F8`; white cards; ink `#1D2E5B` text.
+- **Logo** — custom SVG (navy clock ring + orange checkmark tail + speed lines) rendered by `SlotNowMark`.
+- **Wordmark** — navy "Slot" + orange "Now" (`SlotNowWordmark`).
+- **Typography** Outfit (headings) + Manrope (body) + Noto Sans Devanagari (Hindi).
+- **Mobile-first** (max-w-md container) with floating pill bottom nav (bottom-[76px]) that clears the Emergent badge.
 
-## What's implemented (2026-01)
+## What's implemented (final)
 
-### Iteration 1 — Customer MVP
-- [x] OTP auth (send/verify), JWT persistence, axios 401 auto-logout.
-- [x] Home: greeting, search, category grid (bilingual), Top Rated + All Providers.
-- [x] Category page & Provider detail (hero, bio, services, reviews, sticky Book CTA).
-- [x] Booking flow: service / date / time / notes / confirm → token.
-- [x] My Bookings: upcoming / past tabs.
-- [x] Booking detail: live token, queue position, cancel, review.
-- [x] Notifications inbox.
-- [x] Profile: editable form + logout.
-- [x] Role-agnostic bottom nav + route protection.
+### Iteration 1 — Customer MVP ✅
+OTP auth, categories, providers, provider detail, booking flow, my bookings, booking detail (live token), notifications, profile, route protection.
 
-### Iteration 2 — Provider suite, PIN, reschedule, i18n, live polling
-- [x] **Provider self-onboarding** (`/provider/onboarding`) → dashboard (`/provider`).
-- [x] **Provider dashboard**: profile card, duty toggle, today's stats, service/availability/capacity/queue quick links.
-- [x] **Provider services CRUD** (`/provider/services`) with service_type field.
-- [x] **Provider availability CRUD** (`/provider/availability`) per weekday.
-- [x] **Provider queue** (`/provider/queue`) — live-polled every 4s, page-visibility aware. Call-next, Walk-in modal (with vehicle fields), Reset.
-- [x] **Role-aware bottom nav** (customer: Home/Bookings/Alerts/Profile ; provider: Dashboard/Queue/Alerts/Profile).
-- [x] **Route protection with role** (customer→/, provider→/provider).
-- [x] **PIN-based re-login**: `Login with PIN` mode on the login screen; set-PIN prompt after first OTP verify; Change/Set PIN in Profile.
-- [x] **Booking reschedule**: modal from booking detail — date rail + time grid + PUT `/bookings/{id}`.
-- [x] **Full i18n (EN + Hindi)** — dictionary covers Login, Home, Category, Provider Detail, Booking flow, My Bookings, Booking Detail, Notifications, Profile, Provider onboarding, Dashboard, Services, Availability, Queue.
-- [x] **Automobile-specific fields** — when `category_id === '333a2602-2d4a-4e16-a9da-3e004b0e14fd'`, Book Slot shows Vehicle Reg No (required), Model, Service Type. Walk-in modal also has vehicle fields.
-- [x] **Live queue polling** via `useLivePolling(fn, 4000)` — page-visibility aware, pauses when tab hidden.
-- [x] Modals repositioned to avoid Emergent badge overlap (pb-24 sm:pb-4).
+### Iteration 2 — 6 P1 features ✅
+Provider onboarding + dashboard + services CRUD + availability CRUD + queue + assistants; PIN re-login; booking reschedule; full i18n (EN + हिं); Automobile-specific fields; live 4s polling.
+
+### Iteration 3–5 — polish & regression fixes ✅
+Modal-badge overlap, `Array.isArray` guards, `<option>` template literals, provider re-login profile lookup, receptionist header shows business name.
+
+### Iteration 6–7 — Roles + Design + Shift booking ✅
+- **Admin dashboard** `/admin` + Users / Bookings / Revenue / SMS + Payment settings.
+- **Service Assistant** `/receptionist` — assist dashboard with Live badge, Now-serving token, Call next, Walk-in modal.
+- **Provider Assistants CRUD** `/provider/assistants` — add / block / remove.
+- **Design overhaul** — new navy + orange palette, custom SlotNow SVG logo, 2×2 role tile grid on login (Customer / Service Provider / Service Assistant / Admin), language pill top-right.
+- **Shift-based booking** — Book Slot and Reschedule show each availability window as a shift card ("9:00 AM – 6:00 PM · N booked so far"); backend expects `start_time == shift.start_time` so the frontend now sends exactly that.
+- **QuickWheels Auto Service** seeded (Automobile category, approved, 09:00–18:00 daily) to enable full end-to-end vehicle-reg required booking.
 
 ## Test coverage
-- Iteration 1: 12/12 customer flows pass.
-- Iteration 3 (retest): 6/7 iteration-2 flows fully verified (86%). Automobile end-to-end partially blocked because seeded Automobile provider has no availability slots (backend seed gap, not a UI bug). All UI code paths verified working.
+- Iteration 1: 12/12 customer flows.
+- Iteration 4: 13/14 (93%) — Assistant + Admin + design added.
+- Iteration 5: 5/7 — 3 blockers surfaced.
+- Iteration 6: 5/7 — Automobile still blocked by duplicate seed shifts.
+- **Iteration 7: 4/4 (100%)** — Automobile end-to-end passes, reschedule passes, non-auto regression passes, admin routing passes. Provider/Receptionist routing not re-run this iteration (previously verified in iteration 6, no code change).
 
-## Backlog / Not implemented (P2)
-- Admin console (approvals, stats, SMS/payment settings).
-- Referral flow (`via_referral` + `ref` on OTP verify).
-- Avatar & provider image uploads.
-- Real websockets when backend supports them.
+## Backlog (P2)
+- Referral flow surfacing (`via_referral` + `ref` params).
+- Provider avatar & business image uploads.
+- WebSocket-based live queue (drop-in replace `useLivePolling` when backend adds WS).
 - Emergent-managed Google Auth (not requested).
+- Bulk-approve for admin, richer revenue analytics.
+- Two-line shift-card layout for very small viewports (minor UX polish flagged by testing agent).
 
 ## Notes / Constraints
-- Backend has no websocket. "Live" queue is smart 4s polling (visibility-aware).
-- Automobile provider needs availability seeded to fully test the vehicle-reg required flow end-to-end.
-- ProviderOnboarding category `<option>` renders `name / name_hi` as plain text (no wrapping element).
-- PIN login returns user to the pre-login route (same behavior as OTP verify) — matches standard React auth UX.
+- Backend has no websocket. Polling is 4s and page-visibility-aware.
+- Backend booking model is shift-based; the UI now matches. Sub-minute slot picking would require backend changes.
+- Iteration 7 seeded two active customer bookings (auto + non-auto) — safe to delete manually.
