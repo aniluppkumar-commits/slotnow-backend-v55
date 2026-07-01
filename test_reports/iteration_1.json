@@ -1,0 +1,54 @@
+{
+  "summary": "Comprehensive frontend UI/integration testing for SlotNow web app (frontend-only, calls external backend at pro-booking-21.emergent.host). Tested login OTP flow, home categories/search, category browsing, provider detail, full booking flow (service→date→time→confirm→token), My Bookings upcoming/past tabs, booking detail with cancel + review form, notifications, profile edit/save/persist, logout, and route protection. Nearly all flows pass end-to-end. One critical UX issue: 'Made with Emergent' floating badge overlaps the bottom nav Notifications and Profile buttons on mobile viewport (<=~448px width), rendering both bottom-nav items unclickable for the user.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {
+        "component": "AppShell BottomNav",
+        "issue": "The 'Made with Emergent' floating badge (fixed bottom-right, ~178x40 at coords [206, 844]) sits on top of nav-notifications-btn and nav-profile-btn on the mobile-first layout (viewport 400x900, and any width <=~448px). elementFromPoint on both testids returns the <p>'Made with Emergent'</p> element, confirming they are 100% overlapped and unreachable via click. Users on mobile cannot access Notifications or Profile from the bottom navigation at all. Direct URL navigation to /notifications and /profile works, but the bottom-nav UX is effectively broken for 2 of the 4 tabs.",
+        "selector": "[data-testid=\"nav-notifications-btn\"], [data-testid=\"nav-profile-btn\"]",
+        "priority": "HIGH"
+      },
+      {
+        "component": "Profile.jsx handleLogout",
+        "issue": "Uses native window.confirm() for logout confirmation. Not a functional bug (works when user clicks OK), but poor UX vs. an app-styled modal, and it also blocks automated tests unless dialog handler is attached.",
+        "selector": "[data-testid=\"profile-logout-btn\"]",
+        "priority": "LOW"
+      }
+    ],
+    "integration_issues": [],
+    "design_issues": [
+      {
+        "screen": "Bottom navigation across all authenticated pages on mobile",
+        "issues": ["Made with Emergent badge overlaps last 2 bottom-nav items (Alerts, Profile). Consider reserving right-side padding on the bottom-nav container, moving the badge, or hiding the badge on the max-w-md mobile layout."]
+      }
+    ]
+  },
+  "test_report_links": [],
+  "action_items": [
+    "HIGH: Fix bottom-nav overlap with the Made with Emergent badge. Options: (a) add right padding / reduce nav max width on mobile so the last 2 items are not under the badge, (b) move the badge above the bottom nav (bottom: 88px), or (c) render the badge only on desktop >= md. Currently nav-notifications-btn and nav-profile-btn are unclickable on mobile viewport.",
+    "LOW: Replace window.confirm in Profile.handleLogout with an in-app confirmation modal for better UX and testability."
+  ],
+  "critical_code_review_comments": [
+    "AppShell BottomNav: fixed bottom-0 nav is at same z-index area as the injected Emergent badge; nothing reserves space for the badge on mobile. This is the root cause of the overlap.",
+    "AuthContext.logout is synchronous state clear; Profile page navigates to /login after logout which is correct. No fix needed there.",
+    "api.js interceptor performs a hard window.location redirect on 401 which is fine but bypasses React Router; acceptable given behavior.",
+    "Home.jsx uses (mounted = false) return which sets true first — cosmetic; works via truthy set. No bug.",
+    "BookSlot.jsx generates client-side time slot options from shift start/end + service duration and does not de-duplicate against already booked slots; server side is expected to reject duplicates. Verified end-to-end (booking succeeded, token issued)."
+  ],
+  "updated_files": [],
+  "success_rate": {
+    "backend": "N/A (backend testing skipped per request)",
+    "frontend": "95% - 12/12 test flows pass functionally; 1 critical UX overlap bug on bottom nav for 2 tabs on mobile viewport"
+  },
+  "test_credentials": "Phone 9999999999, OTP 123456 (as provided).",
+  "seed_data_creation": "Booking created & cancelled during testing at Sharma Clinic (Consultation, 2026-07-01 09:00, token #1). One existing past booking at FitLife Coaching visible in Past tab as expected. Profile updated to name='Test User Web', city='Bangalore' — verified persisted after reload.",
+  "retest_needed": true,
+  "should_main_agent_self_test": true,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Test with viewport 400x900 to reproduce badge/nav overlap. Attach a page.on('dialog', lambda d: d.accept()) handler before clicking profile-logout-btn because it uses window.confirm. To test full logout+route-protection flow, need to accept the confirm dialog. All primary data-testids listed in the review request are present and functional. Preview URL: https://slotnow-web.preview.emergentagent.com. Backend base is external (REACT_APP_API_URL=https://pro-booking-21.emergent.host).",
+  "rca of the issue": "AppShell's BottomNav is a fixed-position nav spanning the full mobile container width (max-w-md ~448px). The Emergent preview host injects a 'Made with Emergent' floating badge at fixed bottom-right (~206px from left, 178px wide, 40px tall) which overlaps the rightmost ~40% of the mobile bottom nav — precisely where nav-notifications-btn and nav-profile-btn live. Verified via document.elementFromPoint returning the badge <p> element at the center of both testid rects. Mitigation: either (1) constrain the bottom-nav width so last two items sit left of the badge on mobile, (2) reposition nav above the badge (add bottom-12 or bottom-14 to nav), (3) render only 3 nav tabs and move Profile/Notifications into the header on mobile, or (4) hide the badge on the mobile app container."
+}
