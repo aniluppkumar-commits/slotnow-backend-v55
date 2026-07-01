@@ -29,6 +29,7 @@ import {
   GripVertical,
 } from "lucide-react";
 import { toast } from "sonner";
+import { todayISO } from "@/lib/utils-app";
 
 function SortableItem({ booking, providerName }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: booking.id });
@@ -134,7 +135,7 @@ export default function ReceptionistDashboard() {
       const activeIds = reordered
         .filter((b) => !["completed", "cancelled"].includes(b.status))
         .map((b) => b.id);
-      const today = new Date().toISOString().slice(0, 10);
+      const today = todayISO();
       await api.post("/queue/reorder", { date: today, ordered_ids: activeIds });
       toast.success("Queue reordered");
     } catch (e) {

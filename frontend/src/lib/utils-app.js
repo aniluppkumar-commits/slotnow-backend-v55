@@ -64,7 +64,12 @@ export function formatTime(hhmm) {
 }
 
 export function todayISO() {
-  return new Date().toISOString().slice(0, 10);
+  // Use local date (not UTC) so IST users after 5:30am UTC (post-midnight IST) don't get yesterday's date.
+  const d = new Date();
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
 }
 
 export function nextNDays(n) {

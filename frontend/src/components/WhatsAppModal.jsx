@@ -29,7 +29,7 @@ export function buildTemplates({ name = "there", token, provider = "SlotNow", se
       `If anything needs attention, please reply here and we'll help right away.`,
     invite:
       `Hi ${name}, we've been sharing SlotNow with friends & family — skip the queue and book slots online. ` +
-      `Try it: https://slotnow-web.preview.emergentagent.com/login`,
+      `Try it: ${(typeof window !== "undefined" ? window.location.origin : "")}/login`,
   };
 }
 
