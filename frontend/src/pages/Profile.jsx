@@ -2,11 +2,24 @@ import React, { useState } from "react";
 import { useAuth } from "@/context/AuthContext";
 import { useNavigate } from "react-router-dom";
 import AppShell from "@/components/AppShell";
-import { Mail, MapPin, LogOut, User as UserIcon, Loader2, Phone, Save, Languages } from "lucide-react";
+import { useI18n } from "@/i18n";
+import {
+  Mail,
+  MapPin,
+  LogOut,
+  User as UserIcon,
+  Loader2,
+  Phone,
+  Save,
+  Languages,
+  LockKeyhole,
+  X,
+} from "lucide-react";
 import { toast } from "sonner";
 
 export default function Profile() {
-  const { user, logout, updateProfile } = useAuth();
+  const { user, logout, updateProfile, setPin, isProvider } = useAuth();
+  const { t, setLang } = useI18n();
   const navigate = useNavigate();
   const [form, setForm] = useState({
     name: user?.name || "",
@@ -16,12 +29,17 @@ export default function Profile() {
     language: user?.language || "en",
   });
   const [saving, setSaving] = useState(false);
+  const [pinOpen, setPinOpen] = useState(false);
+  const [newPin, setNewPin] = useState("");
+  const [savingPin, setSavingPin] = useState(false);
+  const [logoutOpen, setLogoutOpen] = useState(false);
 
   const save = async () => {
     setSaving(true);
     try {
       await updateProfile(form);
-      toast.success("Profile updated");
+      setLang(form.language);
+      toast.success(t("profile_updated"));
     } catch (e) {
       toast.error(e.response?.data?.detail || "Failed to update");
     } finally {
@@ -29,15 +47,28 @@ export default function Profile() {
     }
   };
 
-  const handleLogout = () => {
-    if (window.confirm("Logout from SlotNow?")) {
-      logout();
-      navigate("/login", { replace: true });
+  const savePin = async () => {
+    if (!/^\d{4,6}$/.test(newPin)) return toast.error("PIN must be 4-6 digits");
+    setSavingPin(true);
+    try {
+      await setPin(newPin);
+      toast.success("PIN updated");
+      setNewPin("");
+      setPinOpen(false);
+    } catch (e) {
+      toast.error(e.response?.data?.detail || "Failed");
+    } finally {
+      setSavingPin(false);
     }
   };
 
+  const handleLogout = () => {
+    logout();
+    navigate("/login", { replace: true });
+  };
+
   return (
-    <AppShell title="Profile">
+    <AppShell title={t("profile")}>
       <div className="px-4 sm:px-6 pt-4 space-y-5">
         {/* Avatar */}
         <div className="flex flex-col items-center pt-4 pb-2">
@@ -45,25 +76,30 @@ export default function Profile() {
             {form.name?.[0]?.toUpperCase() || user?.phone?.slice(-2) || <UserIcon size={28} />}
           </div>
           <p data-testid="profile-name" className="mt-3 font-heading font-bold text-ink text-lg">
-            {form.name || "Guest"}
+            {form.name || (isProvider ? "Provider" : "Guest")}
           </p>
           <p className="text-xs text-ink-soft flex items-center gap-1 mt-0.5">
             <Phone size={11} /> +91 {user?.phone}
           </p>
+          {isProvider && (
+            <span className="mt-2 text-[10px] font-bold uppercase tracking-widest text-forest bg-forest-faint px-2 py-0.5 rounded-full">
+              {t("role_provider")}
+            </span>
+          )}
         </div>
 
         {/* Form */}
         <div className="bg-white border border-cream-300 rounded-2xl p-4 space-y-3">
-          <Field icon={<UserIcon size={14} />} label="Name">
+          <Field icon={<UserIcon size={14} />} label={t("name")}>
             <input
               data-testid="profile-name-input"
               value={form.name}
               onChange={(e) => setForm({ ...form, name: e.target.value })}
-              placeholder="Your full name"
+              placeholder={t("your_full_name")}
               className="w-full bg-transparent outline-none text-ink font-medium placeholder:text-ink-muted"
             />
           </Field>
-          <Field icon={<Mail size={14} />} label="Email">
+          <Field icon={<Mail size={14} />} label={t("email")}>
             <input
               data-testid="profile-email-input"
               type="email"
@@ -73,7 +109,7 @@ export default function Profile() {
               className="w-full bg-transparent outline-none text-ink font-medium placeholder:text-ink-muted"
             />
           </Field>
-          <Field icon={<MapPin size={14} />} label="City">
+          <Field icon={<MapPin size={14} />} label={t("city")}>
             <input
               data-testid="profile-city-input"
               value={form.city}
@@ -82,20 +118,23 @@ export default function Profile() {
               className="w-full bg-transparent outline-none text-ink font-medium placeholder:text-ink-muted"
             />
           </Field>
-          <Field icon={<MapPin size={14} />} label="Address">
+          <Field icon={<MapPin size={14} />} label={t("address")}>
             <input
               data-testid="profile-address-input"
               value={form.address}
               onChange={(e) => setForm({ ...form, address: e.target.value })}
-              placeholder="Optional"
+              placeholder={t("optional")}
               className="w-full bg-transparent outline-none text-ink font-medium placeholder:text-ink-muted"
             />
           </Field>
-          <Field icon={<Languages size={14} />} label="Language">
+          <Field icon={<Languages size={14} />} label={t("language")}>
             <select
               data-testid="profile-language-input"
               value={form.language}
-              onChange={(e) => setForm({ ...form, language: e.target.value })}
+              onChange={(e) => {
+                setForm({ ...form, language: e.target.value });
+                setLang(e.target.value);
+              }}
               className="w-full bg-transparent outline-none text-ink font-medium"
             >
               <option value="en">English</option>
@@ -109,18 +148,72 @@ export default function Profile() {
             disabled={saving}
             className="w-full mt-2 flex items-center justify-center gap-2 bg-forest text-cream-100 py-3 rounded-xl font-bold hover:bg-forest-dark transition-colors disabled:opacity-60"
           >
-            {saving ? <Loader2 size={16} className="animate-spin" /> : <><Save size={16} /> Save changes</>}
+            {saving ? <Loader2 size={16} className="animate-spin" /> : <><Save size={16} /> {t("save_changes")}</>}
           </button>
         </div>
 
         <button
+          data-testid="profile-change-pin-btn"
+          onClick={() => setPinOpen(true)}
+          className="w-full flex items-center justify-center gap-2 bg-white border border-cream-300 text-ink py-3 rounded-xl font-bold hover:bg-cream-200 transition-colors"
+        >
+          <LockKeyhole size={16} /> {user?.has_pin ? t("change_pin") : "Set PIN"}
+        </button>
+
+        <button
           data-testid="profile-logout-btn"
-          onClick={handleLogout}
+          onClick={() => setLogoutOpen(true)}
           className="w-full flex items-center justify-center gap-2 bg-white border border-rose-200 text-rose-700 py-3 rounded-xl font-bold hover:bg-rose-50 transition-colors"
         >
-          <LogOut size={16} /> Logout
+          <LogOut size={16} /> {t("logout")}
         </button>
       </div>
+
+      {/* PIN modal */}
+      {pinOpen && (
+        <Modal onClose={() => setPinOpen(false)} title={user?.has_pin ? t("change_pin") : "Set PIN"}>
+          <input
+            data-testid="profile-newpin-input"
+            type="password"
+            inputMode="numeric"
+            value={newPin}
+            onChange={(e) => setNewPin(e.target.value.replace(/\D/g, "").slice(0, 6))}
+            placeholder="4-6 digit PIN"
+            className="w-full bg-cream border border-cream-300 rounded-xl px-3 py-3 text-lg tracking-[0.4em] font-bold text-ink placeholder:text-ink-muted placeholder:tracking-normal outline-none focus:ring-2 focus:ring-forest/20"
+            autoFocus
+          />
+          <button
+            data-testid="profile-newpin-save-btn"
+            onClick={savePin}
+            disabled={savingPin || newPin.length < 4}
+            className="w-full mt-3 bg-forest text-cream-100 py-3 rounded-xl font-bold hover:bg-forest-dark disabled:opacity-60"
+          >
+            {savingPin ? <Loader2 size={16} className="animate-spin mx-auto" /> : "Save"}
+          </button>
+        </Modal>
+      )}
+
+      {/* Logout modal */}
+      {logoutOpen && (
+        <Modal onClose={() => setLogoutOpen(false)} title={t("logout_confirm")}>
+          <div className="flex gap-2">
+            <button
+              data-testid="logout-cancel-btn"
+              onClick={() => setLogoutOpen(false)}
+              className="flex-1 bg-white border border-cream-300 text-ink py-3 rounded-xl font-bold"
+            >
+              Cancel
+            </button>
+            <button
+              data-testid="logout-confirm-btn"
+              onClick={handleLogout}
+              className="flex-1 bg-rose-600 text-white py-3 rounded-xl font-bold"
+            >
+              {t("logout")}
+            </button>
+          </div>
+        </Modal>
+      )}
     </AppShell>
   );
 }
@@ -136,5 +229,21 @@ function Field({ icon, label, children }) {
         {children}
       </div>
     </label>
+  );
+}
+
+function Modal({ children, onClose, title }) {
+  return (
+    <div className="fixed inset-0 z-[70] bg-black/40 flex items-end sm:items-center justify-center px-4">
+      <div className="bg-white rounded-2xl p-5 w-full max-w-md">
+        <div className="flex items-center justify-between mb-3">
+          <h3 className="font-heading font-bold text-lg text-ink">{title}</h3>
+          <button onClick={onClose} className="p-1 rounded-lg hover:bg-cream-200">
+            <X size={18} />
+          </button>
+        </div>
+        {children}
+      </div>
+    </div>
   );
 }

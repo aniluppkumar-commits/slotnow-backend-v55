@@ -1,0 +1,81 @@
+{
+  "summary": "Frontend testing of SlotNow web app iteration 2 (new features: provider onboarding + dashboard, PIN re-login, booking reschedule, i18n EN/HI, automobile-specific booking fields, live queue polling). Confirmed PASSING: (1) role toggle + OTP + set-PIN prompt + skip/save, (2) full i18n Hindi/English switch reflected on Home/Bookings/Notifications/Profile, (3) PIN login (accepts phone + 4-digit PIN and authenticates), (4) route protection both directions, (5) provider onboarding form + navigation to dashboard, (6) provider services CRUD (add + remove), (7) provider availability add (rule appears), (8) logout via in-app modal. TWO P0 REGRESSIONS DISCOVERED: (a) BookSlot.jsx crashes with 't is not a function' — the file uses t()/isAutomobile/vehicleReg/vehicleModel/serviceType/Car but NEVER destructures useI18n() nor declares those states nor imports Car icon. Blocks 100% of customer booking creation, and by extension blocks Automobile fields test, Reschedule test (no fresh bookings can be created), and Live-queue polling test (no active booking detail reachable). (b) ProviderQueue.jsx crashes with 'queue.filter is not a function' — assumes /queue/today returns an array but the provider-role response is not an array; needs Array.isArray guard. Blocks Call Next / Walk-in / Reset queue view entirely.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {
+        "component": "BookSlot.jsx",
+        "issue": "Runtime crash 'TypeError: t is not a function' immediately on mount. Root cause: file uses t(...) for i18n strings (lines 203, 207, 235, 241, 252, 259, 266, 273, etc.) but the component NEVER destructures `const { t } = useI18n();` and does not import useI18n from '@/i18n'. Additionally, the states referenced by the Automobile section (isAutomobile, vehicleReg, vehicleModel, serviceType, setVehicleReg, setVehicleModel, setServiceType) are never declared, and the `Car` lucide icon used at line 251 is not in the import statement on line 6. This is a P0 regression from iteration 1 — customers cannot create ANY booking, including the required automobile-fields flow.",
+        "selector": "route /book/:providerId",
+        "priority": "CRITICAL"
+      },
+      {
+        "component": "ProviderQueue.jsx",
+        "issue": "Runtime crash 'TypeError: queue.filter is not a function' on /provider/queue. Root cause: load() does `setQueue(qRes.data || [])` where /queue/today for a provider returns a non-array (likely wrapped object or error). The subsequent `queue.filter(...)` at line 88 explodes. Needs `setQueue(Array.isArray(qRes.data) ? qRes.data : (qRes.data?.items || qRes.data?.queue || []))` or defensive filter. Blocks Call Next, Walk-in modal, Reset queue.",
+        "selector": "route /provider/queue",
+        "priority": "CRITICAL"
+      },
+      {
+        "component": "ProviderOnboarding.jsx (category select)",
+        "issue": "React hydration warning: '<span> cannot be a child of <option>'. The category <option> renders a translated label wrapped in a <span> (via dynamic template) which is invalid HTML. Rendering works but log spam and potential hydration issue in production.",
+        "selector": "[data-testid=\"onboarding-category\"] option",
+        "priority": "LOW"
+      },
+      {
+        "component": "AppShell BottomNav (still present from iter1)",
+        "issue": "Emergent floating badge continues to overlap bottom-nav Notifications/Profile pills on mobile viewport (400x900). Reported in iteration_1 and NOT yet fixed.",
+        "selector": "[data-testid=\"nav-notifications-btn\"], [data-testid=\"nav-profile-btn\"]",
+        "priority": "HIGH"
+      }
+    ],
+    "integration_issues": [
+      {
+        "flow": "PIN login post-navigation",
+        "issue": "After a successful PIN login, the app landed on /profile instead of / (Home). Likely because pinLogin does not force-navigate to '/' or '/provider' based on role, leaving the router on the previous path. Cosmetic but confusing for users.",
+        "affected_selectors": ["[data-testid=\"login-pin-submit-btn\"]"]
+      },
+      {
+        "flow": "Booking reschedule / Live queue polling",
+        "issue": "Could not be validated end-to-end because BookSlot is broken (cannot create fresh bookings) and no existing upcoming bookings remained on the customer account. Reschedule modal testids exist in code (reschedule-date-*, reschedule-time-*, reschedule-confirm-btn) but the flow could not be exercised.",
+        "affected_selectors": ["[data-testid=\"booking-reschedule-btn\"]", "[data-testid=\"reschedule-confirm-btn\"]"]
+      },
+      {
+        "flow": "Provider availability add",
+        "issue": "Selecting only Monday (avail-day-1) + 09:00-18:00 + 30 min + Add resulted in SEVEN avail-rule-* items in the list. Either default availability was pre-created on onboarding for all 7 days, or the add call created rules for all days regardless of selected checkbox. Needs verification.",
+        "affected_selectors": ["[data-testid=\"avail-add-btn\"]"]
+      }
+    ],
+    "design_issues": []
+  },
+  "test_report_links": ["/app/test_reports/iteration_2.json"],
+  "action_items": [
+    "CRITICAL P0: Fix BookSlot.jsx — add `import { useI18n } from '@/i18n'` and `const { t } = useI18n();`, add the missing state hooks `const [vehicleReg,setVehicleReg]=useState(''); const [vehicleModel,setVehicleModel]=useState(''); const [serviceType,setServiceType]=useState('');`, add `const isAutomobile = provider?.category_id === '333a2602-2d4a-4e16-a9da-3e004b0e14fd';`, and add `Car` to the lucide-react import. Verify booking creation works end-to-end before any further iteration.",
+    "CRITICAL P0: Fix ProviderQueue.jsx line 25 — guard against non-array: `setQueue(Array.isArray(qRes.data) ? qRes.data : (qRes.data?.queue || qRes.data?.items || []))`. Also add `.catch(() => ({ data: [] }))` on the /queue/today call.",
+    "HIGH: Fix bottom-nav overlap with 'Made with Emergent' badge (carried over from iter1; still unresolved).",
+    "MEDIUM: Fix PIN-login post-nav — after pinLogin success, navigate to '/' for customer role and '/provider' for provider role (mirror OTP verify handler).",
+    "MEDIUM: Verify provider availability add — one day selected should not create 7 rules.",
+    "LOW: Fix ProviderOnboarding category option to render translated label as plain text (not wrapped in <span>) to eliminate hydration warning."
+  ],
+  "critical_code_review_comments": [
+    "BookSlot.jsx: severe integration miss — the Automobile-fields feature was written but the state, i18n hook, and icon import were never added. Must have missed the diff. Every render crashes. Suggests iteration 2 was not smoke-tested locally before commit.",
+    "ProviderQueue.jsx: no defensive handling around API response shape. Any endpoint that returns an object instead of a list will crash the page. Add Array.isArray guards site-wide (also ProviderDashboard.jsx line 40 has the same pattern).",
+    "i18n integration is solid — dictionary covers Home/Bookings/Notifications/Profile labels in Hindi and switching persists across route changes.",
+    "Onboarding UX: after save the app correctly navigates to /provider dashboard and RequireRole redirects work.",
+    "Consider central error boundary — currently a single component crash yields the raw dev error overlay rather than a graceful fallback."
+  ],
+  "updated_files": [],
+  "success_rate": {
+    "backend": "N/A (frontend-only requested)",
+    "frontend": "9 of 13 requested feature flows verified passing (69%). 2 flows are blocked by BookSlot/ProviderQueue P0 crashes: automobile fields, reschedule, live polling, walk-in modal / call-next / reset queue. All new testids that could be exercised were found."
+  },
+  "test_credentials": "Customer: 9999999999 / OTP 123456 / PIN 1234 (set during test). Provider: fresh phone 8888800884 / OTP 123456 was onboarded (TEST_Provider Biz, Healthcare, Bangalore).",
+  "seed_data_creation": "Set customer PIN=1234 on user 9999999999. Onboarded a NEW provider with phone 8888800884 (business_name TEST_Provider Biz, category Healthcare, city Bangalore, address 'TEST addr 1'). Added and removed one TEST_Basic Service (30min/₹500). Added at least one availability rule (Monday 09:00-18:00 / 30min slot).",
+  "retest_needed": true,
+  "should_main_agent_self_test": false,
+  "main_agent_can_self_test": false,
+  "context_for_next_testing_agent": "After main agent fixes BookSlot.jsx and ProviderQueue.jsx, re-run: (1) create a customer booking (any provider), (2) open its detail and test booking-reschedule-btn → reschedule-date-* → reschedule-time-* → reschedule-confirm-btn; (3) create an Automobile-category booking (provider id 333a2602-2d4a-4e16-a9da-3e004b0e14fd) and verify booking-vehicle-reg is required + saved and shown on booking detail; (4) on booking detail, use network interception to count /api/queue/my-position requests over 10s visible (expect 2-3) and 10s hidden (expect 0); (5) log in as provider 8888800884 with OTP 123456, go to /provider/queue and verify queue-call-next-btn/queue-walkin-btn/queue-reset-btn work and walk-in modal (walkin-name → walkin-add-btn) creates a queue-item. Existing provider user_id (Sharma Clinic) can also be used if backend seed persists.",
+  "rca of the issue": "BookSlot.jsx: the diff for iteration 2's Automobile feature added JSX referencing t(...), isAutomobile, vehicleReg/vehicleModel/serviceType and the Car icon, but the corresponding hook (`const { t } = useI18n()`), state declarations, `const isAutomobile = provider?.category_id === '333a2602-...'`, and lucide-react `Car` import were omitted. Because these variables are undefined at render time, the first t() call throws 'TypeError: t is not a function' and the entire page unmounts to the dev error overlay. ProviderQueue.jsx: the /queue/today API response for a provider does not match the assumed shape (array). `setQueue(qRes.data || [])` accepts an object as truthy; the subsequent `.filter` at line 88 explodes. Both are simple two-line fixes but must be applied before iteration 2 can be considered complete."
+}

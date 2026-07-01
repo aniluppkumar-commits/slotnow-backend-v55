@@ -70,21 +70,28 @@ export default function BookSlot() {
   }, [slots, selectedService]);
 
   const handleBook = async () => {
-    if (!selectedService) return toast.error("Choose a service");
-    if (!selectedTime) return toast.error("Choose a time slot");
+    if (!selectedService) return toast.error(t("select_service"));
+    if (!selectedTime) return toast.error(t("select_time"));
+    if (isAutomobile && !vehicleReg.trim()) return toast.error(t("vehicle_reg_no"));
     setSubmitting(true);
     try {
-      const { data } = await api.post("/bookings", {
+      const payload = {
         provider_id: providerId,
         service_id: selectedService.id,
         date: selectedDate,
         start_time: selectedTime,
         notes: notes || null,
-      });
-      toast.success(`Booked! Token #${data.token_number}`);
+      };
+      if (isAutomobile) {
+        payload.vehicle_reg_no = vehicleReg || null;
+        payload.vehicle_model = vehicleModel || null;
+        payload.service_type = serviceType || selectedService.service_type || null;
+      }
+      const { data } = await api.post("/bookings", payload);
+      toast.success(`${t("booked_token")} #${data.token_number}`);
       navigate(`/bookings/${data.id}`, { replace: true });
     } catch (e) {
-      toast.error(e.response?.data?.detail || "Booking failed");
+      toast.error(e.response?.data?.detail || t("booking_failed"));
     } finally {
       setSubmitting(false);
     }
@@ -92,7 +99,7 @@ export default function BookSlot() {
 
   if (loadingProvider) {
     return (
-      <AppShell title="Book a slot" showBack>
+      <AppShell title={t("book_a_slot")} showBack>
         <div className="flex justify-center py-16">
           <Loader2 className="animate-spin text-forest" />
         </div>
@@ -101,7 +108,7 @@ export default function BookSlot() {
   }
 
   return (
-    <AppShell title="Book a slot" showBack>
+    <AppShell title={t("book_a_slot")} showBack>
       <div className="px-4 sm:px-6 pt-4 space-y-6">
         {/* Provider summary */}
         <div className="bg-forest-faint rounded-2xl p-4 flex items-center gap-3">
@@ -119,7 +126,7 @@ export default function BookSlot() {
         {/* Service */}
         <section>
           <h3 className="text-xs font-bold uppercase tracking-[0.15em] text-ink-soft mb-3">
-            1. Select service
+            1. {t("select_service")}
           </h3>
           <div className="space-y-2">
             {services.map((s) => (
@@ -146,7 +153,7 @@ export default function BookSlot() {
               </button>
             ))}
             {services.length === 0 && (
-              <p className="text-sm text-ink-soft italic text-center py-4">No services available</p>
+              <p className="text-sm text-ink-soft italic text-center py-4">{t("no_services_available")}</p>
             )}
           </div>
         </section>
@@ -155,7 +162,7 @@ export default function BookSlot() {
         <section>
           <h3 className="text-xs font-bold uppercase tracking-[0.15em] text-ink-soft mb-3 flex items-center gap-1.5">
             <CalIcon size={12} strokeWidth={2.5} />
-            2. Select date
+            2. {t("select_date")}
           </h3>
           <div className="flex gap-2 overflow-x-auto no-scrollbar -mx-4 sm:-mx-6 px-4 sm:px-6 pb-1">
             {days.map((d) => {
@@ -185,7 +192,7 @@ export default function BookSlot() {
         {/* Time */}
         <section>
           <h3 className="text-xs font-bold uppercase tracking-[0.15em] text-ink-soft mb-3">
-            3. Select time
+            3. {t("select_time")}
           </h3>
           {loadingSlots ? (
             <div className="flex justify-center py-6">
@@ -193,11 +200,11 @@ export default function BookSlot() {
             </div>
           ) : !slots.has_schedule ? (
             <p className="text-sm text-ink-soft italic text-center py-4">
-              Provider not available on this day. Try another date.
+              {t("provider_not_available_day")}
             </p>
           ) : timeOptions.length === 0 ? (
             <p className="text-sm text-ink-soft italic text-center py-4">
-              No open slots on this day.
+              {t("no_open_slots")}
             </p>
           ) : (
             <div className="grid grid-cols-3 gap-2">
@@ -225,17 +232,50 @@ export default function BookSlot() {
         {/* Notes */}
         <section>
           <label className="text-xs font-bold uppercase tracking-[0.15em] text-ink-soft mb-2 block">
-            4. Notes (optional)
+            4. {t("notes_optional")}
           </label>
           <textarea
             data-testid="booking-notes-input"
             value={notes}
             onChange={(e) => setNotes(e.target.value)}
-            placeholder="Any specific request?"
+            placeholder={t("any_specific_request")}
             rows={2}
             className="w-full bg-white border border-cream-300 rounded-xl px-4 py-3 text-sm text-ink placeholder:text-ink-muted focus:ring-2 focus:ring-forest/20 focus:border-forest outline-none resize-none"
           />
         </section>
+
+        {/* Automobile-specific fields */}
+        {isAutomobile && (
+          <section>
+            <h3 className="text-xs font-bold uppercase tracking-[0.15em] text-ink-soft mb-3 flex items-center gap-1.5">
+              <Car size={12} strokeWidth={2.5} />
+              5. {t("vehicle_details")}
+            </h3>
+            <div className="space-y-2">
+              <input
+                data-testid="booking-vehicle-reg"
+                value={vehicleReg}
+                onChange={(e) => setVehicleReg(e.target.value.toUpperCase())}
+                placeholder={`${t("vehicle_reg_no")} *`}
+                className="w-full bg-white border border-cream-300 rounded-xl px-4 py-3 text-sm text-ink placeholder:text-ink-muted focus:ring-2 focus:ring-forest/20 focus:border-forest outline-none uppercase tracking-wider font-mono"
+              />
+              <input
+                data-testid="booking-vehicle-model"
+                value={vehicleModel}
+                onChange={(e) => setVehicleModel(e.target.value)}
+                placeholder={t("vehicle_model")}
+                className="w-full bg-white border border-cream-300 rounded-xl px-4 py-3 text-sm text-ink placeholder:text-ink-muted focus:ring-2 focus:ring-forest/20 focus:border-forest outline-none"
+              />
+              <input
+                data-testid="booking-service-type"
+                value={serviceType}
+                onChange={(e) => setServiceType(e.target.value)}
+                placeholder={`${t("service_type")} (${t("optional")})`}
+                className="w-full bg-white border border-cream-300 rounded-xl px-4 py-3 text-sm text-ink placeholder:text-ink-muted focus:ring-2 focus:ring-forest/20 focus:border-forest outline-none"
+              />
+            </div>
+          </section>
+        )}
 
         <div className="h-4" />
       </div>
@@ -253,7 +293,7 @@ export default function BookSlot() {
           ) : (
             <>
               <CheckCircle2 size={18} strokeWidth={2.5} />
-              {selectedTime ? `Confirm • ${formatTime(selectedTime)}` : "Select a slot"}
+              {selectedTime ? `${t("confirm")} • ${formatTime(selectedTime)}` : t("select_a_slot")}
               {selectedService && selectedTime && (
                 <span className="opacity-80 font-normal text-sm">• ₹{selectedService.price}</span>
               )}

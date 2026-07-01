@@ -3,6 +3,7 @@ import { useParams, useNavigate } from "react-router-dom";
 import api from "@/lib/api";
 import AppShell from "@/components/AppShell";
 import CategoryIcon from "@/components/CategoryIcon";
+import { useI18n } from "@/i18n";
 import { catStyle } from "@/lib/utils-app";
 import { Star, MapPin, Clock, Loader2, IndianRupee, MessageSquareText, Info } from "lucide-react";
 import { toast } from "sonner";
@@ -10,6 +11,7 @@ import { toast } from "sonner";
 export default function ProviderDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const { t, lang } = useI18n();
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
 
@@ -65,7 +67,7 @@ export default function ProviderDetail() {
                 </h2>
                 {category && (
                   <span className={`inline-block mt-1 text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full ${style.bg} ${style.text}`}>
-                    {category.name}
+                    {lang === "hi" ? category.name_hi : category.name}
                   </span>
                 )}
               </div>
@@ -74,7 +76,7 @@ export default function ProviderDetail() {
                   <Star size={14} className="fill-amber-400 text-amber-400" strokeWidth={0} />
                   <span className="text-sm font-bold text-ink">{provider.rating?.toFixed(1) || "—"}</span>
                 </div>
-                <p className="text-[11px] text-ink-muted">{provider.reviews_count || 0} reviews</p>
+                <p className="text-[11px] text-ink-muted">{provider.reviews_count || 0} {t("reviews")}</p>
               </div>
             </div>
             <div className="flex items-center gap-1.5 text-xs text-ink-soft mt-2">
@@ -90,7 +92,7 @@ export default function ProviderDetail() {
         {provider.bio && (
           <div className="mb-6">
             <h3 className="text-xs font-bold uppercase tracking-[0.15em] text-ink-soft mb-2 flex items-center gap-1.5">
-              <Info size={12} strokeWidth={2.5} /> About
+              <Info size={12} strokeWidth={2.5} /> {t("about")}
             </h3>
             <p className="text-sm text-ink leading-relaxed">{provider.bio}</p>
           </div>
@@ -99,7 +101,7 @@ export default function ProviderDetail() {
         {/* Services */}
         <div className="mb-6">
           <h3 className="text-xs font-bold uppercase tracking-[0.15em] text-ink-soft mb-3">
-            Services Offered
+            {t("services_offered")}
           </h3>
           {services?.length > 0 ? (
             <div className="space-y-2">
@@ -126,7 +128,7 @@ export default function ProviderDetail() {
               ))}
             </div>
           ) : (
-            <p className="text-sm text-ink-soft italic">No services listed yet.</p>
+            <p className="text-sm text-ink-soft italic">{t("no_services_listed")}</p>
           )}
         </div>
 
@@ -135,7 +137,7 @@ export default function ProviderDetail() {
           <div className="mb-6">
             <h3 className="text-xs font-bold uppercase tracking-[0.15em] text-ink-soft mb-3 flex items-center gap-1.5">
               <MessageSquareText size={12} strokeWidth={2.5} />
-              Recent Reviews
+              {t("recent_reviews")}
             </h3>
             <div className="space-y-2">
               {reviews.slice(0, 5).map((r) => (

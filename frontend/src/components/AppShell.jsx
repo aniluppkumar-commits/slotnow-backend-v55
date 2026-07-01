@@ -1,7 +1,17 @@
 import React from "react";
 import { NavLink, useLocation, useNavigate } from "react-router-dom";
-import { Home, CalendarCheck, Bell, User, ChevronLeft } from "lucide-react";
+import {
+  Home,
+  CalendarCheck,
+  Bell,
+  User,
+  ChevronLeft,
+  LayoutDashboard,
+  Users,
+  Settings,
+} from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
+import { useI18n } from "@/i18n";
 
 export function AppShell({ children, title, showBack = false, showHeader = true, headerRight = null }) {
   const navigate = useNavigate();
@@ -38,16 +48,26 @@ export function AppShell({ children, title, showBack = false, showHeader = true,
 }
 
 function BottomNav() {
-  const { user } = useAuth();
+  const { user, isProvider } = useAuth();
+  const { t } = useI18n();
   const location = useLocation();
   if (!user) return null;
 
-  const items = [
-    { to: "/", label: "Home", icon: Home, testId: "nav-home-btn", exact: true },
-    { to: "/bookings", label: "Bookings", icon: CalendarCheck, testId: "nav-bookings-btn" },
+  const customerItems = [
+    { to: "/", label: t("hello") === "नमस्ते" ? "होम" : "Home", icon: Home, testId: "nav-home-btn", exact: true },
+    { to: "/bookings", label: t("upcoming") === "आगामी" ? "बुकिंग" : "Bookings", icon: CalendarCheck, testId: "nav-bookings-btn" },
+    { to: "/notifications", label: t("notifications") === "सूचनाएँ" ? "अलर्ट" : "Alerts", icon: Bell, testId: "nav-notifications-btn" },
+    { to: "/profile", label: t("profile") === "प्रोफ़ाइल" ? "प्रोफ़ाइल" : "Profile", icon: User, testId: "nav-profile-btn" },
+  ];
+
+  const providerItems = [
+    { to: "/provider", label: "Dashboard", icon: LayoutDashboard, testId: "nav-provider-dashboard-btn", exact: true },
+    { to: "/provider/queue", label: "Queue", icon: Users, testId: "nav-provider-queue-btn" },
     { to: "/notifications", label: "Alerts", icon: Bell, testId: "nav-notifications-btn" },
     { to: "/profile", label: "Profile", icon: User, testId: "nav-profile-btn" },
   ];
+
+  const items = isProvider ? providerItems : customerItems;
 
   return (
     <nav className="fixed bottom-[68px] md:bottom-3 left-1/2 -translate-x-1/2 w-[calc(100%-1.5rem)] max-w-md md:max-w-md bg-white border border-cream-300 px-3 pt-2 pb-2 flex justify-around items-center z-50 rounded-2xl shadow-[0_8px_28px_rgba(0,0,0,0.10)]">

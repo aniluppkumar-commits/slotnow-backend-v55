@@ -15,6 +15,13 @@ export function AuthProvider({ children }) {
   const [token, setToken] = useState(() => localStorage.getItem("slotnow_token"));
   const [loading, setLoading] = useState(false);
 
+  const persist = (tok, usr) => {
+    if (tok) localStorage.setItem("slotnow_token", tok);
+    if (usr) localStorage.setItem("slotnow_user", JSON.stringify(usr));
+    setToken(tok);
+    setUser(usr);
+  };
+
   const refreshMe = useCallback(async () => {
     if (!token) return;
     try {
@@ -49,14 +56,28 @@ export function AuthProvider({ children }) {
         role,
         via_referral: false,
       });
-      setToken(data.token);
-      setUser(data.user);
-      localStorage.setItem("slotnow_token", data.token);
-      localStorage.setItem("slotnow_user", JSON.stringify(data.user));
+      persist(data.token, data.user);
       return data;
     } finally {
       setLoading(false);
     }
+  };
+
+  const pinLogin = async (phone, pin, role = "customer") => {
+    setLoading(true);
+    try {
+      const { data } = await api.post("/auth/pin-login", { phone, pin, role });
+      persist(data.token, data.user);
+      return data;
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const setPin = async (pin) => {
+    const { data } = await api.post("/auth/set-pin", { pin });
+    await refreshMe();
+    return data;
   };
 
   const logout = () => {
@@ -73,9 +94,23 @@ export function AuthProvider({ children }) {
     return data;
   };
 
+  const isProvider = user?.role === "provider";
+
   return (
     <AuthContext.Provider
-      value={{ user, token, loading, sendOtp, verifyOtp, logout, updateProfile, refreshMe }}
+      value={{
+        user,
+        token,
+        loading,
+        isProvider,
+        sendOtp,
+        verifyOtp,
+        pinLogin,
+        setPin,
+        logout,
+        updateProfile,
+        refreshMe,
+      }}
     >
       {children}
     </AuthContext.Provider>

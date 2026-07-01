@@ -2,6 +2,7 @@ import React, { useEffect, useState, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import api from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
+import { useI18n } from "@/i18n";
 import AppShell from "@/components/AppShell";
 import CategoryIcon from "@/components/CategoryIcon";
 import { catStyle } from "@/lib/utils-app";
@@ -10,6 +11,7 @@ import { Search, Star, MapPin, Bell, TrendingUp, Loader2 } from "lucide-react";
 export default function Home() {
   const navigate = useNavigate();
   const { user } = useAuth();
+  const { t, lang } = useI18n();
   const [categories, setCategories] = useState([]);
   const [providers, setProviders] = useState([]);
   const [notifCount, setNotifCount] = useState(0);
@@ -54,7 +56,7 @@ export default function Home() {
 
   return (
     <AppShell
-      title={`Hello${user?.name ? `, ${user.name.split(" ")[0]}` : ""} 👋`}
+      title={`${t("hello")}${user?.name ? `, ${user.name.split(" ")[0]}` : ""} 👋`}
       headerRight={
         <button
           data-testid="header-notif-btn"
@@ -77,8 +79,8 @@ export default function Home() {
         {/* Hero */}
         <div className="mb-6">
           <h2 className="font-heading text-3xl sm:text-4xl font-extrabold tracking-tighter text-ink leading-tight">
-            Skip the wait.<br />
-            <span className="text-forest">Book your slot.</span>
+            {t("skip_wait")}<br />
+            <span className="text-forest">{t("book_slot")}</span>
           </h2>
         </div>
 
@@ -91,7 +93,7 @@ export default function Home() {
           <input
             data-testid="home-search-input"
             type="text"
-            placeholder="Search salons, clinics, tutors…"
+            placeholder={t("search_placeholder")}
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             className="w-full bg-white border border-cream-300 rounded-2xl pl-11 pr-4 py-3.5 text-sm text-ink placeholder:text-ink-muted focus:ring-2 focus:ring-forest/15 focus:border-forest outline-none transition-all"
@@ -102,7 +104,7 @@ export default function Home() {
         <section className="mb-8">
           <div className="flex items-center justify-between mb-3">
             <h3 className="text-xs font-bold uppercase tracking-[0.15em] text-ink-soft">
-              Explore Categories
+              {t("explore_categories")}
             </h3>
           </div>
           {loading ? (
@@ -126,8 +128,12 @@ export default function Home() {
                       <CategoryIcon name={c.icon} size={28} strokeWidth={1.75} />
                     </div>
                     <div className="text-center">
-                      <p className="text-xs font-semibold text-ink leading-tight">{c.name}</p>
-                      <p className="text-[10px] text-ink-muted font-deva">{c.name_hi}</p>
+                      <p className="text-xs font-semibold text-ink leading-tight">
+                        {lang === "hi" ? c.name_hi : c.name}
+                      </p>
+                      <p className="text-[10px] text-ink-muted font-deva">
+                        {lang === "hi" ? c.name : c.name_hi}
+                      </p>
                     </div>
                   </button>
                 );
@@ -142,7 +148,7 @@ export default function Home() {
             <div className="flex items-center justify-between mb-3">
               <h3 className="text-xs font-bold uppercase tracking-[0.15em] text-ink-soft flex items-center gap-1.5">
                 <TrendingUp size={13} strokeWidth={2.5} />
-                Top Rated Near You
+                {t("top_rated")}
               </h3>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -157,7 +163,7 @@ export default function Home() {
         {!loading && rest.length > 0 && (
           <section>
             <h3 className="text-xs font-bold uppercase tracking-[0.15em] text-ink-soft mb-3">
-              All Providers
+              {t("all_providers")}
             </h3>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               {rest.map((p) => (
@@ -169,7 +175,7 @@ export default function Home() {
 
         {!loading && filtered.length === 0 && (
           <div className="text-center py-16 px-4">
-            <p className="text-ink-soft">No providers found matching "{query}"</p>
+            <p className="text-ink-soft">{t("no_providers_matching")} "{query}"</p>
           </div>
         )}
       </div>

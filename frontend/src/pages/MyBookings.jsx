@@ -2,10 +2,12 @@ import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import api from "@/lib/api";
 import AppShell from "@/components/AppShell";
+import { useI18n } from "@/i18n";
 import { StatusBadge, formatDate, formatTime } from "@/lib/utils-app";
 import { Calendar, Loader2, MapPin, CalendarX2 } from "lucide-react";
 
 export default function MyBookings() {
+  const { t } = useI18n();
   const [bookings, setBookings] = useState([]);
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState("upcoming");
@@ -33,13 +35,13 @@ export default function MyBookings() {
   });
 
   return (
-    <AppShell title="My Bookings">
+    <AppShell title={t("my_bookings")}>
       <div className="px-4 sm:px-6 pt-4">
         {/* Tabs */}
         <div className="flex gap-1 bg-cream-200 rounded-xl p-1 mb-4">
           {[
-            { k: "upcoming", label: "Upcoming" },
-            { k: "past", label: "Past" },
+            { k: "upcoming", label: t("upcoming") },
+            { k: "past", label: t("past") },
           ].map(({ k, label }) => (
             <button
               key={k}
@@ -64,11 +66,11 @@ export default function MyBookings() {
               <CalendarX2 size={32} strokeWidth={1.5} />
             </div>
             <div>
-              <p className="text-lg font-bold text-ink">No {tab} bookings</p>
+              <p className="text-lg font-bold text-ink">
+                {tab === "upcoming" ? t("no_upcoming_bookings") : t("no_past_bookings")}
+              </p>
               <p className="text-sm text-ink-soft max-w-xs mt-1">
-                {tab === "upcoming"
-                  ? "Book a slot to see it here"
-                  : "Your past bookings will appear here"}
+                {tab === "upcoming" ? t("book_slot_to_see") : t("past_bookings_appear")}
               </p>
             </div>
             {tab === "upcoming" && (
@@ -77,7 +79,7 @@ export default function MyBookings() {
                 onClick={() => navigate("/")}
                 className="mt-2 bg-forest text-cream-100 px-6 py-2.5 rounded-xl text-sm font-bold hover:bg-forest-dark transition-colors"
               >
-                Browse providers
+                {t("browse_providers")}
               </button>
             )}
           </div>
@@ -95,8 +97,7 @@ export default function MyBookings() {
 
 function BookingCard({ booking, onClick }) {
   const p = booking.provider || {};
-  return (
-    <button
+  return (    <button
       data-testid={`booking-card-${booking.id}`}
       onClick={onClick}
       className="w-full text-left bg-white border border-cream-300 rounded-2xl p-4 transition-all hover:shadow-[0_8px_24px_rgba(0,0,0,0.05)] hover:-translate-y-0.5"

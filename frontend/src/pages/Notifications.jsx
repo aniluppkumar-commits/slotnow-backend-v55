@@ -1,9 +1,11 @@
 import React, { useEffect, useState } from "react";
 import api from "@/lib/api";
 import AppShell from "@/components/AppShell";
+import { useI18n } from "@/i18n";
 import { Bell, BellOff, Loader2 } from "lucide-react";
 
 export default function Notifications() {
+  const { t } = useI18n();
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
 
@@ -29,7 +31,7 @@ export default function Notifications() {
   };
 
   return (
-    <AppShell title="Notifications">
+    <AppShell title={t("notifications")}>
       <div className="px-4 sm:px-6 pt-4">
         {loading ? (
           <div className="flex justify-center py-16">
@@ -41,8 +43,8 @@ export default function Notifications() {
               <BellOff size={32} strokeWidth={1.5} />
             </div>
             <div>
-              <p className="text-lg font-bold text-ink">You're all caught up</p>
-              <p className="text-sm text-ink-soft mt-1">No notifications yet.</p>
+              <p className="text-lg font-bold text-ink">{t("all_caught_up")}</p>
+              <p className="text-sm text-ink-soft mt-1">{t("no_notifications")}</p>
             </div>
           </div>
         ) : (
