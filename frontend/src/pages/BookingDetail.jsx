@@ -18,6 +18,7 @@ import {
   X,
   Car,
   Radio,
+  CheckCircle2,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -121,19 +122,16 @@ export default function BookingDetail() {
     return () => (mounted = false);
   }, [rescheduleOpen, newDate, booking]);
 
-  const rescheduleTimes = useMemo(() => {
-    if (!rescheduleSlots?.shifts?.length || !booking) return [];
-    // Estimate slot duration from current booking start/end
-    const [sh, sm] = booking.start_time.split(":").map(Number);
-    const [eh, em] = (booking.end_time || booking.start_time).split(":").map(Number);
-    const dur = Math.max(15, (eh * 60 + em) - (sh * 60 + sm));
-    const out = [];
-    rescheduleSlots.shifts.forEach((sh) => {
-      if (sh.is_full || sh.is_past || !sh.available) return;
-      out.push(...generateTimeSlots(sh.start_time, sh.end_time, dur || 30));
+  const rescheduleShifts = useMemo(() => {
+    if (!rescheduleSlots?.shifts?.length) return [];
+    const seen = new Set();
+    return rescheduleSlots.shifts.filter((s) => {
+      if (!s.available || s.is_full || s.is_past) return false;
+      if (seen.has(s.start_time)) return false;
+      seen.add(s.start_time);
+      return true;
     });
-    return out;
-  }, [rescheduleSlots, booking]);
+  }, [rescheduleSlots]);
 
   const doReschedule = async () => {
     if (!newTime) return toast.error(t("select_time"));
@@ -335,24 +333,25 @@ export default function BookingDetail() {
             </label>
             {loadingReslots ? (
               <div className="flex justify-center py-6"><Loader2 className="animate-spin text-forest" /></div>
-            ) : rescheduleTimes.length === 0 ? (
+            ) : rescheduleShifts.length === 0 ? (
               <p className="text-sm text-ink-soft italic text-center py-4">{t("no_open_slots")}</p>
             ) : (
-              <div className="grid grid-cols-3 gap-2 mb-4 max-h-40 overflow-y-auto">
-                {rescheduleTimes.map((tt) => {
-                  const active = tt === newTime;
+              <div className="space-y-2 mb-4 max-h-56 overflow-y-auto">
+                {rescheduleShifts.map((shift) => {
+                  const active = shift.start_time === newTime;
                   return (
                     <button
-                      key={tt}
-                      data-testid={`reschedule-time-${tt}`}
-                      onClick={() => setNewTime(tt)}
-                      className={`py-2.5 px-2 rounded-lg text-sm font-semibold ${
+                      key={shift.start_time}
+                      data-testid={`reschedule-time-${shift.start_time}`}
+                      onClick={() => setNewTime(shift.start_time)}
+                      className={`w-full flex justify-between items-center py-2.5 px-3 rounded-lg text-sm font-semibold ${
                         active
-                          ? "bg-forest text-cream-100 border-2 border-forest"
+                          ? "bg-forest text-white border-2 border-forest"
                           : "bg-white text-ink border border-cream-300"
                       }`}
                     >
-                      {formatTime(tt)}
+                      <span>{formatTime(shift.start_time)} – {formatTime(shift.end_time)}</span>
+                      {active && <CheckCircle2 size={16} />}
                     </button>
                   );
                 })}

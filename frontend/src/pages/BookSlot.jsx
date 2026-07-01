@@ -67,17 +67,19 @@ export default function BookSlot() {
     return () => (mounted = false);
   }, [providerId, selectedDate]);
 
-  const timeOptions = useMemo(() => {
-    if (!slots?.shifts?.length || !selectedService) return [];
-    const out = [];
-    slots.shifts.forEach((shift) => {
-      if (shift.is_full || shift.is_past || !shift.available) return;
-      const times = generateTimeSlots(shift.start_time, shift.end_time, selectedService.duration_min);
-      out.push(...times);
+  // The backend queue is shift-based — customer picks a shift (session)
+  // and gets a queue token, not a specific time slot within the shift.
+  const bookableShifts = useMemo(() => {
+    if (!slots?.shifts?.length) return [];
+    // Dedupe by start_time (in case of duplicate seed rows)
+    const seen = new Set();
+    return slots.shifts.filter((s) => {
+      if (!s.available || s.is_full || s.is_past) return false;
+      if (seen.has(s.start_time)) return false;
+      seen.add(s.start_time);
+      return true;
     });
-    // Dedupe overlapping shifts producing the same start_time
-    return Array.from(new Set(out)).sort();
-  }, [slots, selectedService]);
+  }, [slots]);
 
   const handleBook = async () => {
     if (!selectedService) return toast.error(t("select_service"));
@@ -200,7 +202,7 @@ export default function BookSlot() {
           </div>
         </section>
 
-        {/* Time */}
+        {/* Time / Session */}
         <section>
           <h3 className="text-xs font-bold uppercase tracking-[0.15em] text-ink-soft mb-3">
             3. {t("select_time")}
@@ -213,26 +215,44 @@ export default function BookSlot() {
             <p className="text-sm text-ink-soft italic text-center py-4">
               {t("provider_not_available_day")}
             </p>
-          ) : timeOptions.length === 0 ? (
+          ) : bookableShifts.length === 0 ? (
             <p className="text-sm text-ink-soft italic text-center py-4">
               {t("no_open_slots")}
             </p>
           ) : (
-            <div className="grid grid-cols-3 gap-2">
-              {timeOptions.map((t) => {
-                const active = t === selectedTime;
+            <div className="space-y-2">
+              {bookableShifts.map((shift) => {
+                const active = shift.start_time === selectedTime;
+                const capText =
+                  shift.max_bookings != null
+                    ? `${shift.booked || 0}/${shift.max_bookings} booked`
+                    : `${shift.booked || 0} booked so far`;
                 return (
                   <button
-                    key={t}
-                    data-testid={`booking-time-${t}`}
-                    onClick={() => setSelectedTime(t)}
-                    className={`py-3 px-2 rounded-xl text-sm font-semibold transition-all ${
+                    key={shift.start_time}
+                    data-testid={`booking-time-${shift.start_time}`}
+                    onClick={() => setSelectedTime(shift.start_time)}
+                    className={`w-full flex justify-between items-center p-4 rounded-xl transition-all text-left ${
                       active
-                        ? "bg-forest text-cream-100 border-2 border-forest shadow-md"
-                        : "bg-white text-ink border border-cream-300 hover:border-forest/40"
+                        ? "bg-forest-faint border-2 border-forest ring-2 ring-forest/10"
+                        : "bg-white border border-cream-300 hover:border-forest/40"
                     }`}
                   >
-                    {formatTime(t)}
+                    <div>
+                      <p className="font-heading font-bold text-ink text-base">
+                        {formatTime(shift.start_time)} – {formatTime(shift.end_time)}
+                      </p>
+                      <p className="text-xs text-ink-soft mt-0.5">
+                        {capText} · Token assigned on confirmation
+                      </p>
+                    </div>
+                    <div
+                      className={`w-6 h-6 rounded-full flex items-center justify-center ${
+                        active ? "bg-forest text-white" : "border-2 border-cream-300"
+                      }`}
+                    >
+                      {active && <CheckCircle2 size={14} strokeWidth={3} />}
+                    </div>
                   </button>
                 );
               })}
