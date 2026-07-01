@@ -1,0 +1,40 @@
+{
+  "summary": "Iteration 3 retest of SlotNow web app after iteration-2 P0 fixes (BookSlot missing hook/state/import, ProviderQueue.filter, AppShell bottom-nav overlap). Verified: (1) BookSlot renders — customer created a real booking (token #2, navigated to /bookings/<id>). (2) BookSlot Automobile — vehicle fields (booking-vehicle-reg / -model / -service-type) render for automobile category, no crash. Full end-to-end blocked because the only Automobile provider ('Nandi auto mobiles', c0c3cc13...) has ZERO availability slots on all 14 upcoming dates (seed data gap, not app bug). (3) ProviderQueue no longer crashes — Array.isArray guard works, walk-in modal successfully added TEST_Walkin_John as Token #1; queue-call-next-btn / queue-walkin-btn / queue-reset-btn all interactive. (4) Reschedule flow works end-to-end — reschedule-btn → date Wed Jul 1 changed to Sat Jul 4 09:00 → 'Booking updated' toast shown, date updated on detail. (5) Live polling: 2 /api/queue/my-position requests in 10s of visible tab (~4-5s interval, matches spec). (6) Bottom-nav overlap fix confirmed — elementFromPoint at each of nav-home/bookings/notifications/profile returns an element inside the button (SVG icon) — self_reached=true for all 4. NEW ISSUE FOUND: Emergent badge overlaps logout-confirm-btn inside the Logout modal (Playwright intercept msg 'Made with Emergent from #emergent-badge subtree intercepts pointer events'). Real users may tap the badge instead of confirm. Programmatic JS click still worked. PIN POST-NAV: mixed — pinLogin's navigateAfter respects the 'from' state, so if user was on /profile → redirected to /login → PIN login, they land back on /profile (NOT /). This is standard React 'return to previous page' UX and OTP verify behaves identically. Whether this violates the task spec is a product call; behavior is consistent between OTP and PIN, no functional bug.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "Profile logout modal", "issue": "The floating 'Made with Emergent' badge overlaps [data-testid=\"logout-confirm-btn\"] in the modal (Playwright error: '<p>Made with Emergent</p> from #emergent-badge subtree intercepts pointer events'). Programmatic click bypasses it, but a real touch on mobile 400x900 would land on the badge, not the confirm button. Same badge-overlap issue as the bottom-nav (fixed for nav but still present for this modal action button).", "selector": "[data-testid=\"logout-confirm-btn\"]", "priority": "MEDIUM"},
+      {"component": "ProviderOnboarding category <option>", "issue": "React hydration warning '<span> cannot be a child of <option>' still present (carry-over from iteration_2). Non-blocking.", "selector": "[data-testid=\"onboarding-category\"] option", "priority": "LOW"},
+      {"component": "Automobile category seed data", "issue": "Only Automobile provider 'Nandi auto mobiles' (c0c3cc13-bb9a-43d9-9211-a493717fb017) has 0 open slots on every one of the next 14 days — cannot fully validate the required 'blocked without vehicle_reg → succeeds with vehicle_reg → vehicle_reg_no visible on booking detail' end-to-end. Vehicle field UI IS correctly rendered (P0 fix confirmed), but the acceptance path requires an availability rule or a second automobile provider with slots.", "selector": "route /book/c0c3cc13-bb9a-43d9-9211-a493717fb017", "priority": "MEDIUM"}
+    ],
+    "integration_issues": [
+      {"flow": "PIN login post-nav", "issue": "handlePinLogin → navigateAfter respects location.state.from. If the user reached /login via a guarded route (e.g., /profile → /login redirect), post-PIN login returns to /profile (not /). OTP verify has identical logic (both call navigateAfter). Task expected always '/' for customer; current code returns to previous page — a common React pattern. Consistent between OTP and PIN, no divergence. If spec must be enforced, replace navigate(from) with navigate('/') for pinLogin.", "affected_selectors": ["[data-testid=\"login-pin-submit-btn\"]"]}
+    ],
+    "design_issues": []
+  },
+  "test_report_links": ["/app/test_reports/iteration_3.json"],
+  "action_items": [
+    "MEDIUM: Raise z-index or reposition the 'Made with Emergent' badge so it no longer overlays modal confirm buttons (logout-confirm-btn specifically). Consider hiding badge when a modal is open or moving modal actions above bottom-56px.",
+    "MEDIUM: Seed at least one time slot for the automobile provider (or add a second automobile provider with availability) so the vehicle_reg required-toast and vehicle_reg_no persistence can be validated end-to-end.",
+    "MEDIUM (product decision): If spec truly requires PIN login to ignore prior route and always land on '/' for customer / '/provider' for provider, override navigateAfter in handlePinLogin — otherwise document current 'return to previous page' behavior as the intended UX (identical for OTP).",
+    "LOW: Fix ProviderOnboarding category <option> to render the translated label without a <span> wrapper (hydration warning)."
+  ],
+  "critical_code_review_comments": [
+    "BookSlot.jsx and ProviderQueue.jsx P0 fixes correctly applied and verified end-to-end.",
+    "AppShell.jsx bottom-nav raised to bottom-[76px] with max-w-[360px] resolves the 4-button overlap perfectly (self_reached=true for all 4 buttons).",
+    "Logout modal is a NEW casualty of the same badge overlap class of issue — consider a global CSS rule .modal-action-btn{z-index: 60} or Emergent badge z-index adjustment on <dialog> open.",
+    "navigateAfter is elegant but slightly under-documented; the task expectation of always '/' for pinLogin conflicts with the 'from' preservation pattern. Recommend either explicit override for pinLogin OR update product spec."
+  ],
+  "updated_files": [],
+  "success_rate": {
+    "backend": "N/A (frontend-only requested)",
+    "frontend": "6 of 7 requested flows fully passing (86%). 1 flow (Automobile end-to-end) partially blocked by seed data — UI fix itself is verified working. PIN post-nav behavior is by-design 'return to previous page' but may not match task's strict '/' expectation."
+  },
+  "test_credentials": "Customer 9999999999 / OTP 123456 / PIN 1234 (re-saved during this test). Provider 8888800884 / OTP 123456 (still exists from iter2).",
+  "seed_data_creation": "None. Reused existing customer booking flow; a new confirmed booking (token #2 for Sharma Clinic Consultation) was created and then rescheduled to Sat Jul 4 09:00. TEST_Walkin_John walk-in token #1 added to provider 8888800884's queue.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "All P0 iteration-2 regressions resolved. Two open items: (a) NEW: Emergent badge overlaps logout-confirm-btn in Profile logout modal — real touches on mobile could hit the badge; JS click still works. (b) PIN post-nav lands on prior route (e.g., /profile) via location.state.from — consistent between OTP and PIN, may or may not match spec. Automobile end-to-end needs a slot in Nandi auto mobiles availability to be fully exercisable.",
+  "rca of the issue": "Logout modal overlap: the 'Made with Emergent' floating anchor (#emergent-badge, fixed bottom-right) sits above the modal action row. AppShell iteration-2 fix raised only the bottom-nav (bottom-[76px]) — modal action buttons are still at ~bottom-30px on mobile 400x900, colliding with the badge. Fix: increase modal action-row margin-bottom OR set the badge to z-index < modal (currently badge is above dialog stacking context). PIN post-nav: /app/frontend/src/pages/Login.jsx line 27-28 — `const navigateAfter = (u) => { if (from && from !== '/login') return navigate(from, { replace: true }); ... }`. Both handleOtpVerify (line 62) and handlePinLogin (line 79) delegate to it, so behavior is symmetric. If task requires always '/', add a role-based override inside handlePinLogin BEFORE calling navigateAfter."
+}

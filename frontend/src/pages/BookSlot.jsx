@@ -2,13 +2,17 @@ import React, { useEffect, useState, useMemo } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import api from "@/lib/api";
 import AppShell from "@/components/AppShell";
+import { useI18n } from "@/i18n";
 import { generateTimeSlots, nextNDays, formatTime, todayISO } from "@/lib/utils-app";
-import { Loader2, Clock, IndianRupee, Calendar as CalIcon, CheckCircle2, Sparkles } from "lucide-react";
+import { Loader2, Clock, IndianRupee, Calendar as CalIcon, CheckCircle2, Car } from "lucide-react";
 import { toast } from "sonner";
+
+const AUTOMOBILE_CAT_ID = "333a2602-2d4a-4e16-a9da-3e004b0e14fd";
 
 export default function BookSlot() {
   const { providerId } = useParams();
   const navigate = useNavigate();
+  const { t } = useI18n();
   const [provider, setProvider] = useState(null);
   const [services, setServices] = useState([]);
   const [selectedService, setSelectedService] = useState(null);
@@ -16,9 +20,14 @@ export default function BookSlot() {
   const [selectedTime, setSelectedTime] = useState(null);
   const [slots, setSlots] = useState({ shifts: [], has_schedule: false });
   const [notes, setNotes] = useState("");
+  const [vehicleReg, setVehicleReg] = useState("");
+  const [vehicleModel, setVehicleModel] = useState("");
+  const [serviceType, setServiceType] = useState("");
   const [loadingProvider, setLoadingProvider] = useState(true);
   const [loadingSlots, setLoadingSlots] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+
+  const isAutomobile = provider?.category_id === AUTOMOBILE_CAT_ID;
 
   const days = useMemo(() => nextNDays(14), []);
 

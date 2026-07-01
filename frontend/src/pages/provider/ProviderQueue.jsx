@@ -19,11 +19,14 @@ export default function ProviderQueue() {
   const load = useCallback(async () => {
     try {
       const [qRes, sRes] = await Promise.all([
-        api.get("/queue/today"),
+        api.get("/queue/today").catch(() => ({ data: [] })),
         api.get("/providers/me/services").catch(() => ({ data: [] })),
       ]);
-      setQueue(qRes.data || []);
-      setServices(sRes.data || []);
+      const arr = Array.isArray(qRes.data)
+        ? qRes.data
+        : (qRes.data?.queue || qRes.data?.items || qRes.data?.bookings || []);
+      setQueue(arr);
+      setServices(Array.isArray(sRes.data) ? sRes.data : []);
     } finally {
       setLoading(false);
     }

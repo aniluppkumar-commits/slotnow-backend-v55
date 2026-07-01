@@ -37,7 +37,10 @@ export default function ProviderDashboard() {
         api.get("/queue/today").catch(() => ({ data: [] })),
       ]);
       setProfile(meRes.data);
-      setQueue(qRes.data || []);
+      const arr = Array.isArray(qRes.data)
+        ? qRes.data
+        : (qRes.data?.queue || qRes.data?.items || qRes.data?.bookings || []);
+      setQueue(arr);
       setCap(meRes.data?.daily_slot_limit || "");
     } catch (e) {
       if (e.response?.status === 404) {

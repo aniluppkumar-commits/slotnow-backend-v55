@@ -70,7 +70,7 @@ function BottomNav() {
   const items = isProvider ? providerItems : customerItems;
 
   return (
-    <nav className="fixed bottom-[68px] md:bottom-3 left-1/2 -translate-x-1/2 w-[calc(100%-1.5rem)] max-w-md md:max-w-md bg-white border border-cream-300 px-3 pt-2 pb-2 flex justify-around items-center z-50 rounded-2xl shadow-[0_8px_28px_rgba(0,0,0,0.10)]">
+    <nav className="fixed bottom-[76px] md:bottom-3 left-1/2 -translate-x-1/2 w-[calc(100%-1.5rem)] max-w-[360px] md:max-w-md bg-white border border-cream-300 px-3 pt-2 pb-2 flex justify-around items-center z-50 rounded-2xl shadow-[0_8px_28px_rgba(0,0,0,0.10)]">
       {items.map(({ to, label, icon: Icon, testId, exact }) => {
         const active = exact
           ? location.pathname === to

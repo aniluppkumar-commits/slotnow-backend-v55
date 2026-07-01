@@ -105,8 +105,7 @@ export default function ProviderOnboarding() {
                 <option key={c.id} value={c.id}>
                   {c.name} / {c.name_hi}
                 </option>
-              ))}
-            </select>
+              ))}            </select>
           </Field>
           <Field label={t("bio")}>
             <textarea

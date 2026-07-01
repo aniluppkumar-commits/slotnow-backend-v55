@@ -32,7 +32,6 @@ export default function Login() {
       navigate("/", { replace: true });
     }
   };
-
   const handleSendOtp = async (e) => {
     e.preventDefault();
     if (!validPhone) return toast.error("Enter a valid 10-digit phone");
@@ -84,7 +83,6 @@ export default function Login() {
       setLoading(false);
     }
   };
-
   const handleSetPin = async (e) => {
     e.preventDefault();
     if (!/^\d{4,6}$/.test(newPin)) return toast.error("PIN must be 4-6 digits");
