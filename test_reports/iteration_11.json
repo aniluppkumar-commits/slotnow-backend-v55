@@ -1,0 +1,49 @@
+{
+  "summary": "Verified two follow-up fixes on top of iteration_10 baseline + light platform regression sweep (frontend only, external backend untouched). Both fixes PASS. Core roles (Customer, Provider, Receptionist, Admin) all login + render as expected. No regressions detected.",
+  "fixes_verified": {
+    "FIX-1_todayISO_local_date": {
+      "status": "PASS",
+      "evidence": "Reorder POST /api/queue/reorder body captured: {\"date\":\"2026-07-01\", \"ordered_ids\":[...]}. Body date matches local date (built from Date.getFullYear/getMonth/getDate) — no toISOString().slice(0,10) UTC branch. Container is UTC so local==UTC today, but code path is verified from utils-app.js todayISO() (lines 66-73) using local Date components. Persistence check: after hard reload, queue order matches post-drag order — reorder persisted server-side.",
+      "captured_body_date": "2026-07-01",
+      "note": "IST off-by-one edge case can only be reliably reproduced by simulating a browser TZ where UTC and IST cross midnight; code inspection confirms local-only construction, which mathematically eliminates the UTC drift. IST run in a real browser would send today's IST date at 00:30 IST as required."
+    },
+    "FIX-2_whatsapp_invite_template": {
+      "status": "PASS",
+      "wa_preview_text": "Hi TEST_WI_Jane, we've been sharing SlotNow with friends & family — skip the queue and book slots online. Try it: https://slotnow-web.preview.emergentagent.com/login",
+      "wa_me_url": "https://wa.me/915555522222?text=...%3A%20https%3A%2F%2Fslotnow-web.preview.emergentagent.com%2Flogin",
+      "evidence": "wa-preview text contains ${window.location.origin}/login (dynamically resolved). WhatsAppModal.jsx buildTemplates.invite uses template literal with window.location.origin — no hardcoded string. Verified by decoding wa.me text query param — contains dynamic origin + /login. On this preview host origin happens to equal slotnow-web.preview.emergentagent.com, but the source of truth is now window.location.origin (would resolve differently on prod/other hosts)."
+    }
+  },
+  "regression_smoke": {
+    "receptionist_queue_dnd": "PASS — 6 walk-in rows with drag handles, DnD works, reorder persists after reload.",
+    "receptionist_walkin_vehicle_model": "PASS (implicit) — existing rows display 'KA01AB1234 · SWIFT' and 'UP15EJ9032 · TATA PUNCH' vehicle model in queue rows (visible in Provider Live Queue screenshot). rec-walkin-model field exists in walk-in creation flow.",
+    "provider_live_queue_no_drag": "PASS — drag handles: 0, queue-wa: 2, queue-call: 3. Provider view correctly hides drag handles while showing WA + Call actions.",
+    "admin_controls": "PASS — admin-bulk-approve-btn visible, 3 admin-approve-*, 3 admin-reject-*, 15 admin-suspend-* buttons rendered. Dashboard shows pending providers with approve/reject icons.",
+    "customer_home": "PASS — logged in via OTP + skipped PIN interstitial. Home shows categories (Healthcare, Salon, Tutor, Consultant, Coach, Home Service, Automobile) + Top Rated + All Providers lists.",
+    "customer_full_booking_e2e": "NOT_EXECUTED — smoke only (home + categories confirmed loading). Iteration_10 already covered full booking flow; no code changes to booking pipeline in this iteration.",
+    "provider_onboarding_image_upload": "NOT_EXECUTED — no changes to ProviderOnboarding.jsx in this iteration; iteration_10 covered.",
+    "history_page_contact_actions": "NOT_EXECUTED — no changes to HistoryPage; WhatsAppModal fix only affects invite template text (regression indirectly covered via receptionist queue WA test which uses same modal + invite option).",
+    "customer_refer_and_share": "NOT_EXECUTED — no changes to Refer & Share in this iteration."
+  },
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "critical_code_review_comments": [
+    "utils-app.js todayISO() correctly uses local date components — good fix. Note: nextNDays() still uses toISOString().slice(0,10) for iso field (line 82). This could cause the same IST off-by-one bug if used for API calls in future work. Consider centralizing on todayISO()-style local construction across the file for consistency.",
+    "WhatsAppModal.jsx buildTemplates.invite uses (typeof window !== 'undefined' ? window.location.origin : '') — correctly SSR-safe. Good.",
+    "Reorder request path is /queue/reorder (verified via network capture) — matches iteration_10 contract."
+  ],
+  "test_report_links": [],
+  "action_items": [],
+  "updated_files": [],
+  "success_rate": {"backend": "n/a (skipped as requested)", "frontend": "100% of targeted checks (2 fixes + 5 regression smokes)"},
+  "test_credentials": "As per /app/memory/test_credentials.md — all logins worked with OTP 123456.",
+  "seed_data_creation": "None — used pre-seeded walk-ins and bookings.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Both fixes (todayISO local date + WhatsApp invite dynamic origin) are green in iteration_11. The full customer booking end-to-end, provider onboarding image upload, history-page contact actions, and customer Refer & Share were not re-executed since no code changes touch those flows in this iteration (iteration_10 remains the passing baseline for them). For a full E2E next time, use the shared login() helper pattern: role click -> phone -> Continue -> single OTP input placeholder=\"123456\" -> Verify & Login -> wait for 'Skip' text button -> click. The Skip link on the PIN interstitial is a plain <button>Skip</button>, not test-id'd.",
+  "rca_of_the_issue": "N/A — verification-only iteration. Both fixes root-caused correctly by main agent: (a) toISOString() returns UTC ISO which shifts to previous day for IST between 00:00-05:30 IST — replaced with local Date component construction. (b) Previously the invite template embedded a hardcoded preview host string; now interpolated from window.location.origin so it adapts to whatever host the app is served from."
+}
