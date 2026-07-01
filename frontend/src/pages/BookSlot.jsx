@@ -22,7 +22,7 @@ export default function BookSlot() {
   const [notes, setNotes] = useState("");
   const [vehicleReg, setVehicleReg] = useState("");
   const [vehicleModel, setVehicleModel] = useState("");
-  const [serviceType, setServiceType] = useState("");
+  const [serviceType, setServiceType] = useState("Paid");
   const [loadingProvider, setLoadingProvider] = useState(true);
   const [loadingSlots, setLoadingSlots] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -75,7 +75,8 @@ export default function BookSlot() {
       const times = generateTimeSlots(shift.start_time, shift.end_time, selectedService.duration_min);
       out.push(...times);
     });
-    return out;
+    // Dedupe overlapping shifts producing the same start_time
+    return Array.from(new Set(out)).sort();
   }, [slots, selectedService]);
 
   const handleBook = async () => {
@@ -94,7 +95,8 @@ export default function BookSlot() {
       if (isAutomobile) {
         payload.vehicle_reg_no = vehicleReg || null;
         payload.vehicle_model = vehicleModel || null;
-        payload.service_type = serviceType || selectedService.service_type || null;
+        // Backend expects payment mode 'Paid' or 'Free' (not vehicle class)
+        payload.service_type = serviceType || "Paid";
       }
       const { data } = await api.post("/bookings", payload);
       toast.success(`${t("booked_token")} #${data.token_number}`);
@@ -275,13 +277,28 @@ export default function BookSlot() {
                 placeholder={t("vehicle_model")}
                 className="w-full bg-white border border-cream-300 rounded-xl px-4 py-3 text-sm text-ink placeholder:text-ink-muted focus:ring-2 focus:ring-forest/20 focus:border-forest outline-none"
               />
-              <input
-                data-testid="booking-service-type"
-                value={serviceType}
-                onChange={(e) => setServiceType(e.target.value)}
-                placeholder={`${t("service_type")} (${t("optional")})`}
-                className="w-full bg-white border border-cream-300 rounded-xl px-4 py-3 text-sm text-ink placeholder:text-ink-muted focus:ring-2 focus:ring-forest/20 focus:border-forest outline-none"
-              />
+              <div>
+                <label className="text-[10px] uppercase tracking-wider font-bold text-ink-muted mb-1 block">
+                  {t("service_type")}
+                </label>
+                <div className="grid grid-cols-2 gap-2">
+                  {["Paid", "Free"].map((mode) => (
+                    <button
+                      key={mode}
+                      type="button"
+                      data-testid={`booking-service-type-${mode.toLowerCase()}`}
+                      onClick={() => setServiceType(mode)}
+                      className={`py-2.5 rounded-xl text-sm font-bold border-2 transition-all ${
+                        serviceType === mode
+                          ? "bg-forest-faint border-forest text-forest ring-2 ring-forest/10"
+                          : "bg-white border-cream-300 text-ink-soft hover:border-forest/40"
+                      }`}
+                    >
+                      {mode}
+                    </button>
+                  ))}
+                </div>
+              </div>
             </div>
           </section>
         )}
