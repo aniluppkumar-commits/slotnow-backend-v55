@@ -56,7 +56,23 @@ export default function BookingDetail() {
           const { data: qp } = await api.get("/queue/my-position", {
             params: { provider_id: b.provider_id, date: b.date },
           });
-          setQueuePos(qp);
+          // Backend response shape: { has_booking, booking, current_token, your_token, wait, ... }
+          // It does NOT include an explicit `position` field, and it ignores provider_id/date
+          // and returns the customer's next active booking globally. So:
+          //  (a) Verify the returned booking id matches the one we're viewing before trusting it.
+          //  (b) Derive `position` = qp.wait (people strictly ahead of you), fallback to
+          //      max(0, your_token - current_token - 1).
+          const returnedId = qp?.booking?.id || qp?.booking_id;
+          if (!returnedId || returnedId === b.id) {
+            const derivedPosition =
+              typeof qp?.wait === "number"
+                ? qp.wait
+                : Math.max(0, (qp?.your_token || 0) - (qp?.current_token || 0) - 1);
+            setQueuePos({ ...qp, position: derivedPosition });
+          } else {
+            // Response is for a different booking — don't render misleading position data.
+            setQueuePos(null);
+          }
         } catch (err) {
           // Non-fatal — booking detail still renders, queue position UI just hides.
           console.warn("Queue position lookup failed:", err);

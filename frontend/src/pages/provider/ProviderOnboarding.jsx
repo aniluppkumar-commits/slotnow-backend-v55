@@ -5,6 +5,7 @@ import AppShell from "@/components/AppShell";
 import { useI18n } from "@/i18n";
 import { useAuth } from "@/context/AuthContext";
 import { compressImageToDataURL } from "@/lib/image";
+import { packAddress, unpackAddress } from "@/lib/address";
 import { Store, Loader2, Save, Upload, ImageIcon, X as XIcon, MapPin } from "lucide-react";
 import { toast } from "sonner";
 
@@ -56,7 +57,14 @@ export default function ProviderOnboarding() {
         setCategories(catRes.data || []);
         if (meRes.data) {
           setExisting(meRes.data);
-          setForm((f) => ({ ...f, ...meRes.data }));
+          // Backend stores map link piggy-backed inside address — split before showing.
+          const { text, mapLink } = unpackAddress(meRes.data.address);
+          setForm((f) => ({
+            ...f,
+            ...meRes.data,
+            address: text,
+            location_link: mapLink,
+          }));
         }
       } finally {
         setLoading(false);
@@ -70,7 +78,14 @@ export default function ProviderOnboarding() {
     }
     setSaving(true);
     try {
-      await api.post("/providers/me/profile", form);
+      // Pack the map link back into the address field before sending — backend has
+      // no dedicated location_link column, so we co-store them and split on read.
+      const payload = {
+        ...form,
+        address: packAddress(form.address, form.location_link),
+      };
+      delete payload.location_link;
+      await api.post("/providers/me/profile", payload);
       await refreshMe();
       toast.success(t("provider_profile_updated"));
       navigate("/provider", { replace: true });

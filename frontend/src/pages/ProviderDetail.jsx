@@ -5,6 +5,7 @@ import AppShell from "@/components/AppShell";
 import CategoryIcon from "@/components/CategoryIcon";
 import { useI18n } from "@/i18n";
 import { catStyle } from "@/lib/utils-app";
+import { unpackAddress } from "@/lib/address";
 import { Star, MapPin, Clock, Loader2, IndianRupee, MessageSquareText, Info, Navigation } from "lucide-react";
 import { toast } from "sonner";
 
@@ -44,6 +45,9 @@ export default function ProviderDetail() {
 
   const { provider, services, reviews, category, has_availability } = data;
   const style = catStyle(category?.color);
+  // Backend has no location_link column — the map link is piggy-backed into `address`.
+  const { text: addressText, mapLink } = unpackAddress(provider.address);
+  const directionsUrl = provider.location_link || mapLink;
 
   return (
     <AppShell title={provider.business_name} showBack>
@@ -81,12 +85,12 @@ export default function ProviderDetail() {
             </div>
             <div className="flex items-center gap-1.5 text-xs text-ink-soft mt-2">
               <MapPin size={12} strokeWidth={2} />
-              <span>{provider.address || provider.city}</span>
+              <span>{addressText || provider.city}</span>
             </div>
-            {provider.location_link && (
+            {directionsUrl && (
               <a
                 data-testid="provider-directions-btn"
-                href={provider.location_link}
+                href={directionsUrl}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="mt-2 inline-flex items-center gap-1.5 text-xs font-bold bg-sky-50 hover:bg-sky-100 text-sky-800 px-2.5 py-1.5 rounded-lg transition-colors"
