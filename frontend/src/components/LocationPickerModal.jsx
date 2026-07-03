@@ -21,10 +21,16 @@ import { X, MapPin, Navigation, ExternalLink, Loader2, Check, AlertTriangle } fr
 // resolves to PERMISSION_DENIED immediately — regardless of the user's
 // browser/OS permission. Detect this so we can give a real explanation.
 function isInsideCrossOriginIframe() {
+  // In a same-origin iframe, `window.top.document` is readable and `window.self !== window.top`.
+  // In a cross-origin iframe, reading `window.top.document` throws a SecurityError — which
+  // is the actual, reliable detection signal. The `window.self !== window.top` prefix is a
+  // cheap fast-path for the (extremely common) top-level case.
+  if (window.self === window.top) return false;
   try {
-    return window.self !== window.top && !window.top.document;
+    // Touching a property to trigger the SecurityError; the return value is intentionally unused.
+    void window.top.document;
+    return false; // same-origin iframe
   } catch {
-    // Reading window.top.document throws for cross-origin — so yes, we're framed.
     return true;
   }
 }
