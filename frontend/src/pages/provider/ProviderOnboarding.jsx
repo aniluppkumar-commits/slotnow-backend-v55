@@ -6,6 +6,7 @@ import { useI18n } from "@/i18n";
 import { useAuth } from "@/context/AuthContext";
 import { compressImageToDataURL } from "@/lib/image";
 import { packAddress, unpackAddress } from "@/lib/address";
+import LocationPickerModal from "@/components/LocationPickerModal";
 import { Store, Loader2, Save, Upload, ImageIcon, X as XIcon, MapPin } from "lucide-react";
 import { toast } from "sonner";
 
@@ -28,6 +29,7 @@ export default function ProviderOnboarding() {
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
+  const [locOpen, setLocOpen] = useState(false);
   const fileRef = useRef(null);
 
   const handleFile = async (e) => {
@@ -170,16 +172,34 @@ export default function ProviderOnboarding() {
             />
           </Field>
           <Field label="Clinic location (Google Maps link)">
-            <div>
+            <div className="w-full">
+              <button
+                type="button"
+                data-testid="onboarding-location-btn"
+                onClick={() => setLocOpen(true)}
+                className="w-full flex items-center gap-2 text-left"
+              >
+                <span
+                  className={`flex-1 truncate text-sm ${
+                    form.location_link ? "text-ink font-medium" : "text-ink-muted italic"
+                  }`}
+                  data-testid="onboarding-location-display"
+                >
+                  {form.location_link || "Tap to pin your clinic on the map"}
+                </span>
+                <span className="inline-flex items-center gap-1 text-[11px] font-bold bg-forest-faint text-forest px-2 py-1 rounded-lg shrink-0">
+                  <MapPin size={11} strokeWidth={2.5} />
+                  {form.location_link ? "Change" : "Pin"}
+                </span>
+              </button>
+              {/* Hidden input to keep the previous testid working for tests that read the value */}
               <input
+                type="hidden"
                 data-testid="onboarding-location-link"
                 value={form.location_link || ""}
-                onChange={(e) => setForm({ ...form, location_link: e.target.value })}
-                placeholder="https://maps.google.com/…  or  https://maps.app.goo.gl/…"
-                className="w-full bg-transparent outline-none text-ink font-medium placeholder:text-ink-muted text-sm"
+                readOnly
               />
-              <p className="text-[10px] text-ink-muted mt-1 flex items-center gap-1">
-                <MapPin size={10} />
+              <p className="text-[10px] text-ink-muted mt-1">
                 Customers will see a &quot;Get Directions&quot; button that opens this link.
               </p>
             </div>
@@ -250,6 +270,13 @@ export default function ProviderOnboarding() {
           {saving ? <Loader2 size={16} className="animate-spin" /> : <><Save size={16} /> {t("save_profile")}</>}
         </button>
       </div>
+
+      <LocationPickerModal
+        open={locOpen}
+        onClose={() => setLocOpen(false)}
+        initial={form.location_link}
+        onSave={(url) => setForm((f) => ({ ...f, location_link: url }))}
+      />
     </AppShell>
   );
 }

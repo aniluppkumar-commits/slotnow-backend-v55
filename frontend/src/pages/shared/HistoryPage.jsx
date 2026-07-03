@@ -5,6 +5,7 @@ import { useI18n } from "@/i18n";
 import { useAuth } from "@/context/AuthContext";
 import { StatusBadge, formatDate, formatTime } from "@/lib/utils-app";
 import WhatsAppModal from "@/components/WhatsAppModal";
+import PatientHistoryModal from "@/components/PatientHistoryModal";
 import {
   Loader2,
   Calendar,
@@ -39,6 +40,7 @@ export default function HistoryPage() {
   const [end, setEnd] = useState(toISO(new Date()));
   const [deletingId, setDeletingId] = useState(null);
   const [waTarget, setWaTarget] = useState(null);
+  const [historyTarget, setHistoryTarget] = useState(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -188,6 +190,7 @@ export default function HistoryPage() {
                 busy={deletingId === b.id}
                 onDelete={() => remove(b)}
                 onWhatsApp={() => setWaTarget(b)}
+                onOpenHistory={() => setHistoryTarget(b)}
               />
             ))}
           </div>
@@ -205,6 +208,14 @@ export default function HistoryPage() {
         service={waTarget?.service_name}
         date={waTarget?.date ? formatDate(waTarget.date) : ""}
         time={waTarget?.start_time ? formatTime(waTarget.start_time) : ""}
+      />
+
+      {/* Patient history modal (shows all past visits for the tapped customer) */}
+      <PatientHistoryModal
+        open={!!historyTarget}
+        onClose={() => setHistoryTarget(null)}
+        phone={historyTarget?.customer_phone}
+        name={historyTarget?.customer_name || historyTarget?.customer?.name || "Customer"}
       />
 
       {/* Print CSS scope */}
@@ -228,7 +239,7 @@ function MiniStat({ label, value, accent = "text-ink", testid }) {
   );
 }
 
-function HistoryRow({ b, canDelete, busy, onDelete, onWhatsApp }) {
+function HistoryRow({ b, canDelete, busy, onDelete, onWhatsApp, onOpenHistory }) {
   const phone = b.customer_phone;
   const name = b.customer_name || b.customer?.name || "Customer";
 
@@ -243,7 +254,16 @@ function HistoryRow({ b, canDelete, busy, onDelete, onWhatsApp }) {
         </div>
         <div className="min-w-0 flex-1">
           <div className="flex items-center justify-between gap-2">
-            <p className="text-sm font-bold text-ink truncate">{name}</p>
+            <button
+              type="button"
+              data-testid={`history-open-history-${b.id}`}
+              onClick={onOpenHistory}
+              disabled={!phone}
+              className="text-sm font-bold text-ink truncate hover:underline decoration-forest/40 underline-offset-2 disabled:no-underline disabled:cursor-default text-left"
+              title={phone ? "View patient history" : "No phone on record"}
+            >
+              {name}
+            </button>
             <StatusBadge status={b.status} />
           </div>
           <p className="text-xs text-ink-soft truncate mt-0.5">

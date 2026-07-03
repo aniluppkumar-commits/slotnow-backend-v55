@@ -31,8 +31,6 @@ import {
 import { toast } from "sonner";
 import { todayISO } from "@/lib/utils-app";
 
-const AUTOMOBILE_CAT_ID = "333a2602-2d4a-4e16-a9da-3e004b0e14fd";
-
 function SortableItem({ booking, providerName, onMoveUp, onMoveDown, canMoveUp, canMoveDown }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: booking.id });
   return (
@@ -66,7 +64,12 @@ export default function ReceptionistDashboard() {
   const [walkOpen, setWalkOpen] = useState(false);
   const [walk, setWalk] = useState({ name: "", phone: "", address: "", vehicle_reg_no: "", vehicle_model: "", service_ref: "", service_type: "Paid" });
 
-  const isAutomobile = providerInfo?.category_id === AUTOMOBILE_CAT_ID;
+  const isAutomobile =
+    // The /queue/today response returns provider.category as a STRING (e.g. "Automobile"),
+    // not a category_id — so match by name (case-insensitive) and also fall back to
+    // category_id if the backend response is ever extended to include it.
+    (providerInfo?.category || "").toLowerCase() === "automobile" ||
+    providerInfo?.category_id === "333a2602-2d4a-4e16-a9da-3e004b0e14fd";
 
   const load = useCallback(async () => {
     try {

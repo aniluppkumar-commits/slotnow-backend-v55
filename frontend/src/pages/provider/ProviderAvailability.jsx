@@ -7,6 +7,13 @@ import { toast } from "sonner";
 
 const WEEKDAYS_EN = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
+// Backend uses Python's weekday() convention: 0=Monday ... 6=Sunday.
+// Frontend UI uses JS getDay() convention: 0=Sunday ... 6=Saturday.
+// Bridge helpers to keep the two in sync (otherwise a schedule added on
+// "Monday" saves and appears as "Tuesday" — the reported bug).
+const jsToPyWeekday = (js) => (js === 0 ? 6 : js - 1);
+const pyToJsWeekday = (py) => (py + 1) % 7;
+
 export default function ProviderAvailability() {
   const { t } = useI18n();
   const [rules, setRules] = useState([]);
@@ -37,7 +44,8 @@ export default function ProviderAvailability() {
     setSaving(true);
     try {
       await api.post("/providers/me/availability", {
-        weekday: Number(form.weekday),
+        // form.weekday is UI-side (0=Sun..6=Sat). Convert to backend-side (0=Mon..6=Sun).
+        weekday: jsToPyWeekday(Number(form.weekday)),
         start_time: form.start_time,
         end_time: form.end_time,
         slot_duration: Number(form.slot_duration) || 30,
@@ -149,7 +157,7 @@ export default function ProviderAvailability() {
             {rules.map((r) => (
               <div key={r.id} data-testid={`avail-rule-${r.id}`} className="bg-white border border-cream-300 rounded-xl p-4 flex justify-between items-center">
                 <div>
-                  <p className="font-bold text-ink text-sm">{weekdays[r.weekday]}</p>
+                  <p className="font-bold text-ink text-sm">{weekdays[pyToJsWeekday(r.weekday)]}</p>
                   <div className="flex items-center gap-1 text-xs text-ink-soft mt-0.5">
                     <Clock size={11} />
                     {r.start_time} – {r.end_time} · {r.slot_duration} min slots
