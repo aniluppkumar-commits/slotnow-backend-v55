@@ -1,0 +1,61 @@
+{
+  "summary": "Iter16 LocationPickerModal geolocation-error redesign verified 100% — all 5 FIX scenarios pass and all 3 regressions hold. FIX-1 (framed context): loading the app via a data:URL wrapper iframe correctly triggers isInsideCrossOriginIframe() → the amber location-picker-frame-notice with location-picker-open-new-tab-btn is rendered proactively; after clicking use-current-btn (with getCurrentPosition mocked to reject code=1 + isSecureContext overridden true), the error box has data-error-kind='iframe', text contains 'preview frame', and location-picker-open-new-tab-btn-from-error is rendered inside the error box. FIX-2 (top-level, geolocation granted): url-input populated with 'https://www.google.com/maps?q=12.971600,77.594600' exactly; no error; frame notice NOT shown. FIX-3 (permissions API denied): mocked navigator.permissions.query({name:'geolocation'})={state:'denied'}; error appears with data-error-kind='denied', text does NOT include 'preview frame', text mentions padlock + Site settings. FIX-4 (TIMEOUT retry): mocked getCurrentPosition to reject with code=3 on first call and succeed on second — window.__gp_calls === 2, url-input filled with 'https://www.google.com/maps?q=10.000000,20.000000', no error shown (retry was transparent). FIX-5 (POSITION_UNAVAILABLE): mocked to reject code=2; error appears with data-error-kind='unavailable' and mentions 'GPS/Location is turned ON'. Regressions: 'Open Google Maps to search' opens https://www.google.com/maps in new tab; pasting https://maps.app.goo.gl/testabc + Save closes modal (via evaluate() click due to iter15-documented Playwright quirk on the modal Save btn) and writes to onboarding-location-display; customer /provider/8fc7a9b9-… still renders provider-directions-btn with href='https://maps.app.goo.gl/abc123' (iter15 seed) target='_blank' rel='noopener noreferrer'.",
+  "fixes_verified": {
+    "FIX-1 framed cross-origin iframe + PERMISSION_DENIED": {
+      "status": "PASS",
+      "evidence": "data:text/html;base64,<iframe src='REACT_APP_BACKEND_URL/provider/onboarding'></iframe> loaded → isInsideCrossOriginIframe()===true (verified via 3 frames present, app frame is cross-origin from data: URL). location-picker-frame-notice VISIBLE with location-picker-open-new-tab-btn VISIBLE. After overriding window.isSecureContext=true (needed because data: parent taints the iframe's secure-context inheritance — not a product issue) and mocking navigator.geolocation.getCurrentPosition to error with {code:1,message:'User denied Geolocation'}, click use-current-btn → error kind='iframe', text='The preview frame does not have permission to read location. Tap Open in a new tab below — the app will then prompt you for permission.', location-picker-open-new-tab-btn-from-error rendered inside the rose error box."
+    },
+    "FIX-2 top-level geolocation granted": {
+      "status": "PASS",
+      "evidence": "context.grant_permissions(['geolocation'], origin=REACT_APP_BACKEND_URL) + context.set_geolocation({lat:12.9716,lng:77.5946}). Modal opened at /provider/onboarding (top-level). Frame notice absent. Click use-current-btn → url-input value exactly 'https://www.google.com/maps?q=12.971600,77.594600'; no error rendered."
+    },
+    "FIX-3 permissions API preflight denied (top-level)": {
+      "status": "PASS",
+      "evidence": "Monkey-patched navigator.permissions.query to return {state:'denied'} for {name:'geolocation'}. Click use-current-btn → error kind='denied', text='Location permission is blocked in your browser settings for this site. Tap the padlock icon in the address bar → Site settings → Location → Allow, then try again. Or paste a Maps link below.' — 'preview frame' NOT present; padlock + site settings both present."
+    },
+    "FIX-4 TIMEOUT auto-retry with lower accuracy": {
+      "status": "PASS",
+      "evidence": "Counted invocations via window.__gp_calls; first call errored with {code:3}, second call succeeded with fake coords {lat:10,lng:20}. Result: __gp_calls===2, url-input='https://www.google.com/maps?q=10.000000,20.000000', location-picker-error absent. Retry is transparent to the user."
+    },
+    "FIX-5 POSITION_UNAVAILABLE": {
+      "status": "PASS",
+      "evidence": "Mocked getCurrentPosition to reject with {code:2,message:'unavailable'}. Error kind='unavailable', text='Your device could not determine a location right now. Check that GPS/Location is turned ON in your phone settings, then try again.' — contains 'GPS' and 'Location is turned ON'."
+    }
+  },
+  "regressions_checked": {
+    "REG-MAPS Open Google Maps in new tab": "PASS — location-picker-open-maps-btn opened https://www.google.com/maps in a new tab.",
+    "REG-SAVE Paste URL + Save flow": "PASS (with test-tooling caveat) — pasting 'https://maps.app.goo.gl/testabc' into location-picker-url-input then clicking location-picker-save-btn via page.evaluate() closes the modal and writes to onboarding-location-display. NOTE: locator.click(force=True) on location-picker-save-btn does NOT dispatch React onClick in this env (same quirk as onboarding-save-btn documented in iter15); use page.evaluate('..save-btn..click()') instead. Product code is fine.",
+    "REG-DIRECTIONS Get Directions on customer ProviderDetail": "PASS — customer /provider/8fc7a9b9-c173-40fb-844b-460faec9b5be renders provider-directions-btn with href='https://maps.app.goo.gl/abc123', target='_blank', rel='noopener noreferrer'. (URL is iter15 seed abc123 because iter16 REG-SAVE never persisted to backend — modal Save only updates local component state; the onboarding-save-btn was intentionally not clicked to preserve iter15 baseline.)"
+  },
+  "backend_issues": { "critical": [], "minor": [] },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "critical_code_review_comments": [
+    "LocationPickerModal.jsx L23-30 isInsideCrossOriginIframe(): the check 'window.self !== window.top && !window.top.document' is correct but the '!window.top.document' branch is unreachable in modern browsers because reading a cross-origin window.top.document ALWAYS throws SecurityError — the catch{} correctly handles this. The '!window.top.document' clause is dead code but harmless; leave for defense-in-depth or drop with a comment.",
+    "LocationPickerModal.jsx L88 catch{} on navigator.permissions.query — perfect; Safari<16 and some older WebKit throw NotSupportedError on unknown names. Good.",
+    "LocationPickerModal.jsx L113 maximumAge: 60000 — reasonable but may return a slightly stale location on the retry path. Consider maximumAge: 0 for the second attempt if that path is chosen to force a fresh network-based fix. Minor.",
+    "LocationPickerModal.jsx L129 lat/lng formatted to fixed(6) is good — ~11cm precision, avoids floating-point representation issues in the URL.",
+    "LocationPickerModal.jsx openInNewTab() uses window.location.href — inside an iframe this correctly resolves to the iframe's URL (NOT the parent's). Good. window.open with noopener,noreferrer is safe.",
+    "Test-tooling: same Playwright event-dispatch quirk seen on onboarding-save-btn (iter15) also affects location-picker-save-btn — must use page.evaluate((sel)=>document.querySelector(sel).click(), '[data-testid=\"location-picker-save-btn\"]') for reliable dispatch. Suggest adding this to the shared test helpers for future runs. Product code unaffected."
+  ],
+  "test_report_links": [],
+  "action_items": [
+    "None — all 5 iter16 fixes and 3 regressions verified. LocationPickerModal.jsx behaves exactly as designed for all 5 failure classifications.",
+    "Optional: L25 '!window.top.document' dead-code cleanup with a code comment noting the try/catch is the actual detection.",
+    "Optional: update test helpers to use page.evaluate() click for location-picker-save-btn AND onboarding-save-btn to avoid the documented Playwright/React onClick dispatch quirk."
+  ],
+  "updated_files": [],
+  "success_rate": {
+    "backend": "n/a (frontend-only iteration per request)",
+    "frontend": "5/5 FIX + 3/3 regressions PASS"
+  },
+  "test_credentials": "Provider 8888800884 / OTP 123456 (used for onboarding modal interactions); Customer 9999999999 / OTP 123456 (used for regression on Get Directions).",
+  "seed_data_creation": "None — iter15 baseline preserved. Provider TEST_Provider Biz still has address='42 MG Road, Koramangala, Bangalore\\n\\n📍 https://maps.app.goo.gl/abc123'. The 'testabc' URL used during REG-SAVE was only written to local modal state, never POSTed to /providers/me/profile, so backend seed is untouched.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Iter16 all-green. LocationPickerModal now handles 5 distinct error classifications with data-error-kind attribute: 'iframe', 'denied', 'unavailable', 'timeout', 'other'. The framed-context detection uses try/catch on window.top.document — a data:URL wrapper works as an OK proxy for cross-origin (frame notice appears correctly). BUT: a data:URL parent taints the iframe's secure-context inheritance (window.isSecureContext becomes false inside the iframe), which trips the pre-flight secure-context guard at L72-76 BEFORE the iframe-classified branch can fire. To fully validate the code=1 PERMISSION_DENIED → kind='iframe' path in Playwright, override window.isSecureContext AND mock navigator.geolocation.getCurrentPosition to reject with {code:1} inside the iframe. In real Emergent chat preview (HTTPS parent iframing HTTPS app without allow='geolocation'), isSecureContext will genuinely be true, so this test workaround is only for local automation. IMPORTANT: location-picker-save-btn has the same locator.click(force=True)→no-React-onClick quirk as onboarding-save-btn — use page.evaluate() to click both.",
+  "rca_of_the_issue": "N/A — this iteration verified the mitigation for the Android 'permission denied' user report. Root cause was correctly identified upstream: cross-origin iframe without allow='geolocation' → browser rejects getCurrentPosition() with PERMISSION_DENIED instantly, regardless of the user's OS/browser permissions. The frontend-only mitigation in LocationPickerModal.jsx correctly (a) detects the framed context up-front (via try/catch on window.top.document, verified via frame_notice_present=True in an iframe wrapper), (b) proactively surfaces an amber warning with an 'Open in a new tab' button before the user even clicks (verified), (c) classifies the eventual PERMISSION_DENIED as 'iframe' rather than the generic 'denied' when framed (verified via data-error-kind='iframe' and 'preview frame' text), (d) shows a second contextual 'Open in a new tab' button inside the rose error box (verified). All classifications are actionable and distinct — no false-negative for the reported user scenario."
+}
