@@ -47,14 +47,19 @@ History page (Provider + Assistant) with Call/WhatsApp/Print + Provider-only Del
 - Iteration 9: 6/6 (100%) — all P2 items + bug fix verified.
 - Iteration 10: 100% — WhatsApp + Call + DnD + Admin controls; only 2 non-blocking design nits.
 - Iteration 11: 100% — post-fix verification of `todayISO()` local-date + WhatsApp `window.location.origin` invite.
-- **Iteration 12: 100%** — code-quality refactor sweep (hook deps → useCallback, empty catches → console.error/warn, inline object props → useMemo, array-index keys → stable). Zero regressions across all roles.
+- Iteration 12: 100% — code-quality refactor sweep (hook deps, empty catches, useMemo, stable keys). Zero regressions.
+- Iteration 13: 6 user-reported bugs fixed — schedule date (nextNDays local), ↑/↓ arrow buttons on receptionist queue, patient-history modal on row click, on-time alert on BookingDetail, walk-in conditional fields, Get Directions link. Surfaced 2 backend gaps.
+- **Iteration 14: 100%** — workarounds for the 2 backend gaps confirmed live: (a) BookingDetail derives position from `qp.wait` and gates on booking-id match, all 4 branches (wait 0/3/8/mismatched-id) exercised; (b) `packAddress`/`unpackAddress` module co-stores map link in the address field — save + reload + customer view all render correctly.
 
 ## Open Backend Recommendations (for backend team)
+- **[NEW – would let us remove a workaround] `GET /api/queue/my-position`**: (a) add an explicit `position` integer (count of active tokens strictly ahead of the caller), (b) honor the `provider_id` and `date` query params — currently the endpoint returns the caller's next active booking globally, so a customer viewing a *non-first* active booking gets misleading data. Frontend workaround (iteration 14): derive `position = qp.wait` and only trust the response when `qp.booking.id === viewed booking id`.
+- **[NEW – would let us remove a workaround] `Provider.location_link`**: add a dedicated string column so we can stop piggy-backing the Google Maps link inside `address`. Frontend workaround (iteration 14): `packAddress(text, url) → "<text>\n\n📍 <url>"`, `unpackAddress()` on read. Legacy addresses that already have a trailing map URL are also split cleanly by the fallback regex.
 - **[Security] Migrate auth token storage to httpOnly cookies.** The web frontend currently stores JWT in `localStorage` (see `src/lib/api.js:11` and `src/context/AuthContext.jsx`) because the deployed backend returns `{ token }` in JSON. localStorage is XSS-exposed. Backend must (a) issue the JWT via `Set-Cookie: HttpOnly; Secure; SameSite=Lax` on `/api/auth/verify-otp` and `/api/auth/pin-login`, (b) accept the cookie on subsequent requests, (c) add a `/api/auth/logout` that clears the cookie, and (d) enable CORS `credentials: true`. Frontend will then switch axios to `withCredentials: true` and stop reading/writing tokens client-side.
 - Add a dedicated `PUT /api/admin/providers/{id}/suspend` (+ `/unsuspend`) endpoint. Currently Suspend reuses `/reject`, which is semantically fragile.
 - Implement `GET /api/referrals/mine` returning `{ count: N }` (or add `total_refs` to `/users/me`) so the Profile progress bar shows live counts. Currently 404s; UI handles gracefully.
 - Consider a real image upload endpoint (multipart) or return a signed URL. Current approach stores base64 in Mongo which may bloat documents; fine for MVP but a proper media service would be cleaner.
 - Consider explicit `approved: false` on freshly-onboarded providers so they enter the admin approval funnel.
+- Seed a receptionist account linked to an Automobile provider so the vehicle-fields walk-in branch can be validated live (currently the sole receptionist is linked to a Healthcare provider, so the auto branch remains code-verified only).
 
 ## Backlog (P2/P3)
 - Real WebSocket-based live queue.

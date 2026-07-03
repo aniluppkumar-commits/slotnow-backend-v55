@@ -51,7 +51,7 @@ export default function BookingDetail() {
         return;
       }
       setBooking(b);
-      if (["pending", "confirmed", "in_progress"].includes(b.status)) {
+      if (["pending", "confirmed", "in_progress"].includes(b.status) && b.token_number != null) {
         try {
           const { data: qp } = await api.get("/queue/my-position", {
             params: { provider_id: b.provider_id, date: b.date },
