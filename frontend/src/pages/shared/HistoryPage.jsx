@@ -17,7 +17,11 @@ import {
 import { toast } from "sonner";
 
 function toISO(d) {
-  return d.toISOString().slice(0, 10);
+  // Local date, not UTC — otherwise IST users get yesterday after 5:30am UTC.
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
 }
 
 function daysAgoISO(n) {

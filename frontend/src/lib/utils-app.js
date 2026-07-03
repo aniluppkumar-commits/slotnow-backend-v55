@@ -78,8 +78,13 @@ export function nextNDays(n) {
   for (let i = 0; i < n; i++) {
     const d = new Date(now);
     d.setDate(now.getDate() + i);
+    // Use LOCAL date parts so the "today" tile is actually the user's local today,
+    // not UTC today (which is +1 for IST users after 5:30am UTC / 11:00am IST).
+    const y = d.getFullYear();
+    const mo = String(d.getMonth() + 1).padStart(2, "0");
+    const da = String(d.getDate()).padStart(2, "0");
     days.push({
-      iso: d.toISOString().slice(0, 10),
+      iso: `${y}-${mo}-${da}`,
       day: d.toLocaleDateString(undefined, { weekday: "short" }),
       date: d.getDate(),
       month: d.toLocaleDateString(undefined, { month: "short" }),

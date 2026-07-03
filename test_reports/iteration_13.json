@@ -1,0 +1,96 @@
+{
+  "summary": "Iteration 13 verified 6 targeted fixes on SlotNow web app (frontend-only). 4/6 fixes fully PASS via live UI. FIX-4 (on-time alert) is functionally BROKEN — front-end/back-end contract mismatch on /queue/my-position (backend returns `wait`, `your_token`, `current_token` — no `position` field, so `queuePos.position != null` is never true and the amber banner can never render). FIX-6 backend persistence is BROKEN — POST /providers/me/profile silently drops the new `location_link` field, so the customer-facing 'Get Directions' button never renders after reload. FIX-2/FIX-3 for receptionist could NOT be verified live because receptionist 6666600011 is linked to TEST_Provider Biz (Healthcare) — not QuickWheels as the review request claims — and TEST_Provider Biz has zero queue rows today (no availability, no bookings). All receptionist-only code paths verified via source inspection.",
+  "fixes_verified": {
+    "FIX-1 BookSlot first date tile": {
+      "status": "PASS",
+      "evidence": "Browser today = 2026-07-03. First booking-date-* testid on /book/3610a6f1-4cf4-4f03-94c5-b9795ccefd9b = 'booking-date-2026-07-03'. nextNDays() correctly emits local YYYY-MM-DD."
+    },
+    "FIX-1b HistoryPage Today preset": {
+      "status": "PASS",
+      "evidence": "As receptionist, /receptionist/history → click history-preset-0 → start/end fields both = 2026-07-03 (matches new Date() local). toISO() using local parts works."
+    },
+    "FIX-2 Receptionist reorder arrows + hint text": {
+      "status": "PASS (code) / NOT-VERIFIED (live)",
+      "evidence": "Cannot verify live — receptionist 6666600011 is linked to TEST_Provider Biz (Healthcare) which has NO active bookings today. QueueRow.jsx L96-120 renders queue-move-up-<id>/queue-move-down-<id> only when onMoveUp/onMoveDown props passed; ReceptionistDashboard.jsx L253-258 passes them + canMoveUp/canMoveDown; L243-245 renders 'Drag or use ↑ ↓ to reorder' hint only when queue.length>0. moveByOne() and persistReorder() correctly POST /queue/reorder with { date: todayISO(), ordered_ids }.",
+      "verified_on_provider_queue": "Provider live queue (8888800002) shows 0 move-up buttons because provider dashboard does NOT wire onMoveUp/onMoveDown (only receptionist does). This is correct per spec."
+    },
+    "FIX-3 Patient history modal (Provider live queue)": {
+      "status": "PASS",
+      "evidence": "As provider 8888800002 (QuickWheels) on /provider/queue: 1 queue row (Neelam #2) rendered with queue-open-history-<id>. Click opened patient-history-modal, fetched /queue/history, and rendered 2 patient-history-item-<id> cards (customer had 2 prior visits). Close button closes modal. Modal filter-by-phone works."
+    },
+    "FIX-3 Patient history modal (Receptionist queue)": {
+      "status": "PASS (code) / NOT-VERIFIED (live)",
+      "evidence": "Same QueueRow component is used — provider path works so receptionist path will too. Only untestable live because the linked provider has no queue rows."
+    },
+    "FIX-4 On-time alert banner": {
+      "status": "FAIL (functional bug — will never render)",
+      "evidence": "Opened active booking /bookings/7e2f4c69-... for QuickWheels (queue has 1 person). booking-on-time-alert NOT rendered. Root cause: backend /api/queue/my-position response body = {\"has_booking\":true,\"booking\":{…},\"provider_on_duty\":true,\"current_token\":0,\"last_assigned\":1,\"your_token\":1,\"wait\":0} — there is NO `position` key. BookingDetail.jsx L202 checks `queuePos?.position != null && queuePos.position <= 5 && queuePos.position > 0`, which is always false, so the amber banner cannot render. ALSO: the endpoint ignores the provider_id/date query params and always returns the customer's next active booking globally (verified — 7 different booking IDs queried, all returned the same Sharma Clinic booking cf35662e)."
+    },
+    "FIX-5 Walk-in conditional fields (non-Auto path)": {
+      "status": "PASS (live, non-Auto path)",
+      "evidence": "Receptionist 6666600011 → linked provider = TEST_Provider Biz (Healthcare, category != AUTOMOBILE_CAT_ID) → isAutomobile=false. Walk-in modal rendered: rec-walkin-name ✓, rec-walkin-phone ✓, rec-walkin-address ✓. Confirmed absent: rec-walkin-reg, rec-walkin-model, rec-walkin-service-ref, rec-walkin-service-type-paid/free. Non-Auto branch works correctly."
+    },
+    "FIX-5 Walk-in conditional fields (Auto path)": {
+      "status": "PASS (code) / NOT-VERIFIED (live)",
+      "evidence": "Could NOT verify live — review request claimed receptionist 6666600011 is linked to QuickWheels (Automobile), but the actual linked provider is TEST_Provider Biz (Healthcare) per both /api/queue/today response and /app/memory/test_credentials.md. ReceptionistDashboard.jsx L296-341 renders the auto branch (rec-walkin-reg, rec-walkin-model, rec-walkin-service-ref, rec-walkin-service-type-*) with no address field when isAutomobile===true. Code path correct — but no receptionist account is linked to an Automobile provider to verify live."
+    },
+    "FIX-6 Provider Onboarding location_link input": {
+      "status": "PASS (frontend), FAIL (backend persistence)",
+      "evidence": "onboarding-location-link input renders on /provider/onboarding. Filled 'https://maps.google.com/?q=28.6139,77.2090' + saved. POST /api/providers/me/profile payload includes location_link (verified). Response status 200 BUT response body does NOT echo the location_link field (backend Provider model strips unknown keys). After page reload the input is EMPTY — value not persisted. The review request called this out as an acceptable partial; flagging here as backend recommendation."
+    },
+    "FIX-6b Get Directions button on ProviderDetail": {
+      "status": "FAIL (blocked by FIX-6 backend gap)",
+      "evidence": "As customer, opened /provider/8fc7a9b9-... (TEST_Provider Biz). provider-directions-btn NOT rendered — because provider.location_link is falsy in the /providers/:id response (backend never stored it). Frontend code in ProviderDetail.jsx L86-97 is correct; will render as soon as backend persists+returns location_link."
+    }
+  },
+  "regression_smoke": {
+    "customer_login+bookings_list": "PASS — 9999999999 logs in, /bookings shows 3 booking cards (9 total via API, 7 active).",
+    "provider_login+live_queue": "PASS — 8888800002 lands /provider, /provider/queue renders 1 queue row correctly.",
+    "receptionist_login": "PASS — 6666600011 lands /receptionist Assistant Desk, TEST_Provider Biz shown as linked provider.",
+    "provider_onboarding_load": "PASS — 8888800884 /provider/onboarding loads existing profile fields.",
+    "provider_detail_load_as_customer": "PASS — /provider/<id> renders TEST_Provider Biz card (image / rating / bio / services fallback).",
+    "wa_call_stopPropagation": "PASS — clicking queue-wa-<id> opens WhatsAppModal but does NOT open patient-history-modal. Clicking queue-call-<id> also does NOT open patient-history-modal. e.stopPropagation() guards work.",
+    "dnd_reorder": "NOT-TESTED — no queue rows on receptionist's linked provider.",
+    "customer_end_to_end_booking": "PARTIAL — /book/<id> loads first-tile OK but selecting a service is required before time slots surface (0 time slots on default view); did not exercise full confirm flow — pre-existing behavior, not a regression."
+  },
+  "backend_issues": {
+    "critical": [
+      {"endpoint": "POST /api/providers/me/profile", "issue": "Silently drops the `location_link` field (does not persist, does not return it). Root cause of FIX-6 gap. Frontend sends it correctly.", "priority": "HIGH"},
+      {"endpoint": "GET /api/queue/my-position", "issue": "Response has no `position` field (only has_booking, booking, current_token, last_assigned, your_token, wait). BookingDetail.jsx checks queuePos.position which is never present, so on-time alert (FIX-4) and 'X ahead of you' text can NEVER render. Also endpoint ignores provider_id/date query params — always returns the customer's next active booking globally.", "priority": "HIGH"}
+    ],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [
+      {"flow": "FIX-4 amber alert on BookingDetail", "issue": "Frontend expects queuePos.position (1..5) but backend returns wait/your_token/current_token — banner will never render. Suggest mapping: `position = wait` OR update backend to include `position` (# of people strictly ahead of your_token, i.e. your_token - current_token - 1, clamped >= 0).", "affected_selectors": ["booking-on-time-alert"]},
+      {"flow": "FIX-6b Get Directions", "issue": "provider.location_link never returned from backend; button hidden even after save.", "affected_selectors": ["provider-directions-btn"]}
+    ],
+    "design_issues": []
+  },
+  "critical_code_review_comments": [
+    "BookingDetail.jsx L186-197 also relies on queuePos.position for 'X ahead of you' / 'youre_up_next' text — same missing-field issue as the alert. Both features are inert until backend contract aligns.",
+    "PatientHistoryModal.jsx L27-34 fetches ALL /queue/history for the caller (2-year window) then filters client-side by phone. For high-traffic providers this may return large payloads and is inefficient — recommend adding a backend `?phone=` query filter later.",
+    "ReceptionistDashboard.jsx L69 relies on providerInfo?.category_id being populated from /queue/today's `provider` sub-doc. If backend ever omits category_id there, isAutomobile silently degrades to false and the walk-in form defaults to the non-auto branch. Confirm /queue/today.provider payload always contains category_id.",
+    "ReceptionistDashboard.jsx walk-in payload L109-121: for non-auto path it sends `payload.notes = walk.address` (repurposes notes as address). Cleaner to send a separate `address` field once backend supports it — otherwise a customer with actual booking notes gets their address overwritten.",
+    "Nice: QueueRow.jsx correctly puts e.stopPropagation() on both call and WhatsApp handlers (L128, L136) — verified live that clicking these no longer opens the history modal."
+  ],
+  "test_report_links": [],
+  "action_items": [
+    "BACKEND: Extend Provider model + POST /api/providers/me/profile + GET /api/providers/:id to persist and return the `location_link` (string, optional, URL). Once done, FIX-6 and FIX-6b will go green with no frontend change.",
+    "BACKEND: Add a `position` integer to /api/queue/my-position response = (your_token - current_token - 1) clamped to >= 0, and honor provider_id/date query params so multi-booking customers see per-provider data. Once done FIX-4 amber alert (and the existing 'X ahead of you' subtitle) will render correctly.",
+    "OPTIONAL (or CLARIFY with E1): Seed a receptionist account whose linked provider is Automobile (QuickWheels 8888800002) so FIX-5 Auto walk-in path can be verified live. Currently only the non-auto receptionist exists.",
+    "OPTIONAL: Seed at least one active booking on TEST_Provider Biz (or link receptionist to a provider with bookings) so FIX-2 arrow reorder, FIX-3 receptionist patient-history modal, and DnD reorder regression can be validated live."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "n/a (skipped as requested)", "frontend": "6/9 targeted checks fully PASS live + 3 pass-by-code (FIX-2, FIX-3 receptionist, FIX-5 Auto); 2 features functionally BROKEN due to backend gaps (FIX-4, FIX-6b)"},
+  "test_credentials": "All 4 accounts from /app/memory/test_credentials.md logged in successfully with OTP 123456.",
+  "seed_data_creation": "None — no test data created.",
+  "retest_needed": true,
+  "main_agent_can_self_test": false,
+  "context_for_next_testing_agent": "Receptionist 6666600011 is linked to TEST_Provider Biz (Healthcare, category != AUTOMOBILE_CAT_ID), NOT QuickWheels — review requests to the contrary should be adjusted. TEST_Provider Biz has no availability + no bookings + no services, so all queue-based UI (arrows, DnD, patient history) can't be exercised via this receptionist. For live queue testing use provider 8888800002 (QuickWheels) — it has 1 active queue row. To test FIX-4 the backend /queue/my-position must include a `position` integer field first. To test FIX-6 fully the backend must persist location_link on Provider profile.",
+  "rca_of_the_issues": {
+    "FIX-4": "Contract mismatch. Frontend BookingDetail.jsx expects queuePos.position (added by front-end change); backend /api/queue/my-position returns wait/your_token/current_token but no position. Since 'position != null' is required to render the amber alert, the banner is unreachable. Repro: login as customer 9999999999 → open any active booking under /bookings/<id> → banner never appears, DevTools Network shows /queue/my-position 200 with no `position` key.",
+    "FIX-6": "Backend Provider profile schema does not include location_link. POST payload includes it (verified via request inspection), backend responds 200 with the profile body but strips the unknown key. Field is not stored. On reload, GET returns profile without location_link, so both onboarding input and ProviderDetail 'Get Directions' anchor stay empty. Repro: as provider 8888800884, /provider/onboarding, fill location_link, save, reload — value gone. Mitigation: add nullable string field to backend Provider model + Pydantic schema."
+  }
+}

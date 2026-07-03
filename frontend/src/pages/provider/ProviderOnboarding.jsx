@@ -5,7 +5,7 @@ import AppShell from "@/components/AppShell";
 import { useI18n } from "@/i18n";
 import { useAuth } from "@/context/AuthContext";
 import { compressImageToDataURL } from "@/lib/image";
-import { Store, Loader2, Save, Upload, ImageIcon, X as XIcon } from "lucide-react";
+import { Store, Loader2, Save, Upload, ImageIcon, X as XIcon, MapPin } from "lucide-react";
 import { toast } from "sonner";
 
 export default function ProviderOnboarding() {
@@ -22,6 +22,7 @@ export default function ProviderOnboarding() {
     address: "",
     contact_phone: "",
     image: "",
+    location_link: "",
   });
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -152,6 +153,21 @@ export default function ProviderOnboarding() {
               placeholder="Full address"
               className="w-full bg-transparent outline-none text-ink font-medium placeholder:text-ink-muted"
             />
+          </Field>
+          <Field label="Clinic location (Google Maps link)">
+            <div>
+              <input
+                data-testid="onboarding-location-link"
+                value={form.location_link || ""}
+                onChange={(e) => setForm({ ...form, location_link: e.target.value })}
+                placeholder="https://maps.google.com/…  or  https://maps.app.goo.gl/…"
+                className="w-full bg-transparent outline-none text-ink font-medium placeholder:text-ink-muted text-sm"
+              />
+              <p className="text-[10px] text-ink-muted mt-1 flex items-center gap-1">
+                <MapPin size={10} />
+                Customers will see a &quot;Get Directions&quot; button that opens this link.
+              </p>
+            </div>
           </Field>
           <Field label="Business image">
             <div className="space-y-2">

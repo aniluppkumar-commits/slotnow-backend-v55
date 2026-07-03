@@ -19,6 +19,7 @@ import {
   Car,
   Radio,
   CheckCircle2,
+  AlertTriangle,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -194,6 +195,21 @@ export default function BookingDetail() {
                 {t("now_serving")}: #{queuePos.current_token}
               </p>
             )}
+          </div>
+        )}
+
+        {/* Automated on-time alert — appears when the customer is close to being served */}
+        {isActive && queuePos?.position != null && queuePos.position <= 5 && queuePos.position > 0 && (
+          <div
+            data-testid="booking-on-time-alert"
+            className="bg-amber-50 border border-amber-200 rounded-2xl p-3 flex items-start gap-2.5"
+          >
+            <AlertTriangle size={16} className="text-amber-600 shrink-0 mt-0.5" strokeWidth={2.5} />
+            <p className="text-xs text-amber-900 leading-snug">
+              <span className="font-bold">Please be on time.</span>{" "}
+              You are {queuePos.position} spot{queuePos.position === 1 ? "" : "s"} away from being served —
+              if you are not on time, your token may be moved back in the queue.
+            </p>
           </div>
         )}
 

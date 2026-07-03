@@ -31,7 +31,9 @@ import {
 import { toast } from "sonner";
 import { todayISO } from "@/lib/utils-app";
 
-function SortableItem({ booking, providerName }) {
+const AUTOMOBILE_CAT_ID = "333a2602-2d4a-4e16-a9da-3e004b0e14fd";
+
+function SortableItem({ booking, providerName, onMoveUp, onMoveDown, canMoveUp, canMoveDown }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: booking.id });
   return (
     <QueueRow
@@ -45,6 +47,10 @@ function SortableItem({ booking, providerName }) {
         zIndex: isDragging ? 20 : "auto",
       }}
       dragHandleProps={{ ...attributes, ...listeners }}
+      onMoveUp={onMoveUp}
+      onMoveDown={onMoveDown}
+      canMoveUp={canMoveUp}
+      canMoveDown={canMoveDown}
     />
   );
 }
@@ -58,7 +64,9 @@ export default function ReceptionistDashboard() {
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState(false);
   const [walkOpen, setWalkOpen] = useState(false);
-  const [walk, setWalk] = useState({ name: "", phone: "", vehicle_reg_no: "", vehicle_model: "", service_type: "Paid" });
+  const [walk, setWalk] = useState({ name: "", phone: "", address: "", vehicle_reg_no: "", vehicle_model: "", service_ref: "", service_type: "Paid" });
+
+  const isAutomobile = providerInfo?.category_id === AUTOMOBILE_CAT_ID;
 
   const load = useCallback(async () => {
     try {
@@ -98,15 +106,21 @@ export default function ReceptionistDashboard() {
     if (!walk.name.trim()) return toast.error("Name required");
     setActionLoading(true);
     try {
-      const { data } = await api.post("/queue/walkin", {
+      const payload = {
         name: walk.name,
         phone: walk.phone || null,
-        vehicle_reg_no: walk.vehicle_reg_no || null,
-        vehicle_model: walk.vehicle_model || null,
-        service_type: walk.service_type || "Paid",
-      });
+      };
+      if (isAutomobile) {
+        payload.vehicle_reg_no = walk.vehicle_reg_no || null;
+        payload.vehicle_model = walk.vehicle_model || null;
+        payload.service_type = walk.service_type || "Paid";
+        if (walk.service_ref) payload.notes = `Ref: ${walk.service_ref}`;
+      } else if (walk.address) {
+        payload.notes = walk.address;
+      }
+      const { data } = await api.post("/queue/walkin", payload);
       toast.success(`Added • Token #${data.token_number}`);
-      setWalk({ name: "", phone: "", vehicle_reg_no: "", vehicle_model: "", service_type: "Paid" });
+      setWalk({ name: "", phone: "", address: "", vehicle_reg_no: "", vehicle_model: "", service_ref: "", service_type: "Paid" });
       setWalkOpen(false);
       await load();
     } catch (e) {
@@ -123,25 +137,40 @@ export default function ReceptionistDashboard() {
     useSensor(KeyboardSensor)
   );
 
+  // Persist a reordered queue to the backend. Optimistically updates local state;
+  // reloads on failure. Used by both drag-and-drop and ↑/↓ button reordering.
+  const persistReorder = useCallback(
+    async (reordered) => {
+      setQueue(reordered);
+      try {
+        const activeIds = reordered
+          .filter((b) => !["completed", "cancelled"].includes(b.status))
+          .map((b) => b.id);
+        await api.post("/queue/reorder", { date: todayISO(), ordered_ids: activeIds });
+        toast.success("Queue reordered");
+      } catch (e) {
+        toast.error(e.response?.data?.detail || "Failed to reorder");
+        await load();
+      }
+    },
+    [load]
+  );
+
   const handleDragEnd = async (event) => {
     const { active: dragged, over } = event;
     if (!dragged || !over || dragged.id === over.id) return;
     const oldIdx = queue.findIndex((b) => b.id === dragged.id);
     const newIdx = queue.findIndex((b) => b.id === over.id);
     if (oldIdx < 0 || newIdx < 0) return;
-    const reordered = arrayMove(queue, oldIdx, newIdx);
-    setQueue(reordered);
-    try {
-      const activeIds = reordered
-        .filter((b) => !["completed", "cancelled"].includes(b.status))
-        .map((b) => b.id);
-      const today = todayISO();
-      await api.post("/queue/reorder", { date: today, ordered_ids: activeIds });
-      toast.success("Queue reordered");
-    } catch (e) {
-      toast.error(e.response?.data?.detail || "Failed to reorder");
-      await load();
-    }
+    await persistReorder(arrayMove(queue, oldIdx, newIdx));
+  };
+
+  const moveByOne = async (bookingId, direction) => {
+    const idx = queue.findIndex((b) => b.id === bookingId);
+    if (idx < 0) return;
+    const target = direction === "up" ? idx - 1 : idx + 1;
+    if (target < 0 || target >= queue.length) return;
+    await persistReorder(arrayMove(queue, idx, target));
   };
 
   const businessName = providerInfo?.business_name || user?.designation || "your provider";
@@ -212,13 +241,21 @@ export default function ReceptionistDashboard() {
         ) : (
           <>
             <p className="text-[10px] uppercase tracking-widest font-bold text-ink-muted flex items-center gap-1">
-              <GripVertical size={11} /> Drag to reorder
+              <GripVertical size={11} /> Drag or use ↑ ↓ to reorder
             </p>
             <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
               <SortableContext items={queue.map((b) => b.id)} strategy={verticalListSortingStrategy}>
                 <div className="space-y-2">
-                  {queue.map((b) => (
-                    <SortableItem key={b.id} booking={b} providerName={providerInfo?.business_name} />
+                  {queue.map((b, idx) => (
+                    <SortableItem
+                      key={b.id}
+                      booking={b}
+                      providerName={providerInfo?.business_name}
+                      onMoveUp={() => moveByOne(b.id, "up")}
+                      onMoveDown={() => moveByOne(b.id, "down")}
+                      canMoveUp={idx > 0}
+                      canMoveDown={idx < queue.length - 1}
+                    />
                   ))}
                 </div>
               </SortableContext>
@@ -255,42 +292,62 @@ export default function ReceptionistDashboard() {
                 placeholder="Phone (optional)"
                 className="w-full bg-cream border border-cream-300 rounded-xl px-3 py-2.5 text-ink outline-none focus:ring-2 focus:ring-forest/20"
               />
-              <input
-                data-testid="rec-walkin-reg"
-                value={walk.vehicle_reg_no}
-                onChange={(e) => setWalk({ ...walk, vehicle_reg_no: e.target.value.toUpperCase() })}
-                placeholder="Vehicle reg no (optional)"
-                className="w-full bg-cream border border-cream-300 rounded-xl px-3 py-2.5 text-ink outline-none focus:ring-2 focus:ring-forest/20 uppercase"
-              />
-              <input
-                data-testid="rec-walkin-model"
-                value={walk.vehicle_model}
-                onChange={(e) => setWalk({ ...walk, vehicle_model: e.target.value })}
-                placeholder="Vehicle model (optional)"
-                className="w-full bg-cream border border-cream-300 rounded-xl px-3 py-2.5 text-ink outline-none focus:ring-2 focus:ring-forest/20"
-              />
-              <div>
-                <label className="text-[10px] uppercase tracking-wider font-bold text-ink-muted mb-1 block">
-                  Service type
-                </label>
-                <div className="grid grid-cols-2 gap-2">
-                  {["Paid", "Free"].map((mode) => (
-                    <button
-                      key={mode}
-                      type="button"
-                      data-testid={`rec-walkin-service-type-${mode.toLowerCase()}`}
-                      onClick={() => setWalk({ ...walk, service_type: mode })}
-                      className={`py-2.5 rounded-xl text-sm font-bold border-2 transition-all ${
-                        walk.service_type === mode
-                          ? "bg-forest-faint border-forest text-forest ring-2 ring-forest/10"
-                          : "bg-white border-cream-300 text-ink-soft hover:border-forest/40"
-                      }`}
-                    >
-                      {mode}
-                    </button>
-                  ))}
-                </div>
-              </div>
+
+              {isAutomobile ? (
+                <>
+                  <input
+                    data-testid="rec-walkin-reg"
+                    value={walk.vehicle_reg_no}
+                    onChange={(e) => setWalk({ ...walk, vehicle_reg_no: e.target.value.toUpperCase() })}
+                    placeholder="Vehicle registration no *"
+                    className="w-full bg-cream border border-cream-300 rounded-xl px-3 py-2.5 text-ink outline-none focus:ring-2 focus:ring-forest/20 uppercase"
+                  />
+                  <input
+                    data-testid="rec-walkin-model"
+                    value={walk.vehicle_model}
+                    onChange={(e) => setWalk({ ...walk, vehicle_model: e.target.value })}
+                    placeholder="Vehicle model *"
+                    className="w-full bg-cream border border-cream-300 rounded-xl px-3 py-2.5 text-ink outline-none focus:ring-2 focus:ring-forest/20"
+                  />
+                  <input
+                    data-testid="rec-walkin-service-ref"
+                    value={walk.service_ref}
+                    onChange={(e) => setWalk({ ...walk, service_ref: e.target.value })}
+                    placeholder="Service / Ref no (optional)"
+                    className="w-full bg-cream border border-cream-300 rounded-xl px-3 py-2.5 text-ink outline-none focus:ring-2 focus:ring-forest/20"
+                  />
+                  <div>
+                    <label className="text-[10px] uppercase tracking-wider font-bold text-ink-muted mb-1 block">
+                      Service type
+                    </label>
+                    <div className="grid grid-cols-2 gap-2">
+                      {["Paid", "Free"].map((mode) => (
+                        <button
+                          key={mode}
+                          type="button"
+                          data-testid={`rec-walkin-service-type-${mode.toLowerCase()}`}
+                          onClick={() => setWalk({ ...walk, service_type: mode })}
+                          className={`py-2.5 rounded-xl text-sm font-bold border-2 transition-all ${
+                            walk.service_type === mode
+                              ? "bg-forest-faint border-forest text-forest ring-2 ring-forest/10"
+                              : "bg-white border-cream-300 text-ink-soft hover:border-forest/40"
+                          }`}
+                        >
+                          {mode}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </>
+              ) : (
+                <input
+                  data-testid="rec-walkin-address"
+                  value={walk.address}
+                  onChange={(e) => setWalk({ ...walk, address: e.target.value })}
+                  placeholder="Address (optional)"
+                  className="w-full bg-cream border border-cream-300 rounded-xl px-3 py-2.5 text-ink outline-none focus:ring-2 focus:ring-forest/20"
+                />
+              )}
               <button
                 data-testid="rec-walkin-add-btn"
                 onClick={addWalkin}

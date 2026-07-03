@@ -5,7 +5,7 @@ import AppShell from "@/components/AppShell";
 import CategoryIcon from "@/components/CategoryIcon";
 import { useI18n } from "@/i18n";
 import { catStyle } from "@/lib/utils-app";
-import { Star, MapPin, Clock, Loader2, IndianRupee, MessageSquareText, Info } from "lucide-react";
+import { Star, MapPin, Clock, Loader2, IndianRupee, MessageSquareText, Info, Navigation } from "lucide-react";
 import { toast } from "sonner";
 
 export default function ProviderDetail() {
@@ -83,6 +83,18 @@ export default function ProviderDetail() {
               <MapPin size={12} strokeWidth={2} />
               <span>{provider.address || provider.city}</span>
             </div>
+            {provider.location_link && (
+              <a
+                data-testid="provider-directions-btn"
+                href={provider.location_link}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="mt-2 inline-flex items-center gap-1.5 text-xs font-bold bg-sky-50 hover:bg-sky-100 text-sky-800 px-2.5 py-1.5 rounded-lg transition-colors"
+              >
+                <Navigation size={12} strokeWidth={2.5} />
+                Get Directions
+              </a>
+            )}
           </div>
         </div>
       </div>
