@@ -28,6 +28,7 @@ import AdminBookings from "@/pages/admin/AdminBookings";
 import AdminSettings from "@/pages/admin/AdminSettings";
 import AdminRevenue from "@/pages/admin/AdminRevenue";
 import AdminReferrals from "@/pages/admin/AdminReferrals";
+import ErrorBoundary from "@/components/ErrorBoundary";
 
 // Static toast options — hoisted so React doesn't re-create the object on every render.
 const TOAST_OPTIONS = {
@@ -62,14 +63,15 @@ function RequireRole({ roles, children }) {
 
 function App() {
   return (
-    <BrowserRouter>
-      <AuthProvider>
-        <I18nProvider>
-          <Toaster
-            position="top-center"
-            toastOptions={TOAST_OPTIONS}
-          />
-          <Routes>
+    <ErrorBoundary>
+      <BrowserRouter>
+        <AuthProvider>
+          <I18nProvider>
+            <Toaster
+              position="top-center"
+              toastOptions={TOAST_OPTIONS}
+            />
+            <Routes>
             <Route path="/login" element={<Login />} />
 
             {/* Customer */}
@@ -107,9 +109,10 @@ function App() {
 
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
-        </I18nProvider>
-      </AuthProvider>
-    </BrowserRouter>
+          </I18nProvider>
+        </AuthProvider>
+      </BrowserRouter>
+    </ErrorBoundary>
   );
 }
 
