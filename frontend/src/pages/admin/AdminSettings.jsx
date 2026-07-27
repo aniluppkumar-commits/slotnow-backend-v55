@@ -238,24 +238,22 @@ export default function AdminSettings() {
                   className="w-full bg-cream border border-cream-300 rounded-xl px-3 py-2.5 text-ink font-medium outline-none focus:ring-2 focus:ring-forest/20 uppercase font-mono"
                 />
               </Field>
-              <Field label="DLT template ID" hint="19-digit DLT registered template used to deliver the OTP.">
+              <Field label="DLT template ID" hint="DLT-registered template ID (alphanumeric — accepts letters and numbers).">
                 <input
                   data-testid="admin-setting-dlt-template-id"
                   type="text"
                   value={form.dlt_template_id || ""}
-                  onChange={(e) => set("dlt_template_id", e.target.value.replace(/\D/g, ""))}
-                  inputMode="numeric"
+                  onChange={(e) => set("dlt_template_id", e.target.value)}
                   placeholder="1207178359126464853"
                   className="w-full bg-cream border border-cream-300 rounded-xl px-3 py-2.5 text-ink font-medium outline-none focus:ring-2 focus:ring-forest/20 font-mono text-sm"
                 />
               </Field>
-              <Field label="DLT entity ID (Principal Entity ID / PEID)" hint="19-digit DLT-registered Principal Entity ID issued by your telecom operator.">
+              <Field label="DLT entity ID (Principal Entity ID / PEID)" hint="DLT-registered Principal Entity ID issued by your telecom operator (alphanumeric).">
                 <input
                   data-testid="admin-setting-dlt-entity-id"
                   type="text"
                   value={form.dlt_entity_id || ""}
-                  onChange={(e) => set("dlt_entity_id", e.target.value.replace(/\D/g, ""))}
-                  inputMode="numeric"
+                  onChange={(e) => set("dlt_entity_id", e.target.value)}
                   placeholder="1101234567890123456"
                   className="w-full bg-cream border border-cream-300 rounded-xl px-3 py-2.5 text-ink font-medium outline-none focus:ring-2 focus:ring-forest/20 font-mono text-sm"
                 />
@@ -265,7 +263,7 @@ export default function AdminSettings() {
                   data-testid="admin-setting-dlt-variable-name"
                   type="text"
                   value={form.dlt_variable_name || ""}
-                  onChange={(e) => set("dlt_variable_name", e.target.value.replace(/[^a-zA-Z0-9_]/g, ""))}
+                  onChange={(e) => set("dlt_variable_name", e.target.value)}
                   placeholder="num"
                   className="w-full bg-cream border border-cream-300 rounded-xl px-3 py-2.5 text-ink font-medium outline-none focus:ring-2 focus:ring-forest/20 font-mono text-sm"
                 />

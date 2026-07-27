@@ -1,0 +1,39 @@
+{
+  "verdict": "fixed",
+  "user_reported_bug": "You have messed up the fields again. The DLT Template ID fields are strictly blocking alphabets and only accepting numbers because of your 'digit-sanitize' frontend validation. My details contain alphabets, and your frontend restriction is preventing me from typing or saving them. Remove this numeric-only validation immediately! Make both fields fully 'Alphanumeric' (accepting both text and numbers) without any strict formatting blocking my input. Fix this frontend bug right now so I can save my ID",
+  "summary": "No relevant testing skill found. Focused frontend preview verification passed with MOCKED APIs: DLT Template ID preserves typed 'ABC123DEF456' and pasted 'TEMPLATE-ID-XYZ-789'; DLT Entity ID preserves 'PE1101ABC12345' and 'Entity_ID-99'; DLT variable name preserves 'my-var_1'. Save PUT carried 'TPL_ABC_123', 'PEID_XYZ_456', and 'otp_var' exactly, and echoed response rehydrated the same values. Narrow iter19/20 regressions passed for live status/test-send/no demo OTP text/mock label/payment page no DLT fields.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/tests/bug_verification_iter21_admin_sms_dlt_alphanumeric.py",
+    "/app/test_reports/bug_verification_21.json",
+    "/app/test_reports/iteration_21.json"
+  ],
+  "action_items": [
+    "None for the reported frontend sanitizer bug. Note: APIs were MOCKED per frontend-only request; run separate real-backend/live-SMS testing only if production gateway behavior must be validated."
+  ],
+  "critical_code_review_comments": [
+    "Code review of AdminSettings.jsx confirmed dlt_template_id, dlt_entity_id, and dlt_variable_name now call set(..., e.target.value) with no replace()/regex sanitizer; inputMode='numeric' was removed from the DLT Template ID and Entity ID inputs. Sender/test-phone numeric handling remains separate and was not part of the DLT bug."
+  ],
+  "updated_files": [
+    "/app/tests/bug_verification_iter21_admin_sms_dlt_alphanumeric.py",
+    "/app/test_reports/bug_verification_21.json",
+    "/app/test_reports/iteration_21.json"
+  ],
+  "success_rate": {
+    "backend": "N/A - backend endpoints were MOCKED per frontend-only request",
+    "frontend": "100%"
+  },
+  "seed_data_creation": "No seed data created. Admin auth and SMS/payment settings APIs were MOCKED in Playwright route handlers.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "The exact bug is verified fixed in preview UI with mocked APIs. Use /app/tests/bug_verification_iter21_admin_sms_dlt_alphanumeric.py checklist. Browser automation passed against https://slotnow-web.preview.emergentagent.com with routes mocked for /api/users/me, /api/auth/login-email, /api/admin/settings/sms, /api/admin/settings/sms/test-send, and /api/admin/settings/payment.",
+  "rca_of_the_issue": "The previous frontend onChange handlers sanitized DLT IDs with replace(/\\D/g, '') and sanitized variable names with a character-class regex, stripping user-entered letters or hyphens before save. The verified fix stores raw e.target.value for all three DLT fields and removes numeric inputMode from the DLT ID fields, so typed/pasted alphanumeric IDs are no longer mutated before PUT."
+}
