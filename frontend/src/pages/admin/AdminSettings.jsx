@@ -36,6 +36,8 @@ const SMS_DEFAULTS = {
   api_key: "",
   sender_id: "",
   dlt_template_id: "",
+  dlt_entity_id: "",
+  dlt_variable_name: "num",
   enabled: false,
 };
 
@@ -244,6 +246,27 @@ export default function AdminSettings() {
                   onChange={(e) => set("dlt_template_id", e.target.value.replace(/\D/g, ""))}
                   inputMode="numeric"
                   placeholder="1207178359126464853"
+                  className="w-full bg-cream border border-cream-300 rounded-xl px-3 py-2.5 text-ink font-medium outline-none focus:ring-2 focus:ring-forest/20 font-mono text-sm"
+                />
+              </Field>
+              <Field label="DLT entity ID (Principal Entity ID / PEID)" hint="19-digit DLT-registered Principal Entity ID issued by your telecom operator.">
+                <input
+                  data-testid="admin-setting-dlt-entity-id"
+                  type="text"
+                  value={form.dlt_entity_id || ""}
+                  onChange={(e) => set("dlt_entity_id", e.target.value.replace(/\D/g, ""))}
+                  inputMode="numeric"
+                  placeholder="1101234567890123456"
+                  className="w-full bg-cream border border-cream-300 rounded-xl px-3 py-2.5 text-ink font-medium outline-none focus:ring-2 focus:ring-forest/20 font-mono text-sm"
+                />
+              </Field>
+              <Field label="DLT variable name" hint="Variable placeholder name inside the DLT template (default: 'num').">
+                <input
+                  data-testid="admin-setting-dlt-variable-name"
+                  type="text"
+                  value={form.dlt_variable_name || ""}
+                  onChange={(e) => set("dlt_variable_name", e.target.value.replace(/[^a-zA-Z0-9_]/g, ""))}
+                  placeholder="num"
                   className="w-full bg-cream border border-cream-300 rounded-xl px-3 py-2.5 text-ink font-medium outline-none focus:ring-2 focus:ring-forest/20 font-mono text-sm"
                 />
               </Field>

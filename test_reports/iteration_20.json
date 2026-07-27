@@ -1,0 +1,39 @@
+{
+  "verdict": "fixed",
+  "user_reported_bug": "Listen carefully and fix this right now without any excuses. You are unnecessarily running in circles and missing the core configuration. Look at the root setup: our main server Top Pro Booking (pro booking 21) is already successfully receiving and sending live SMS, but the new project/panel is completely missing the required DLT Template ID and DLT Entity ID input fields in the SMS settings page. Stop giving me outdated status reports or fake 'fixed' verdicts. I want both the DLT Template ID field and the DLT Entity ID field rendered properly on the SMS settings page right now, linked directly to the main server's working gateway, so we can save our actual IDs and get live SMS working without further delays. Fix this completely in this very attempt.",
+  "summary": "No relevant testing skill found. Focused preview UI verification passed with MOCKED APIs: SMS settings renders editable DLT Template ID, DLT Entity ID, and DLT variable name fields; Entity ID strips non-digits; save PUT included all three dlt_* fields and echoed rehydration kept values populated. Regression checks passed for no 123456 demo OTP text, off-to-live status, test-send POST body, and payment settings having no DLT fields. Live SMS delivery was not tested because this was a frontend-only MOCKED API verification per request.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/tests/bug_verification_iter20_admin_sms_dlt.py",
+    "/app/test_reports/bug_verification_20.json",
+    "/app/test_reports/iteration_20.json"
+  ],
+  "action_items": [
+    "None for the reported frontend DLT field bug. If production assurance is required, run a separate real-backend/live-SMS smoke test with actual DLT IDs because this verification intentionally used MOCKED APIs."
+  ],
+  "critical_code_review_comments": [
+    "Code review confirmed SMS_DEFAULTS now includes dlt_entity_id and dlt_variable_name, and AdminSettings.jsx renders inputs with data-testid admin-setting-dlt-entity-id and admin-setting-dlt-variable-name after admin-setting-dlt-template-id."
+  ],
+  "updated_files": [
+    "/app/tests/bug_verification_iter20_admin_sms_dlt.py",
+    "/app/test_reports/bug_verification_20.json",
+    "/app/test_reports/iteration_20.json"
+  ],
+  "success_rate": {
+    "backend": "N/A - backend endpoints were MOCKED per frontend-only request",
+    "frontend": "100%"
+  },
+  "seed_data_creation": "No seed data created. Admin auth and SMS/payment settings APIs were MOCKED in Playwright route handlers.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Use /app/tests/bug_verification_iter20_admin_sms_dlt.py as the checklist. Browser automation passed against https://slotnow-web.preview.emergentagent.com with routes mocked for /api/users/me, /api/admin/settings/sms, /api/admin/settings/sms/test-send, and /api/admin/settings/payment.",
+  "rca_of_the_issue": "The previous SMS settings form only exposed dlt_template_id. The verified fix adds dlt_entity_id and dlt_variable_name to the SMS defaults and renders corresponding controlled inputs, so the PUT payload now carries all DLT configuration fields needed by the existing gateway settings API."
+}
