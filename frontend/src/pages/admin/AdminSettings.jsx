@@ -363,6 +363,7 @@ export default function AdminSettings() {
                 className="flex-1 bg-cream border border-cream-300 rounded-xl px-3 py-2.5 text-ink font-medium outline-none focus:ring-2 focus:ring-forest/20 font-mono"
               />
               <button
+                type="button"
                 data-testid="admin-settings-dry-run-btn"
                 onClick={dryRunSms}
                 disabled={dryRunning || testPhone.length !== 10}
@@ -372,6 +373,7 @@ export default function AdminSettings() {
                 {dryRunning ? <Loader2 size={14} className="animate-spin" /> : "Dry-run"}
               </button>
               <button
+                type="button"
                 data-testid="admin-settings-send-test-btn"
                 onClick={sendTestSms}
                 disabled={testing || testPhone.length !== 10}
@@ -398,7 +400,7 @@ export default function AdminSettings() {
                     diagnostic.error ? "text-rose-700" : "text-slate-700"
                   }`}>
                     {diagnostic.label}
-                    {diagnostic.error && ` — HTTP ${diagnostic.error}`}
+                    {diagnostic.error && ` — HTTP ${diagnostic.error === "network" ? "N/A (network)" : diagnostic.error}`}
                   </p>
                   <button
                     type="button"
