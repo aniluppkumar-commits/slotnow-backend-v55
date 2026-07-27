@@ -62,6 +62,8 @@ export default function AdminSettings() {
   const [saving, setSaving] = useState(false);
   const [testPhone, setTestPhone] = useState("");
   const [testing, setTesting] = useState(false);
+  const [dryRunning, setDryRunning] = useState(false);
+  const [diagnostic, setDiagnostic] = useState(null); // { label, data, error }
 
   useEffect(() => {
     let mounted = true;
@@ -115,14 +117,48 @@ export default function AdminSettings() {
       return;
     }
     setTesting(true);
+    setDiagnostic(null);
     try {
       const { data } = await api.post("/admin/settings/sms/test-send", { phone: testPhone });
       toast.success(data?.message || `Test SMS sent to ${testPhone}`);
+      setDiagnostic({ label: "Test-send response (raw)", data, error: null });
     } catch (err) {
       console.error("Test SMS failed:", err);
       toast.error(err?.response?.data?.detail || "Failed to send test SMS");
+      setDiagnostic({
+        label: "Test-send FAILED (raw error from backend)",
+        data: err?.response?.data ?? { message: err?.message },
+        error: err?.response?.status || "network",
+      });
     } finally {
       setTesting(false);
+    }
+  };
+
+  // Dry-run — asks the backend to build the MSG91 payload but NOT actually send it.
+  // Renders the exact request body the backend would fire, so misconfigured
+  // phone-number format / template variables / entity ID become visible.
+  const dryRunSms = async () => {
+    if (!/^\d{10}$/.test(testPhone)) {
+      toast.error("Enter a 10-digit phone number for the dry-run");
+      return;
+    }
+    setDryRunning(true);
+    setDiagnostic(null);
+    try {
+      const { data } = await api.post("/admin/settings/sms/dry-run", { phone: testPhone });
+      setDiagnostic({ label: "Dry-run payload the backend WOULD send to MSG91", data, error: null });
+      toast.success("Dry-run complete — inspect the payload below");
+    } catch (err) {
+      console.error("Dry-run failed:", err);
+      toast.error(err?.response?.data?.detail || "Dry-run failed");
+      setDiagnostic({
+        label: "Dry-run FAILED (raw error from backend)",
+        data: err?.response?.data ?? { message: err?.message },
+        error: err?.response?.status || "network",
+      });
+    } finally {
+      setDryRunning(false);
     }
   };
 
@@ -307,14 +343,14 @@ export default function AdminSettings() {
           </div>
         )}
 
-        {/* SMS-only: Send Test SMS section (uses the new /admin/settings/sms/test-send backend endpoint) */}
+        {/* SMS-only: Send Test SMS + Dry-Run diagnostic tools */}
         {!isPayment && form.provider !== "mock" && form.enabled && (
           <div className="bg-white border border-cream-300 rounded-2xl p-4 space-y-2">
             <p className="text-[10px] uppercase tracking-widest font-bold text-ink-muted">
-              Send a real test SMS
+              SMS diagnostics
             </p>
             <p className="text-xs text-ink-soft">
-              After saving MSG91 credentials, verify by sending a test SMS to your own phone.
+              Enter a 10-digit phone, then use <b>Dry-run</b> to see the exact payload the backend would send to MSG91 (nothing is actually delivered), or <b>Send</b> to fire a real test SMS to that phone.
             </p>
             <div className="flex gap-2">
               <input
@@ -327,6 +363,15 @@ export default function AdminSettings() {
                 className="flex-1 bg-cream border border-cream-300 rounded-xl px-3 py-2.5 text-ink font-medium outline-none focus:ring-2 focus:ring-forest/20 font-mono"
               />
               <button
+                data-testid="admin-settings-dry-run-btn"
+                onClick={dryRunSms}
+                disabled={dryRunning || testPhone.length !== 10}
+                className="flex items-center gap-1.5 bg-cream-200 text-ink px-4 rounded-xl font-bold hover:bg-cream-300 disabled:opacity-60"
+                title="Preview payload without sending"
+              >
+                {dryRunning ? <Loader2 size={14} className="animate-spin" /> : "Dry-run"}
+              </button>
+              <button
                 data-testid="admin-settings-send-test-btn"
                 onClick={sendTestSms}
                 disabled={testing || testPhone.length !== 10}
@@ -336,6 +381,45 @@ export default function AdminSettings() {
                 Send
               </button>
             </div>
+
+            {/* Diagnostic panel — shows exactly what the backend returned. Critical for
+                debugging when SMS "succeeds" from the backend but the phone never rings. */}
+            {diagnostic && (
+              <div
+                data-testid="admin-settings-diagnostic-panel"
+                className={`mt-2 rounded-xl border p-3 space-y-1 ${
+                  diagnostic.error
+                    ? "bg-rose-50 border-rose-200"
+                    : "bg-slate-50 border-slate-200"
+                }`}
+              >
+                <div className="flex items-center justify-between gap-2">
+                  <p className={`text-[10px] uppercase tracking-widest font-bold ${
+                    diagnostic.error ? "text-rose-700" : "text-slate-700"
+                  }`}>
+                    {diagnostic.label}
+                    {diagnostic.error && ` — HTTP ${diagnostic.error}`}
+                  </p>
+                  <button
+                    type="button"
+                    data-testid="admin-settings-diagnostic-close-btn"
+                    onClick={() => setDiagnostic(null)}
+                    className="text-[10px] font-bold text-ink-soft hover:text-ink"
+                  >
+                    Clear
+                  </button>
+                </div>
+                <pre
+                  data-testid="admin-settings-diagnostic-json"
+                  className="text-[11px] font-mono text-ink leading-tight whitespace-pre-wrap break-all bg-white/60 p-2 rounded max-h-72 overflow-auto"
+                >
+                  {JSON.stringify(diagnostic.data, null, 2)}
+                </pre>
+                <p className="text-[10px] text-ink-muted italic">
+                  Share this panel with backend/support if SMS still doesn&apos;t deliver — it reveals the exact request/response.
+                </p>
+              </div>
+            )}
           </div>
         )}
 
