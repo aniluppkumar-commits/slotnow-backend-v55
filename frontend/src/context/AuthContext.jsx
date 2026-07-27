@@ -77,6 +77,17 @@ export function AuthProvider({ children }) {
     }
   };
 
+  const loginEmail = async (email, password) => {
+    setLoading(true);
+    try {
+      const { data } = await api.post("/auth/login-email", { email, password });
+      persist(data.token, data.user);
+      return data;
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const setPin = async (pin) => {
     const { data } = await api.post("/auth/set-pin", { pin });
     await refreshMe();
@@ -114,6 +125,7 @@ export function AuthProvider({ children }) {
       sendOtp,
       verifyOtp,
       pinLogin,
+      loginEmail,
       setPin,
       logout,
       updateProfile,

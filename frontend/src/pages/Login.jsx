@@ -17,6 +17,7 @@ import {
   UserCog,
   ShieldQuestion,
   Languages,
+  Mail,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -28,7 +29,7 @@ const ROLE_TILES = [
 ];
 
 export default function Login() {
-  const { sendOtp, verifyOtp, pinLogin, setPin: setPinApi } = useAuth();
+  const { sendOtp, verifyOtp, pinLogin, loginEmail, setPin: setPinApi } = useAuth();
   const { t, lang, setLang } = useI18n();
   const navigate = useNavigate();
   const location = useLocation();
@@ -43,16 +44,19 @@ export default function Login() {
   });
 
   const [role, setRole] = useState("customer");
-  const [mode, setMode] = useState("otp");
+  const [mode, setMode] = useState("otp"); // "otp" | "pin" | "email"
   const [step, setStep] = useState(1);
   const [phone, setPhone] = useState("");
   const [otp, setOtp] = useState("");
   const [pin, setPin] = useState("");
   const [newPin, setNewPin] = useState("");
   const [demoOtp, setDemoOtp] = useState("");
+  const [email, setEmail] = useState("");
+  const [emailPassword, setEmailPassword] = useState("");
   const [loading, setLoading] = useState(false);
 
   const validPhone = /^\d{10}$/.test(phone);
+  const validEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 
   const homeForRole = async (u) => {
     switch (u?.role) {
@@ -154,6 +158,23 @@ export default function Login() {
     }
   };
 
+  const handleEmailLogin = async (e) => {
+    e.preventDefault();
+    if (!validEmail) return toast.error("Enter a valid email");
+    if (!emailPassword) return toast.error("Enter your password");
+    setLoading(true);
+    try {
+      const res = await loginEmail(email, emailPassword);
+      toast.success("Welcome to SlotNow");
+      sessionStorage.removeItem("slotnow_ref");
+      await navigateAfter(res.user);
+    } catch (err) {
+      toast.error(err.response?.data?.detail || "Incorrect email or password");
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const skipSetPin = async () => {
     const u = JSON.parse(localStorage.getItem("slotnow_user") || "{}");
     await navigateAfter(u);
@@ -230,26 +251,60 @@ export default function Login() {
                 </div>
               </div>
 
-              <form onSubmit={mode === "otp" ? handleSendOtp : handlePinLogin} className="space-y-3">
-                <label className="block text-sm font-semibold text-ink">
-                  {t("mobile_number")}
-                </label>
-                <div className="relative">
-                  <div className="absolute inset-y-0 left-0 pl-3 pr-3 flex items-center border-r border-cream-300 pointer-events-none">
-                    <Phone size={16} className="text-ink-soft mr-2" />
-                    <span className="text-ink font-semibold">+91</span>
-                  </div>
-                  <input
-                    data-testid="login-phone-input"
-                    type="tel"
-                    inputMode="numeric"
-                    placeholder={t("ten_digit")}
-                    value={phone}
-                    onChange={(e) => setPhone(e.target.value.replace(/\D/g, "").slice(0, 10))}
-                    className="w-full bg-white border border-cream-300 rounded-xl pl-24 pr-4 py-3.5 text-base text-ink placeholder:text-ink-muted focus:ring-2 focus:ring-forest/20 focus:border-forest outline-none font-medium"
-                    autoFocus
-                  />
-                </div>
+              <form onSubmit={mode === "otp" ? handleSendOtp : mode === "email" ? handleEmailLogin : handlePinLogin} className="space-y-3">
+                {mode === "email" ? (
+                  <>
+                    <label className="block text-sm font-semibold text-ink">Email</label>
+                    <div className="relative">
+                      <Mail size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-ink-soft" />
+                      <input
+                        data-testid="login-email-input"
+                        type="email"
+                        autoComplete="email"
+                        placeholder="you@example.com"
+                        value={email}
+                        onChange={(e) => setEmail(e.target.value.trim())}
+                        className="w-full bg-white border border-cream-300 rounded-xl pl-10 pr-4 py-3.5 text-base text-ink placeholder:text-ink-muted focus:ring-2 focus:ring-forest/20 focus:border-forest outline-none font-medium"
+                        autoFocus
+                      />
+                    </div>
+                    <label className="block text-sm font-semibold text-ink pt-1">Password</label>
+                    <div className="relative">
+                      <LockKeyhole size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-ink-soft" />
+                      <input
+                        data-testid="login-email-password-input"
+                        type="password"
+                        autoComplete="current-password"
+                        placeholder="••••••••"
+                        value={emailPassword}
+                        onChange={(e) => setEmailPassword(e.target.value)}
+                        className="w-full bg-white border border-cream-300 rounded-xl pl-10 pr-4 py-3.5 text-base text-ink placeholder:text-ink-muted focus:ring-2 focus:ring-forest/20 focus:border-forest outline-none font-medium"
+                      />
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <label className="block text-sm font-semibold text-ink">
+                      {t("mobile_number")}
+                    </label>
+                    <div className="relative">
+                      <div className="absolute inset-y-0 left-0 pl-3 pr-3 flex items-center border-r border-cream-300 pointer-events-none">
+                        <Phone size={16} className="text-ink-soft mr-2" />
+                        <span className="text-ink font-semibold">+91</span>
+                      </div>
+                      <input
+                        data-testid="login-phone-input"
+                        type="tel"
+                        inputMode="numeric"
+                        placeholder={t("ten_digit")}
+                        value={phone}
+                        onChange={(e) => setPhone(e.target.value.replace(/\D/g, "").slice(0, 10))}
+                        className="w-full bg-white border border-cream-300 rounded-xl pl-24 pr-4 py-3.5 text-base text-ink placeholder:text-ink-muted focus:ring-2 focus:ring-forest/20 focus:border-forest outline-none font-medium"
+                        autoFocus
+                      />
+                    </div>
+                  </>
+                )}
 
                 {mode === "pin" && (
                   <>
@@ -272,9 +327,13 @@ export default function Login() {
                 )}
 
                 <button
-                  data-testid={mode === "otp" ? "login-send-otp-btn" : "login-pin-submit-btn"}
+                  data-testid={mode === "otp" ? "login-send-otp-btn" : mode === "email" ? "login-email-submit-btn" : "login-pin-submit-btn"}
                   type="submit"
-                  disabled={loading || !validPhone || (mode === "pin" && pin.length < 4)}
+                  disabled={
+                    loading ||
+                    (mode === "email" ? !validEmail || !emailPassword : !validPhone) ||
+                    (mode === "pin" && pin.length < 4)
+                  }
                   className="w-full flex items-center justify-center gap-2 bg-accent hover:bg-accent-dark disabled:bg-accent/40 text-white py-3.5 rounded-xl font-bold transition-colors shadow-[0_6px_20px_rgba(249,115,22,0.25)]"
                 >
                   {loading ? (
@@ -283,6 +342,8 @@ export default function Login() {
                     <>
                       {t("continue")} <ArrowRight size={18} strokeWidth={2.5} />
                     </>
+                  ) : mode === "email" ? (
+                    "Sign in"
                   ) : (
                     t("verify_login")
                   )}
@@ -301,6 +362,21 @@ export default function Login() {
               >
                 {mode === "otp" ? <LockKeyhole size={14} /> : <Phone size={14} />}
                 {mode === "otp" ? t("login_with_pin") : t("login_with_otp")}
+              </button>
+
+              {/* Email/password fallback — visible to every role (admin uses it most often).
+                  Kept below the phone options so the primary flow remains OTP. */}
+              <button
+                data-testid="login-email-toggle-btn"
+                type="button"
+                onClick={() => {
+                  setMode(mode === "email" ? "otp" : "email");
+                  setEmailPassword("");
+                }}
+                className="w-full mt-2 text-xs font-semibold text-ink-soft hover:text-forest hover:underline flex items-center justify-center gap-1.5"
+              >
+                <Mail size={12} />
+                {mode === "email" ? "Use phone instead" : "Sign in with email & password"}
               </button>
               <p className="text-center text-xs text-ink-muted mt-3">{t("terms_note")}</p>
             </>
