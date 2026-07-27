@@ -1,0 +1,55 @@
+{
+  "verdict": "not_fixed",
+  "user_reported_bug": "Look at the Dry-run request payload. The backend is sending the phone number without the 91 country code prefix (e.g. 10 digits instead of 919876543210), which is causing MSG91 to reject or fail the SMS delivery. Please update the backend mobile formatting to include the 91 prefix automatically",
+  "summary": "No relevant testing skill found. Focused frontend-only verification with MOCKED API routes showed the primary 10-digit dry-run/send-test/auth requests now send 91-prefixed phones, and the dry-run diagnostic displays 919876543210. However, the requested normalization variants in Admin SMS send-test are not fixed: entering 919876543210, 09876543210, or +91 98765 43210 is truncated by the input before normalization and sends incorrect numbers.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {
+        "component": "AdminSettings SMS diagnostics phone input",
+        "issue": "Input onChange strips non-digits and slices to 10 characters before toIndianE164() runs, so already 91-prefixed, leading-0, and formatted values are corrupted before POST.",
+        "selector": "admin-settings-test-phone",
+        "priority": "HIGH"
+      }
+    ],
+    "integration_issues": [
+      {
+        "flow": "Admin SMS send-test normalization variants",
+        "issue": "Expected 919876543210 for variant inputs, but intercepted request bodies were 919198765432 for 919876543210, 910987654321 for 09876543210, and 919198765432 for +91 98765 43210.",
+        "affected_selectors": [
+          "admin-settings-test-phone",
+          "admin-settings-send-test-btn"
+        ]
+      }
+    ],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/tests/bug_verification_iter23_phone_normalization.py"
+  ],
+  "action_items": [
+    "Update AdminSettings SMS diagnostics input handling/validation so raw values like 919876543210, 09876543210, and +91 98765 43210 reach toIndianE164() correctly instead of being truncated to the first 10 digits.",
+    "Retest intercepted POST /api/admin/settings/sms/test-send and /dry-run after fixing variant input handling."
+  ],
+  "critical_code_review_comments": [
+    "/app/frontend/src/lib/phone.js correctly normalizes direct inputs in isolation, and AuthContext uses it for sendOtp/verifyOtp/pinLogin.",
+    "/app/frontend/src/pages/admin/AdminSettings.jsx still gates diagnostics with /^\\d{10}$/ and mutates testPhone via replace(/\\D/g, '').slice(0, 10), which defeats the new normalizer for 12-digit, leading-0, and formatted input variants."
+  ],
+  "updated_files": [
+    "/app/tests/bug_verification_iter23_phone_normalization.py",
+    "/app/test_reports/bug_verification_23.json",
+    "/app/test_reports/iteration_23.json"
+  ],
+  "success_rate": {
+    "backend": "N/A - frontend-only test with MOCKED API routes",
+    "frontend": "75% (9/12 focused assertions passed)"
+  },
+  "seed_data_creation": "None. LocalStorage admin/customer session and all backend API responses were MOCKED via browser routing; no real backend traffic required.",
+  "retest_needed": true,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Skill lookup was performed for 'MSG91 dry-run phone country code SMS payload' and no relevant testing skill was found. Preview URL tested: https://slotnow-web.preview.emergentagent.com. MOCKED API host/routes: https://pro-booking-21.emergent.host. Primary passing evidence: dry-run body {'phone':'919876543210'}, test-send 10-digit body {'phone':'919876543210'}, send-otp body {'phone':'919876543210','role':'customer'}, verify-otp body phone 919876543210, pin-login body phone 919876543210. Failing evidence: Admin send-test variants sent 919198765432 / 910987654321 / 919198765432 due input truncation.",
+  "rca_of_the_issue": "The client-side normalizer was added, but AdminSettings normalizes the UI field prematurely: onChange strips formatting and slices to 10 digits, and sendTestSms/dryRunSms only allow /^\\d{10}$/. Thus non-10-digit-but-valid Indian phone formats never reach toIndianE164 intact. The user's exact 10-digit dry-run symptom is fixed, but the requested broader mobile formatting is partial."
+}

@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
 import api from "@/lib/api";
+import { toIndianE164 } from "@/lib/phone";
 import AppShell from "@/components/AppShell";
 import { Loader2, Save, MessageSquareText, CreditCard, Send, CheckCircle2 } from "lucide-react";
 import { toast } from "sonner";
@@ -119,7 +120,7 @@ export default function AdminSettings() {
     setTesting(true);
     setDiagnostic(null);
     try {
-      const { data } = await api.post("/admin/settings/sms/test-send", { phone: testPhone });
+      const { data } = await api.post("/admin/settings/sms/test-send", { phone: toIndianE164(testPhone) });
       toast.success(data?.message || `Test SMS sent to ${testPhone}`);
       setDiagnostic({ label: "Test-send response (raw)", data, error: null });
     } catch (err) {
@@ -146,7 +147,7 @@ export default function AdminSettings() {
     setDryRunning(true);
     setDiagnostic(null);
     try {
-      const { data } = await api.post("/admin/settings/sms/dry-run", { phone: testPhone });
+      const { data } = await api.post("/admin/settings/sms/dry-run", { phone: toIndianE164(testPhone) });
       setDiagnostic({ label: "Dry-run payload the backend WOULD send to MSG91", data, error: null });
       toast.success("Dry-run complete — inspect the payload below");
     } catch (err) {
