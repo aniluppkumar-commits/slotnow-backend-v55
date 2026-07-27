@@ -102,7 +102,7 @@ export default function Login() {
 
   const handleVerify = async (e) => {
     e.preventDefault();
-    if (!/^\d{4,6}$/.test(otp)) return toast.error("Enter the OTP");
+    if (!/^\d{4}$/.test(otp)) return toast.error("Enter the OTP");
     setLoading(true);
     try {
       const res = await verifyOtp(phone, otp, role, refCode);
@@ -339,9 +339,9 @@ export default function Login() {
                   data-testid="login-otp-input"
                   type="text"
                   inputMode="numeric"
-                  placeholder="123456"
+                  placeholder="1234"
                   value={otp}
-                  onChange={(e) => setOtp(e.target.value.replace(/\D/g, "").slice(0, 6))}
+                  onChange={(e) => setOtp(e.target.value.replace(/\D/g, "").slice(0, 4))}
                   className="w-full bg-white border border-cream-300 rounded-xl pl-10 pr-4 py-3.5 text-lg tracking-[0.4em] text-ink placeholder:text-ink-muted placeholder:tracking-normal font-bold focus:ring-2 focus:ring-forest/20 focus:border-forest outline-none"
                   autoFocus
                 />
