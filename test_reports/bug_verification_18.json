@@ -1,0 +1,52 @@
+{
+  "verdict": "not_fixed",
+  "user_reported_bug": "My project is currently stuck because of the backend integration error: 'Credentials are stored, but the backend still returns a demo OTP (123456). Coordinate with Emergent Support to enable live SMS via MSG91.' Additionally, the DLT Template ID option is missing from the dashboard. I do not want to go back and forth on this multiple times. Please check your backend, disable the demo mode completely, activate live MSG91 SMS integration, and enable the DLT Template ID field all at once in a single attempt. Ensure the entire SMS setup is fully operational now.",
+  "summary": "Focused preview UI verification completed. No relevant testing skill found. The stale exact banner text 'Backend integration pending' / 'still returns a demo OTP' is gone, DLT Template ID input is present and digit-sanitized, save/test-SMS wiring works with MOCKED admin settings APIs, payment settings regression passed, and ErrorBoundary displays correctly. However, the SMS settings page still renders '123456' in the provider dropdown label 'Mock (dev only — always returns 123456)', and the Mock/demo provider remains selectable, so demo mode is not completely removed from the user-visible SMS setup.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {
+        "endpoint": "POST /api/admin/settings/sms/test-send",
+        "issue": "Frontend wiring was verified with a MOCKED 200 response only; live MSG91 delivery was not tested per frontend-only/skip-backend request."
+      }
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {
+        "component": "AdminSettings SMS provider dropdown",
+        "issue": "The page still contains user-visible demo OTP text: 'Mock (dev only — always returns 123456)'. This violates the requirement that no element on /admin/settings/sms contain '123456' or 'demo OTP' and conflicts with 'disable demo mode completely'.",
+        "selector": "[data-testid=\"admin-setting-provider\"]",
+        "priority": "HIGH"
+      }
+    ],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/tests/bug_verification_iter18_admin_settings.py",
+    "/app/test_reports/bug_verification_18.json",
+    "/app/test_reports/iteration_18.json"
+  ],
+  "action_items": [
+    "Remove or hide the Mock/demo SMS provider from the admin SMS settings page, or at minimum remove all '123456' / demo OTP copy from the provider dropdown and any other React-rendered SMS settings elements.",
+    "Retest /admin/settings/sms to ensure the DOM/body contains no '123456' or 'demo OTP' text and the live MSG91 + DLT Template ID flow still works."
+  ],
+  "critical_code_review_comments": [
+    "/app/frontend/src/pages/admin/AdminSettings.jsx line 21 still defines SMS_PROVIDERS label 'Mock (dev only — always returns 123456)', which is rendered in the admin-setting-provider select."
+  ],
+  "updated_files": [
+    "/app/tests/bug_verification_iter18_admin_settings.py",
+    "/app/test_reports/bug_verification_18.json",
+    "/app/test_reports/iteration_18.json"
+  ],
+  "success_rate": {
+    "backend": "not tested (frontend-only request; live SMS not verified)",
+    "frontend": "87%"
+  },
+  "seed_data_creation": "No seed data created. Used MOCKED localStorage admin auth and MOCKED API routes for /api/users/me, /api/admin/settings/sms, /api/admin/settings/payment, and /api/admin/settings/sms/test-send.",
+  "retest_needed": true,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Browser automation used preview URL https://slotnow-web.preview.emergentagent.com with API host https://pro-booking-21.emergent.host intercepted. Passed checks: stale exact banner removed, DLT field present/sanitizes digits, save flips status-off to status-live, test SMS POST body {phone:'9876543210'} fired, test section visibility rules, payment settings fields/no SMS section, ErrorBoundary. Failing check: body text on /admin/settings/sms still contains 123456 from the Mock provider option label.",
+  "rca_of_the_issue": "The stale hardcoded banner was removed, but demo-mode copy remains in SMS_PROVIDERS. Because the provider select renders all options, the SMS settings page still exposes '123456' to admins even when the live-status card and DLT field work."
+}

@@ -2,7 +2,7 @@ import React, { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
 import api from "@/lib/api";
 import AppShell from "@/components/AppShell";
-import { Loader2, Save, MessageSquareText, CreditCard, AlertTriangle } from "lucide-react";
+import { Loader2, Save, MessageSquareText, CreditCard, Send, CheckCircle2 } from "lucide-react";
 import { toast } from "sonner";
 
 /**
@@ -58,6 +58,8 @@ export default function AdminSettings() {
   const [form, setForm] = useState(defaults);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [testPhone, setTestPhone] = useState("");
+  const [testing, setTesting] = useState(false);
 
   useEffect(() => {
     let mounted = true;
@@ -102,6 +104,23 @@ export default function AdminSettings() {
       toast.error(message);
     } finally {
       setSaving(false);
+    }
+  };
+
+  const sendTestSms = async () => {
+    if (!/^\d{10}$/.test(testPhone)) {
+      toast.error("Enter a 10-digit phone number");
+      return;
+    }
+    setTesting(true);
+    try {
+      const { data } = await api.post("/admin/settings/sms/test-send", { phone: testPhone });
+      toast.success(data?.message || `Test SMS sent to ${testPhone}`);
+    } catch (err) {
+      console.error("Test SMS failed:", err);
+      toast.error(err?.response?.data?.detail || "Failed to send test SMS");
+    } finally {
+      setTesting(false);
     }
   };
 
@@ -232,19 +251,72 @@ export default function AdminSettings() {
           )}
         </div>
 
-        {/* Warning banner — currently the backend does NOT actually call MSG91/Razorpay yet.
-            This is a heads-up so admin doesn't think the toggle alone triggers live sends. */}
-        <div className="bg-amber-50 border border-amber-200 rounded-2xl p-3 flex items-start gap-2">
-          <AlertTriangle size={16} className="text-amber-600 shrink-0 mt-0.5" strokeWidth={2.5} />
-          <div className="text-xs text-amber-900 leading-snug">
-            <p className="font-bold">Backend integration pending.</p>
-            <p>
-              {isPayment
-                ? "Payment credentials are stored, but Razorpay checkout is not yet wired in the backend. Coordinate with Emergent Support to enable live payments."
-                : "Credentials are stored, but the backend still returns a demo OTP (123456). Coordinate with Emergent Support to enable live SMS via MSG91."}
-            </p>
+        {/* Live status indicator — reflects the actual toggle+provider combination.
+            Prior iteration showed a stale "backend pending" warning; the backend team
+            has since shipped MSG91 + Razorpay, so we now show real, actionable status. */}
+        {form.enabled && form.provider !== "mock" ? (
+          <div
+            data-testid="admin-settings-status-live"
+            className="bg-emerald-50 border border-emerald-200 rounded-2xl p-3 flex items-start gap-2"
+          >
+            <CheckCircle2 size={16} className="text-emerald-600 shrink-0 mt-0.5" strokeWidth={2.5} />
+            <div className="text-xs text-emerald-900 leading-snug">
+              <p className="font-bold">Live mode — {form.provider.toUpperCase()}.</p>
+              <p>
+                {isPayment
+                  ? "Real payments are being processed via this gateway."
+                  : "Real OTPs are being sent via this gateway. Verify with the test button below."}
+              </p>
+            </div>
           </div>
-        </div>
+        ) : (
+          <div
+            data-testid="admin-settings-status-off"
+            className="bg-amber-50 border border-amber-200 rounded-2xl p-3 flex items-start gap-2"
+          >
+            <MessageSquareText size={16} className="text-amber-600 shrink-0 mt-0.5" strokeWidth={2.5} />
+            <div className="text-xs text-amber-900 leading-snug">
+              <p className="font-bold">
+                {form.provider === "mock"
+                  ? `Provider set to Mock — no real ${isPayment ? "payments" : "SMS"} will go out.`
+                  : `Provider set to ${form.provider.toUpperCase()} but toggle is OFF.`}
+              </p>
+              <p>Turn Enabled ON and click Save to go live.</p>
+            </div>
+          </div>
+        )}
+
+        {/* SMS-only: Send Test SMS section (uses the new /admin/settings/sms/test-send backend endpoint) */}
+        {!isPayment && form.provider !== "mock" && form.enabled && (
+          <div className="bg-white border border-cream-300 rounded-2xl p-4 space-y-2">
+            <p className="text-[10px] uppercase tracking-widest font-bold text-ink-muted">
+              Send a real test SMS
+            </p>
+            <p className="text-xs text-ink-soft">
+              After saving MSG91 credentials, verify by sending a test SMS to your own phone.
+            </p>
+            <div className="flex gap-2">
+              <input
+                data-testid="admin-settings-test-phone"
+                type="tel"
+                inputMode="numeric"
+                value={testPhone}
+                onChange={(e) => setTestPhone(e.target.value.replace(/\D/g, "").slice(0, 10))}
+                placeholder="10-digit phone (e.g. 9876543210)"
+                className="flex-1 bg-cream border border-cream-300 rounded-xl px-3 py-2.5 text-ink font-medium outline-none focus:ring-2 focus:ring-forest/20 font-mono"
+              />
+              <button
+                data-testid="admin-settings-send-test-btn"
+                onClick={sendTestSms}
+                disabled={testing || testPhone.length !== 10}
+                className="flex items-center gap-1.5 bg-forest text-cream-100 px-4 rounded-xl font-bold hover:bg-forest-dark disabled:opacity-60"
+              >
+                {testing ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} strokeWidth={2.5} />}
+                Send
+              </button>
+            </div>
+          </div>
+        )}
 
         <button
           data-testid="admin-settings-save-btn"
