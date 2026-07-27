@@ -1,0 +1,39 @@
+{
+  "verdict": "fixed",
+  "user_reported_bug": "Look at the Dry-run request payload. The backend is sending the phone number without the 91 country code prefix (e.g. 10 digits instead of 919876543210), which is causing MSG91 to reject or fail the SMS delivery. Please update the backend mobile formatting to include the 91 prefix automatically",
+  "summary": "No relevant testing skill found. Focused frontend-only browser verification against the preview URL with MOCKED backend routes confirmed all requested phone-normalization assertions now pass: Admin SMS dry-run/send-test, 12-digit/leading-0/+91 formatted variants, customer OTP verify flow, PIN login, button disabled states, diagnostic panel regressions, DLT alphanumeric preservation, and absence of visible 123456 text.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/tests/bug_verification_iter24_phone_normalization_mcp.py",
+    "/app/test_reports/bug_verification_24.json",
+    "/app/test_reports/iteration_24.json"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "Skill lookup was mandatory and completed for 'MSG91 SMS phone dry-run'; no relevant testing skill found.",
+    "Code inspection shows AdminSettings now preserves broader input text up to 20 chars, validates the normalized toIndianE164(testPhone) value with /^91\\d{10}$/, and posts the normalized value to both /admin/settings/sms/dry-run and /test-send.",
+    "Runtime evidence: intercepted dry-run body was {'phone':'919876543210'} for 9876543210; variant send-test bodies were all {'phone':'919876543210'} for 919876543210, 09876543210, and +91 98765 43210."
+  ],
+  "updated_files": [
+    "/app/tests/bug_verification_iter24_phone_normalization_mcp.py",
+    "/app/test_reports/bug_verification_24.json",
+    "/app/test_reports/iteration_24.json"
+  ],
+  "success_rate": {
+    "backend": "N/A - frontend-only test with MOCKED API routes",
+    "frontend": "100% (13/13 focused assertions passed)"
+  },
+  "seed_data_creation": "None. LocalStorage admin/customer state and all backend API responses were MOCKED via browser routing; no real backend data was created.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Preview URL tested: https://slotnow-web.preview.emergentagent.com. API host routes were MOCKED: POST /api/admin/settings/sms/test-send, POST /api/admin/settings/sms/dry-run, GET/PUT /api/admin/settings/sms, POST /api/auth/send-otp, POST /api/auth/verify-otp, POST /api/auth/pin-login, POST /api/auth/login-email, GET /api/users/me. The prior iter23 failures are fixed: stored Admin SMS input values remained untruncated for 919876543210, 09876543210, and +91 98765 43210; send buttons enabled; intercepted request bodies all carried 919876543210.",
+  "rca_of_the_issue": "Previous failure was caused by AdminSettings pre-mutating the diagnostic phone input before toIndianE164() ran. Iter24 removes the destructive 10-digit-only input handling and gates/posts based on the normalized value, so the user-visible dry-run payload and related SMS/auth request bodies now include the 91 country-code prefix. Direct proof: all targeted browser assertions passed with intercepted MOCKED request bodies containing 919876543210."
+}

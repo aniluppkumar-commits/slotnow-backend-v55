@@ -113,15 +113,16 @@ export default function AdminSettings() {
   };
 
   const sendTestSms = async () => {
-    if (!/^\d{10}$/.test(testPhone)) {
-      toast.error("Enter a 10-digit phone number");
+    const normalized = toIndianE164(testPhone);
+    if (!/^91\d{10}$/.test(normalized)) {
+      toast.error("Enter a valid Indian mobile number");
       return;
     }
     setTesting(true);
     setDiagnostic(null);
     try {
-      const { data } = await api.post("/admin/settings/sms/test-send", { phone: toIndianE164(testPhone) });
-      toast.success(data?.message || `Test SMS sent to ${testPhone}`);
+      const { data } = await api.post("/admin/settings/sms/test-send", { phone: normalized });
+      toast.success(data?.message || `Test SMS sent to +${normalized}`);
       setDiagnostic({ label: "Test-send response (raw)", data, error: null });
     } catch (err) {
       console.error("Test SMS failed:", err);
@@ -140,14 +141,15 @@ export default function AdminSettings() {
   // Renders the exact request body the backend would fire, so misconfigured
   // phone-number format / template variables / entity ID become visible.
   const dryRunSms = async () => {
-    if (!/^\d{10}$/.test(testPhone)) {
-      toast.error("Enter a 10-digit phone number for the dry-run");
+    const normalized = toIndianE164(testPhone);
+    if (!/^91\d{10}$/.test(normalized)) {
+      toast.error("Enter a valid Indian mobile number for the dry-run");
       return;
     }
     setDryRunning(true);
     setDiagnostic(null);
     try {
-      const { data } = await api.post("/admin/settings/sms/dry-run", { phone: toIndianE164(testPhone) });
+      const { data } = await api.post("/admin/settings/sms/dry-run", { phone: normalized });
       setDiagnostic({ label: "Dry-run payload the backend WOULD send to MSG91", data, error: null });
       toast.success("Dry-run complete — inspect the payload below");
     } catch (err) {
@@ -357,17 +359,16 @@ export default function AdminSettings() {
               <input
                 data-testid="admin-settings-test-phone"
                 type="tel"
-                inputMode="numeric"
                 value={testPhone}
-                onChange={(e) => setTestPhone(e.target.value.replace(/\D/g, "").slice(0, 10))}
-                placeholder="10-digit phone (e.g. 9876543210)"
+                onChange={(e) => setTestPhone(e.target.value.slice(0, 20))}
+                placeholder="Phone (10-digit, 91XXXXXXXXXX, or +91XXXXXXXXXX)"
                 className="flex-1 bg-cream border border-cream-300 rounded-xl px-3 py-2.5 text-ink font-medium outline-none focus:ring-2 focus:ring-forest/20 font-mono"
               />
               <button
                 type="button"
                 data-testid="admin-settings-dry-run-btn"
                 onClick={dryRunSms}
-                disabled={dryRunning || testPhone.length !== 10}
+                disabled={dryRunning || !/^91\d{10}$/.test(toIndianE164(testPhone))}
                 className="flex items-center gap-1.5 bg-cream-200 text-ink px-4 rounded-xl font-bold hover:bg-cream-300 disabled:opacity-60"
                 title="Preview payload without sending"
               >
@@ -377,7 +378,7 @@ export default function AdminSettings() {
                 type="button"
                 data-testid="admin-settings-send-test-btn"
                 onClick={sendTestSms}
-                disabled={testing || testPhone.length !== 10}
+                disabled={testing || !/^91\d{10}$/.test(toIndianE164(testPhone))}
                 className="flex items-center gap-1.5 bg-forest text-cream-100 px-4 rounded-xl font-bold hover:bg-forest-dark disabled:opacity-60"
               >
                 {testing ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} strokeWidth={2.5} />}
