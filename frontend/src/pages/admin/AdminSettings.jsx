@@ -18,7 +18,7 @@ import { toast } from "sonner";
  */
 
 const SMS_PROVIDERS = [
-  { value: "mock", label: "Mock (dev only — always returns 123456)" },
+  { value: "mock", label: "Mock (dev only — no SMS sent)" },
   { value: "msg91", label: "MSG91" },
   { value: "twilio", label: "Twilio" },
 ];
