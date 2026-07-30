@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { useAuth } from "@/context/AuthContext";
 import { useI18n } from "@/i18n";
+import { useBackendCapabilities } from "@/hooks/useBackendCapabilities";
 import { SlotNowMark } from "@/components/SlotNowLogo";
 import api from "@/lib/api";
 import {
@@ -57,6 +58,10 @@ export default function Login() {
 
   const validPhone = /^\d{10}$/.test(phone);
   const validEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+
+  // Only render the email-login toggle when the backend actually exposes the endpoint.
+  const caps = useBackendCapabilities();
+  const hasEmailLogin = caps.has("/api/auth/login-email");
 
   const homeForRole = async (u) => {
     switch (u?.role) {
@@ -369,20 +374,22 @@ export default function Login() {
                 {mode === "otp" ? t("login_with_pin") : t("login_with_otp")}
               </button>
 
-              {/* Email/password fallback — visible to every role (admin uses it most often).
-                  Kept below the phone options so the primary flow remains OTP. */}
-              <button
-                data-testid="login-email-toggle-btn"
-                type="button"
-                onClick={() => {
-                  setMode(mode === "email" ? "otp" : "email");
-                  setEmailPassword("");
-                }}
-                className="w-full mt-2 text-xs font-semibold text-ink-soft hover:text-forest hover:underline flex items-center justify-center gap-1.5"
-              >
-                <Mail size={12} />
-                {mode === "email" ? "Use phone instead" : "Sign in with email & password"}
-              </button>
+              {/* Email/password fallback — only shown when the backend actually
+                  exposes the login-email endpoint. Otherwise clicking it 404's. */}
+              {hasEmailLogin && (
+                <button
+                  data-testid="login-email-toggle-btn"
+                  type="button"
+                  onClick={() => {
+                    setMode(mode === "email" ? "otp" : "email");
+                    setEmailPassword("");
+                  }}
+                  className="w-full mt-2 text-xs font-semibold text-ink-soft hover:text-forest hover:underline flex items-center justify-center gap-1.5"
+                >
+                  <Mail size={12} />
+                  {mode === "email" ? "Use phone instead" : "Sign in with email & password"}
+                </button>
+              )}
               <p className="text-center text-xs text-ink-muted mt-3">{t("terms_note")}</p>
             </>
           )}

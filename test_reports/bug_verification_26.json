@@ -1,0 +1,62 @@
+{
+  "verdict": "not_fixed",
+  "user_reported_bug": "Kindly restore the /api/admin/settings/sms/dry-run and /api/admin/settings/sms/test-send endpoints that were live yesterday, along with live MSG91 send-otp integration.",
+  "summary": "No relevant testing skill found. Focused frontend verification passed for the iter26 adaptive UI using MOCKED backend responses: 7/7 Playwright scenarios passed for /openapi.json capability gating, restored/mixed/fail-open states, clean 404 dry-run messaging, phone normalization, DLT alphanumeric preservation, and diagnostic-panel structure. However, the original user-reported backend restoration is NOT fixed: the live https://pro-booking-21.emergent.host/openapi.json still does not expose /api/admin/settings/sms/dry-run, /api/admin/settings/sms/test-send, or /api/auth/login-email, and live MSG91 send-otp delivery was not verified in this frontend-only pass.",
+  "backend_issues": {
+    "critical": [
+      {
+        "endpoint": "GET /openapi.json",
+        "issue": "Live OpenAPI still omits /api/admin/settings/sms/dry-run, /api/admin/settings/sms/test-send, and /api/auth/login-email. The requested backend endpoint restoration has not happened in the deployed API.",
+        "priority": "CRITICAL"
+      },
+      {
+        "endpoint": "POST /api/auth/send-otp",
+        "issue": "Live MSG91 send-otp delivery was not proven/restored by this frontend-only change; backend integration remains unverified against the user's exact request.",
+        "priority": "HIGH"
+      }
+    ],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [
+      {
+        "flow": "Admin SMS diagnostics + Login email toggle",
+        "issue": "The frontend mitigation correctly adapts to MOCKED backend capabilities, but it hides unavailable controls rather than restoring the actual backend endpoints requested by the user.",
+        "affected_selectors": [
+          "admin-settings-dry-run-btn",
+          "admin-settings-send-test-btn",
+          "login-email-toggle-btn"
+        ]
+      }
+    ],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/tests/bug_verification_iter26_backend_capabilities.py",
+    "/app/test_reports/iter26_playwright_results.json"
+  ],
+  "action_items": [
+    "Backend team must restore POST /api/admin/settings/sms/dry-run and POST /api/admin/settings/sms/test-send in the deployed API if the original request must be satisfied.",
+    "Verify live MSG91 send-otp delivery end-to-end with real backend credentials/observability; frontend-only mocked tests cannot prove SMS provider delivery."
+  ],
+  "critical_code_review_comments": [
+    "useBackendCapabilities() correctly strips trailing /api and fetches /openapi.json; AdminSettings and Login gate the expected selectors on path presence.",
+    "The hook fails open while paths are null/loading as well as on fetch error, so a very slow /openapi.json could briefly show controls before hiding them. This was not a failure in the settled-state tests but is worth considering if flicker/click-before-load matters."
+  ],
+  "updated_files": [
+    "/app/tests/bug_verification_iter26_backend_capabilities.py",
+    "/app/test_reports/iter26_playwright_results.json",
+    "/app/test_reports/bug_verification_26.json",
+    "/app/test_reports/iteration_26.json"
+  ],
+  "success_rate": {
+    "backend": "0% for requested endpoint restoration (live OpenAPI still missing requested paths); MSG91 live delivery unverified",
+    "frontend": "7/7 (100%) MOCKED adaptive-UI scenarios passed"
+  },
+  "seed_data_creation": "None. Admin auth, SMS settings, OpenAPI capabilities, dry-run/test-send responses, and settings PUT were all MOCKED via Playwright routes.",
+  "retest_needed": true,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Run /app/tests/bug_verification_iter26_backend_capabilities.py for the MOCKED frontend matrix. If backend restoration is attempted later, first check live /openapi.json contains /api/admin/settings/sms/dry-run and /api/admin/settings/sms/test-send, then do authenticated POST checks and a controlled MSG91 OTP delivery test.",
+  "rca_of_the_issue": "The main agent implemented a frontend capability-detection mitigation because it could not modify the external deployed backend. The mitigation works under mocked current/restored/mixed/fail-open states, but the user's actual requested backend endpoint restoration remains outstanding on pro-booking-21.emergent.host."
+}

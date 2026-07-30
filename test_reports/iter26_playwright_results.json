@@ -1,0 +1,35 @@
+{
+  "total": 7,
+  "passed": 7,
+  "failed": 0,
+  "results": [
+    {
+      "name": "current_rolled_back_backend_hides_absent_tools",
+      "status": "passed"
+    },
+    {
+      "name": "restored_backend_shows_all_tools",
+      "status": "passed"
+    },
+    {
+      "name": "mixed_dry_only_state",
+      "status": "passed"
+    },
+    {
+      "name": "openapi_failure_fails_open",
+      "status": "passed"
+    },
+    {
+      "name": "dry_run_404_clean_and_phone_normalization",
+      "status": "passed"
+    },
+    {
+      "name": "dlt_alphanumeric_preserved_on_save",
+      "status": "passed"
+    },
+    {
+      "name": "non_404_diagnostic_panel_structure",
+      "status": "passed"
+    }
+  ]
+}

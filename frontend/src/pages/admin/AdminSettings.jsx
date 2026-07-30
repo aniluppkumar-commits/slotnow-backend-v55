@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
 import api from "@/lib/api";
 import { toIndianE164 } from "@/lib/phone";
+import { useBackendCapabilities } from "@/hooks/useBackendCapabilities";
 import AppShell from "@/components/AppShell";
 import { Loader2, Save, MessageSquareText, CreditCard, Send, CheckCircle2 } from "lucide-react";
 import { toast } from "sonner";
@@ -65,6 +66,12 @@ export default function AdminSettings() {
   const [testing, setTesting] = useState(false);
   const [dryRunning, setDryRunning] = useState(false);
   const [diagnostic, setDiagnostic] = useState(null); // { label, data, error }
+
+  // Backend capability detection — hides buttons whose endpoints have been
+  // removed from the deployed backend, so users never see 404s for them again.
+  const caps = useBackendCapabilities();
+  const hasDryRun = caps.has("/api/admin/settings/sms/dry-run");
+  const hasTestSend = caps.has("/api/admin/settings/sms/test-send");
 
   useEffect(() => {
     let mounted = true;
@@ -372,13 +379,13 @@ export default function AdminSettings() {
         )}
 
         {/* SMS-only: Send Test SMS + Dry-Run diagnostic tools */}
-        {!isPayment && form.provider !== "mock" && form.enabled && (
+        {!isPayment && form.provider !== "mock" && form.enabled && (hasDryRun || hasTestSend) && (
           <div className="bg-white border border-cream-300 rounded-2xl p-4 space-y-2">
             <p className="text-[10px] uppercase tracking-widest font-bold text-ink-muted">
               SMS diagnostics
             </p>
             <p className="text-xs text-ink-soft">
-              Enter a 10-digit phone, then use <b>Dry-run</b> to see the exact payload the backend would send to MSG91 (nothing is actually delivered), or <b>Send</b> to fire a real test SMS to that phone.
+              Enter a 10-digit phone, then use {hasDryRun && <b>Dry-run</b>}{hasDryRun && hasTestSend && " to see the exact payload the backend would send to MSG91 (nothing is actually delivered), or "}{hasTestSend && <b>Send</b>}{hasTestSend && " to fire a real test SMS to that phone"}.
             </p>
             <div className="flex gap-2">
               <input
@@ -389,26 +396,30 @@ export default function AdminSettings() {
                 placeholder="Phone (10-digit, 91XXXXXXXXXX, or +91XXXXXXXXXX)"
                 className="flex-1 bg-cream border border-cream-300 rounded-xl px-3 py-2.5 text-ink font-medium outline-none focus:ring-2 focus:ring-forest/20 font-mono"
               />
-              <button
-                type="button"
-                data-testid="admin-settings-dry-run-btn"
-                onClick={dryRunSms}
-                disabled={dryRunning || !/^91\d{10}$/.test(toIndianE164(testPhone))}
-                className="flex items-center gap-1.5 bg-cream-200 text-ink px-4 rounded-xl font-bold hover:bg-cream-300 disabled:opacity-60"
-                title="Preview payload without sending"
-              >
-                {dryRunning ? <Loader2 size={14} className="animate-spin" /> : "Dry-run"}
-              </button>
-              <button
-                type="button"
-                data-testid="admin-settings-send-test-btn"
-                onClick={sendTestSms}
-                disabled={testing || !/^91\d{10}$/.test(toIndianE164(testPhone))}
-                className="flex items-center gap-1.5 bg-forest text-cream-100 px-4 rounded-xl font-bold hover:bg-forest-dark disabled:opacity-60"
-              >
-                {testing ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} strokeWidth={2.5} />}
-                Send
-              </button>
+              {hasDryRun && (
+                <button
+                  type="button"
+                  data-testid="admin-settings-dry-run-btn"
+                  onClick={dryRunSms}
+                  disabled={dryRunning || !/^91\d{10}$/.test(toIndianE164(testPhone))}
+                  className="flex items-center gap-1.5 bg-cream-200 text-ink px-4 rounded-xl font-bold hover:bg-cream-300 disabled:opacity-60"
+                  title="Preview payload without sending"
+                >
+                  {dryRunning ? <Loader2 size={14} className="animate-spin" /> : "Dry-run"}
+                </button>
+              )}
+              {hasTestSend && (
+                <button
+                  type="button"
+                  data-testid="admin-settings-send-test-btn"
+                  onClick={sendTestSms}
+                  disabled={testing || !/^91\d{10}$/.test(toIndianE164(testPhone))}
+                  className="flex items-center gap-1.5 bg-forest text-cream-100 px-4 rounded-xl font-bold hover:bg-forest-dark disabled:opacity-60"
+                >
+                  {testing ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} strokeWidth={2.5} />}
+                  Send
+                </button>
+              )}
             </div>
 
             {/* Diagnostic panel — shows exactly what the backend returned. Critical for
