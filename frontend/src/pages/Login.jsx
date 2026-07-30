@@ -169,7 +169,12 @@ export default function Login() {
       sessionStorage.removeItem("slotnow_ref");
       await navigateAfter(res.user);
     } catch (err) {
-      toast.error(err.response?.data?.detail || "Incorrect email or password");
+      const status = err.response?.status;
+      if (status === 404) {
+        toast.error("Email login is not enabled on this backend build — please use phone + OTP");
+      } else {
+        toast.error(err.response?.data?.detail || "Incorrect email or password");
+      }
     } finally {
       setLoading(false);
     }

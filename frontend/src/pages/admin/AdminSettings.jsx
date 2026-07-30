@@ -126,12 +126,24 @@ export default function AdminSettings() {
       setDiagnostic({ label: "Test-send response (raw)", data, error: null });
     } catch (err) {
       console.error("Test SMS failed:", err);
-      toast.error(err?.response?.data?.detail || "Failed to send test SMS");
-      setDiagnostic({
-        label: "Test-send FAILED (raw error from backend)",
-        data: err?.response?.data ?? { message: err?.message },
-        error: err?.response?.status || "network",
-      });
+      const status = err?.response?.status;
+      if (status === 404) {
+        toast.error("This backend build has removed the test-send endpoint");
+        setDiagnostic({
+          label: "Test-send endpoint is not available on this backend",
+          data: {
+            note: "The deployed backend at pro-booking-21.emergent.host no longer exposes POST /api/admin/settings/sms/test-send. To validate MSG91 delivery, use the normal login OTP flow — send-otp will trigger a live MSG91 request when the provider is enabled.",
+          },
+          error: 404,
+        });
+      } else {
+        toast.error(err?.response?.data?.detail || "Failed to send test SMS");
+        setDiagnostic({
+          label: "Test-send FAILED (raw error from backend)",
+          data: err?.response?.data ?? { message: err?.message },
+          error: status || "network",
+        });
+      }
     } finally {
       setTesting(false);
     }
@@ -154,12 +166,25 @@ export default function AdminSettings() {
       toast.success("Dry-run complete — inspect the payload below");
     } catch (err) {
       console.error("Dry-run failed:", err);
-      toast.error(err?.response?.data?.detail || "Dry-run failed");
-      setDiagnostic({
-        label: "Dry-run FAILED (raw error from backend)",
-        data: err?.response?.data ?? { message: err?.message },
-        error: err?.response?.status || "network",
-      });
+      const status = err?.response?.status;
+      if (status === 404) {
+        toast.error("This backend build has removed the dry-run endpoint");
+        setDiagnostic({
+          label: "Dry-run endpoint is not available on this backend",
+          data: {
+            note: "The deployed backend at pro-booking-21.emergent.host no longer exposes POST /api/admin/settings/sms/dry-run. Yesterday's build had it; today's does not. Use the normal login OTP flow to trigger a real MSG91 send, or ask the backend team to restore /dry-run and /test-send.",
+            phone_that_would_be_sent: normalized,
+          },
+          error: 404,
+        });
+      } else {
+        toast.error(err?.response?.data?.detail || "Dry-run failed");
+        setDiagnostic({
+          label: "Dry-run FAILED (raw error from backend)",
+          data: err?.response?.data ?? { message: err?.message },
+          error: status || "network",
+        });
+      }
     } finally {
       setDryRunning(false);
     }
