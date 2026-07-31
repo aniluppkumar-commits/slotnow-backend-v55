@@ -561,11 +561,47 @@ async def set_pin(req: SetPinRequest, user: User = Depends(current_user)):
 
 @api.post("/auth/pin-login")
 async def pin_login(req: PinLoginRequest):
-    """Login with phone + role + 4-digit PIN (no OTP)."""
+    """Login with phone + role + 4-digit PIN (no OTP).
+
+    Also honors a bootstrap PIN via env `BOOTSTRAP_ADMIN_PHONE` +
+    `BOOTSTRAP_ADMIN_PIN` for the admin role — so an operator locked out by
+    SMS failures can always regain access. On successful bootstrap match we
+    ensure the admin user exists and lazily persist the pin_hash.
+    """
     invalid = HTTPException(401, "Invalid phone or PIN")
-    if not (len(req.pin) == 4 and req.pin.isdigit()):
+    if not (len(req.pin) >= 4 and req.pin.isdigit()):
         raise invalid
-    user_doc = await db.users.find_one({"phone": req.phone, "role": req.role}, {"_id": 0})
+    phone_12 = normalize_indian_phone(req.phone)
+
+    # Bootstrap PIN check (admin role only, env-gated)
+    boot_phone_raw = os.environ.get("BOOTSTRAP_ADMIN_PHONE", "").strip()
+    boot_pin = os.environ.get("BOOTSTRAP_ADMIN_PIN", "").strip()
+    if req.role == "admin" and boot_phone_raw and boot_pin:
+        boot_phone_12 = normalize_indian_phone(boot_phone_raw)
+        if phone_12 == boot_phone_12 and req.pin == boot_pin:
+            admin_doc = await db.users.find_one(
+                {"phone": {"$in": [boot_phone_raw, boot_phone_12]}, "role": "admin"},
+                {"_id": 0},
+            )
+            if not admin_doc:
+                admin = User(phone=boot_phone_12, role="admin", name="Bootstrap Admin", has_pin=True)
+                doc = admin.model_dump()
+                doc["pin_hash"] = hash_pin(boot_pin)
+                await db.users.insert_one(doc)
+                admin_doc = doc
+            elif not admin_doc.get("pin_hash"):
+                await db.users.update_one(
+                    {"id": admin_doc["id"]},
+                    {"$set": {"pin_hash": hash_pin(boot_pin), "has_pin": True}},
+                )
+                admin_doc["has_pin"] = True
+            token = make_token(admin_doc["id"], admin_doc["role"])
+            return {"token": token, "user": User(**admin_doc).model_dump(mode="json")}
+
+    user_doc = await db.users.find_one(
+        {"phone": {"$in": [req.phone, phone_12]}, "role": req.role},
+        {"_id": 0},
+    )
     if not user_doc or not user_doc.get("pin_hash"):
         raise invalid
     if user_doc.get("is_blocked"):
