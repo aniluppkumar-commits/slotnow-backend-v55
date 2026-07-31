@@ -501,19 +501,28 @@ async def send_otp(req: OTPRequest):
 @api.post("/auth/verify-otp")
 async def verify_otp(req: OTPVerify):
     phone_12 = normalize_indian_phone(req.phone)
-    # Live-OTP path: look up the last stored OTP for this phone
+    settings = await db.settings.find_one({"key": "sms"}, {"_id": 0}) or {}
+    live_mode = bool(
+        settings.get("enabled")
+        and settings.get("provider") == "msg91"
+        and settings.get("api_key")
+    )
     stored = await db.otps.find_one({"phone": phone_12}, {"_id": 0})
     live_match = bool(stored and stored.get("otp") and req.otp == stored.get("otp"))
-    if not (
-        live_match
-        or req.otp == MOCK_OTP
-        or (len(req.otp) == 6 and req.otp.isdigit())
-    ):
-        raise HTTPException(400, "Invalid OTP")
-    # Consume the OTP on successful match so it can't be reused
+    if live_mode:
+        # In live mode ONLY the stored OTP counts — no mock/demo fallback.
+        if not live_match:
+            raise HTTPException(400, "Invalid OTP")
+    else:
+        # Demo / dev mode — accept MOCK_OTP or any digit OTP (matches legacy behavior).
+        if not (
+            live_match
+            or req.otp == MOCK_OTP
+            or (len(req.otp) == 6 and req.otp.isdigit())
+        ):
+            raise HTTPException(400, "Invalid OTP")
     if live_match:
         await db.otps.delete_one({"phone": phone_12})
-    # Look up the user under either the raw phone or the normalized 12-digit form
     user_doc = await db.users.find_one({"phone": {"$in": [req.phone, phone_12]}, "role": req.role}, {"_id": 0})
     if not user_doc:
         # Service Assistants cannot self-register. They must be created by a Provider.

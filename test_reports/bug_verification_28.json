@@ -1,0 +1,41 @@
+{
+  "verdict": "fixed",
+  "user_reported_bug": "Backend must fully disable demo/mock OTP fallback in live MSG91 mode. Previous run: verify_otp with otp='123456' returned 200 token even though MSG91 was live and stored OTP was '5678'. This is a security regression.",
+  "summary": "No relevant testing skill found. Backend-only re-verification passed: previous iter27 MSG91/SMS checks passed 15/15, and new live-mode OTP gating checks passed 5/5. In live MSG91 mode, verify-otp rejected demo OTP 123456 and arbitrary 999999 with HTTP 400 Invalid OTP, accepted only stored OTP 5678 with a token, consumed it from db.otps, then rejected reuse. Demo mode still returned demo_otp=123456 and verified successfully when SMS was disabled. MSG91 integration was NOT MOCKED; real MSG91 test-send/send-otp calls returned success.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/tests/bug_verification_iter27_sms_msg91.py",
+    "/app/tests/bug_verification_iter28_live_otp_primary.py",
+    "/app/test_reports/bug_verification_iter27_raw_results.json",
+    "/app/test_reports/bug_verification_iter28_primary_raw_results.json"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "/app/backend/server.py verify_otp now computes live_mode from enabled + provider=msg91 + api_key and gates demo/mock fallback to non-live mode only.",
+    "Runtime DB evidence confirmed db.otps phone 919876543210 otp 5678 remains after rejected live attempts and is deleted only after the matching live OTP succeeds."
+  ],
+  "updated_files": [
+    "/app/tests/bug_verification_iter28_live_otp_primary.py",
+    "/app/test_reports/bug_verification_iter27_raw_results.json",
+    "/app/test_reports/bug_verification_iter28_primary_raw_results.json",
+    "/app/test_reports/bug_verification_28.json",
+    "/app/test_reports/iteration_28.json"
+  ],
+  "success_rate": {
+    "backend": "100% (20/20 focused checks passed)",
+    "frontend": "N/A - backend only"
+  },
+  "seed_data_creation": "Temporarily changed/restored SMS settings and db.otps for phone 919876543210. Seeded live OTP 5678 for primary verify checks. Existing iter27 script also obtained an admin token via mock OTP and made real MSG91 test-send/send-otp calls to +919876543210. Test users for customer/admin demo flows may remain.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Backend-only. No relevant testing skill found. Reran /app/tests/bug_verification_iter27_sms_msg91.py plus /app/tests/bug_verification_iter28_live_otp_primary.py against http://localhost:8001/api with Mongo DB test_database. All checks passed; no frontend testing was performed.",
+  "rca_of_the_issue": "Previous failure was caused by global demo/mock fallback acceptance in verify_otp. Current code branches by live_mode; live MSG91 accepts only the stored normalized-phone OTP and consumes it on success, while demo mode preserves 123456/6-digit legacy behavior. Reproduction now returns expected HTTP 400 for live 123456 and 999999 instead of tokens."
+}

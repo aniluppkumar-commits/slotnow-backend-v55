@@ -1,0 +1,105 @@
+{
+  "base": "http://localhost:8001/api",
+  "results": [
+    {
+      "name": "PRIMARY live mode rejects demo MOCK_OTP 123456",
+      "passed": true,
+      "detail": "status=400; stored_after_reject=True",
+      "evidence": {
+        "response": {
+          "detail": "Invalid OTP"
+        },
+        "stored_after_reject": {
+          "phone": "919876543210",
+          "created_at": "2026-07-31 15:00:24.827000",
+          "otp": "5678"
+        }
+      }
+    },
+    {
+      "name": "PRIMARY live mode rejects arbitrary 6-digit OTP 999999",
+      "passed": true,
+      "detail": "status=400; stored_after_reject=True",
+      "evidence": {
+        "response": {
+          "detail": "Invalid OTP"
+        },
+        "stored_after_reject": {
+          "phone": "919876543210",
+          "created_at": "2026-07-31 15:00:24.831000",
+          "otp": "5678"
+        }
+      }
+    },
+    {
+      "name": "PRIMARY live mode accepts stored OTP 5678 and consumes it",
+      "passed": true,
+      "detail": "status=200; otp_after_success=None",
+      "evidence": {
+        "response": {
+          "token": "***REDACTED***",
+          "user": {
+            "id": "ee3721e4-f884-4c48-9a08-7c62a72c1b5a",
+            "phone": "9876543210",
+            "role": "customer",
+            "name": null,
+            "email": null,
+            "avatar": null,
+            "city": null,
+            "address": null,
+            "language": "en",
+            "linked_provider_id": null,
+            "via_referral": false,
+            "referred_by": null,
+            "designation": null,
+            "is_blocked": false,
+            "has_pin": false,
+            "created_at": "2026-07-31T14:56:39.895000"
+          }
+        },
+        "otp_after_success": null
+      }
+    },
+    {
+      "name": "PRIMARY live mode rejects consumed stored OTP 5678",
+      "passed": true,
+      "detail": "status=400; expected 400 after prior success consumed OTP",
+      "evidence": {
+        "detail": "Invalid OTP"
+      }
+    },
+    {
+      "name": "REGRESSION demo mode still returns demo_otp and verifies 123456 when SMS disabled",
+      "passed": true,
+      "detail": "send_status=200; verify_status=200",
+      "evidence": {
+        "send": {
+          "ok": true,
+          "message": "OTP sent (demo: use 123456)",
+          "demo_otp": "123456"
+        },
+        "verify": {
+          "token": "***REDACTED***",
+          "user": {
+            "id": "ee3721e4-f884-4c48-9a08-7c62a72c1b5a",
+            "phone": "9876543210",
+            "role": "customer",
+            "name": null,
+            "email": null,
+            "avatar": null,
+            "city": null,
+            "address": null,
+            "language": "en",
+            "linked_provider_id": null,
+            "via_referral": false,
+            "referred_by": null,
+            "designation": null,
+            "is_blocked": false,
+            "has_pin": false,
+            "created_at": "2026-07-31T14:56:39.895000"
+          }
+        }
+      }
+    }
+  ]
+}

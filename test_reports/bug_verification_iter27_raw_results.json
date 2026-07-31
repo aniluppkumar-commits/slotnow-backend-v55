@@ -134,7 +134,7 @@
         "message": "OTP sent to +919876543210 via MSG91",
         "would_send_to": "919876543210",
         "msg91_response": {
-          "message": "366745747a4b764b7736686e",
+          "message": "366745744475663463464d4e",
           "type": "success"
         }
       }
@@ -152,8 +152,8 @@
         },
         "otp_doc": {
           "phone": "919876543210",
-          "created_at": "2026-07-31 14:56:37.355000",
-          "otp": "5885"
+          "created_at": "2026-07-31 15:00:22.067000",
+          "otp": "3648"
         }
       }
     },
@@ -170,8 +170,8 @@
         },
         "otp_doc": {
           "phone": "919876543210",
-          "created_at": "2026-07-31 14:56:38.209000",
-          "otp": "8788"
+          "created_at": "2026-07-31 15:00:22.902000",
+          "otp": "4570"
         }
       }
     },
@@ -188,35 +188,17 @@
         },
         "otp_doc": {
           "phone": "919876543210",
-          "created_at": "2026-07-31 14:56:39.044000",
-          "otp": "4623"
+          "created_at": "2026-07-31 15:00:23.733000",
+          "otp": "5433"
         }
       }
     },
     {
       "name": "live verify rejects demo MOCK_OTP fallback 123456",
-      "passed": false,
-      "detail": "status=200; expected HTTP 400 Invalid OTP in live mode",
+      "passed": true,
+      "detail": "status=400; expected HTTP 400 Invalid OTP in live mode",
       "evidence": {
-        "token": "***REDACTED***",
-        "user": {
-          "id": "ee3721e4-f884-4c48-9a08-7c62a72c1b5a",
-          "phone": "9876543210",
-          "role": "customer",
-          "name": null,
-          "email": null,
-          "avatar": null,
-          "city": null,
-          "address": null,
-          "language": "en",
-          "linked_provider_id": null,
-          "via_referral": false,
-          "referred_by": null,
-          "designation": null,
-          "is_blocked": false,
-          "has_pin": false,
-          "created_at": "2026-07-31T14:56:39.895962Z"
-        }
+        "detail": "Invalid OTP"
       }
     },
     {
@@ -281,7 +263,7 @@
             "designation": null,
             "is_blocked": false,
             "has_pin": false,
-            "created_at": "2026-07-31T14:56:39.905827Z"
+            "created_at": "2026-07-31T14:56:39.905000"
           }
         }
       }
