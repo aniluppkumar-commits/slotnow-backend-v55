@@ -1,0 +1,48 @@
+{
+  "verdict": "not_fixed",
+  "user_reported_bug": "github url send kar rha hu ye problem sahi kar do https://github.com/aniluppkumar/commits/Book-preview-11 \u2014 user provided backend source; the ongoing SMS integration issues (missing dry-run/test-send endpoints, demo OTP fallback, phone number missing 91 prefix) must now be fixed IN THE BACKEND CODE (server.py) that the user will redeploy from this repo.",
+  "summary": "No relevant testing skill found. Focused backend-only verification against http://localhost:8001 covered SMS settings defaults/persistence, dry-run/test-send, real MSG91 dispatch, phone normalization, live OTP storage/consumption, and demo mode regression. 14/15 checks passed, including real MSG91 success and +91 normalization, but the bug is NOT fixed because /api/auth/verify-otp still accepts the demo MOCK_OTP=123456 while MSG91 live mode is enabled.",
+  "backend_issues": {
+    "critical": [
+      {
+        "endpoint": "POST /api/auth/verify-otp",
+        "issue": "Live MSG91 mode can still be bypassed with demo MOCK_OTP=123456. With settings.enabled=true/provider=msg91 and a stored live OTP 5678 for 919876543210, verifying phone 9876543210 with otp=123456 returned HTTP 200 and a token instead of HTTP 400 Invalid OTP. This leaves the reported demo OTP fallback issue unresolved.",
+        "priority": "CRITICAL"
+      }
+    ],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/tests/bug_verification_iter27_sms_msg91.py",
+    "/app/test_reports/bug_verification_iter27_raw_results.json"
+  ],
+  "action_items": [
+    "Update /app/backend/server.py verify_otp so MOCK_OTP/any-demo fallback is allowed only when SMS is not live-enabled; in MSG91 live mode, accept only the stored OTP for the normalized phone and reject all other values.",
+    "Remove or gate the legacy `len(req.otp) == 6 and req.otp.isdigit()` acceptance path; code review shows it would allow arbitrary six-digit OTPs even when live OTP is expected.",
+    "Retest live MSG91 send + verify after the fix, specifically: stored OTP succeeds and is consumed; 123456, arbitrary 6-digit values, and wrong 4-digit values all return 400 in live mode."
+  ],
+  "critical_code_review_comments": [
+    "/app/backend/server.py lines 507-510 currently allow `live_match or req.otp == MOCK_OTP or (len(req.otp) == 6 and req.otp.isdigit())`, so live OTP verification is not authoritative even after MSG91 send succeeds.",
+    "The real MSG91 integration itself was not mocked: /api/admin/settings/sms/test-send returned msg91_response.type='success', and /api/auth/send-otp sent via MSG91 for 10-digit, leading-zero, and formatted +91 inputs."
+  ],
+  "updated_files": [
+    "/app/tests/bug_verification_iter27_sms_msg91.py",
+    "/app/test_reports/bug_verification_iter27_raw_results.json",
+    "/app/test_reports/bug_verification_27.json",
+    "/app/test_reports/iteration_27.json"
+  ],
+  "success_rate": {
+    "backend": "93% (14/15 focused checks passed)",
+    "frontend": "N/A - backend only"
+  },
+  "seed_data_creation": "Temporary SMS settings were changed through admin API/direct DB and restored afterward. Admin token was obtained via mock OTP with settings row removed. Seeded db.otps phone 919876543210 otp 5678 for verify tests. Test users for admin/customer demo flows may remain. Real MSG91 SMS calls were made to +919876543210: one test-send and three send-otp normalization checks.",
+  "retest_needed": true,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Backend-only test. No relevant testing skill found. Re-run /app/tests/bug_verification_iter27_sms_msg91.py after fixing verify_otp. The script restores the original sms settings row but does perform real MSG91 calls when live settings are enabled.",
+  "rca_of_the_issue": "Runtime reproduction: enable MSG91 settings with the provided key, seed db.otps {phone:'919876543210', otp:'5678'}, then POST /api/auth/verify-otp {phone:'9876543210', role:'customer', otp:'123456'}; expected 400 Invalid OTP, actual 200 token. Root cause is verify_otp retaining mock/demo fallback conditions globally instead of branching by live SMS settings."
+}

@@ -1,0 +1,290 @@
+{
+  "base": "http://localhost:8001/api",
+  "results": [
+    {
+      "name": "admin mock send-otp for token setup",
+      "passed": true,
+      "detail": "status=200",
+      "evidence": {
+        "ok": true,
+        "message": "OTP sent (demo: use 123456)",
+        "demo_otp": "123456"
+      }
+    },
+    {
+      "name": "admin mock verify-otp returns token",
+      "passed": true,
+      "detail": "status=200",
+      "evidence": {
+        "token": "***REDACTED***",
+        "user": {
+          "id": "00e3255e-bdc6-4fa3-837a-5a1dea09712f",
+          "phone": "9999999999",
+          "role": "admin",
+          "name": "EasySlot Admin",
+          "email": null,
+          "avatar": null,
+          "city": null,
+          "address": null,
+          "language": "en",
+          "linked_provider_id": null,
+          "via_referral": false,
+          "referred_by": null,
+          "designation": null,
+          "is_blocked": false,
+          "has_pin": false,
+          "created_at": "2026-07-31T14:52:38.934000"
+        }
+      }
+    },
+    {
+      "name": "SmsSettings default when no row exists",
+      "passed": true,
+      "detail": "status=200; defaults matched",
+      "evidence": {
+        "provider": "mock",
+        "api_key": "",
+        "sender_id": "",
+        "dlt_template_id": "",
+        "dlt_entity_id": "",
+        "dlt_variable_name": "num",
+        "enabled": false
+      }
+    },
+    {
+      "name": "SmsSettings persistence includes dlt_entity_id and dlt_variable_name",
+      "passed": true,
+      "detail": "PUT status=200, GET status=200; all fields matched",
+      "evidence": {
+        "put": {
+          "provider": "msg91",
+          "api_key": "***REDACTED***",
+          "sender_id": "S",
+          "dlt_template_id": "T",
+          "dlt_entity_id": "E",
+          "dlt_variable_name": "otp",
+          "enabled": true
+        },
+        "get": {
+          "api_key": "***REDACTED***",
+          "dlt_entity_id": "E",
+          "dlt_template_id": "T",
+          "dlt_variable_name": "otp",
+          "enabled": true,
+          "provider": "msg91",
+          "sender_id": "S"
+        }
+      }
+    },
+    {
+      "name": "test-send guard when MSG91 disabled",
+      "passed": true,
+      "detail": "status=503",
+      "evidence": {
+        "detail": "MSG91 is not enabled. Turn Enabled ON and save your API key first."
+      }
+    },
+    {
+      "name": "seed live MSG91 settings via admin API",
+      "passed": true,
+      "detail": "status=200",
+      "evidence": {
+        "provider": "msg91",
+        "api_key": "***REDACTED***",
+        "sender_id": "SLOTNW",
+        "dlt_template_id": "1207178359126464853",
+        "dlt_entity_id": "",
+        "dlt_variable_name": "num",
+        "enabled": true
+      }
+    },
+    {
+      "name": "dry-run payload normalizes phone and redacts authkey",
+      "passed": true,
+      "detail": "status=200",
+      "evidence": {
+        "would_send_to": "919876543210",
+        "provider": "msg91",
+        "enabled": true,
+        "endpoint": "https://control.msg91.com/api/v5/flow/",
+        "headers": {
+          "authkey": "***REDACTED***",
+          "Content-Type": "application/json"
+        },
+        "body": {
+          "template_id": "1207178359126464853",
+          "sender": "SLOTNW",
+          "short_url": "0",
+          "recipients": [
+            {
+              "mobiles": "919876543210",
+              "num": "1234"
+            }
+          ]
+        },
+        "note": "This is what the backend would send. No SMS was dispatched."
+      }
+    },
+    {
+      "name": "test-send dispatches real MSG91 successfully",
+      "passed": true,
+      "detail": "status=200",
+      "evidence": {
+        "ok": true,
+        "message": "OTP sent to +919876543210 via MSG91",
+        "would_send_to": "919876543210",
+        "msg91_response": {
+          "message": "366745747a4b764b7736686e",
+          "type": "success"
+        }
+      }
+    },
+    {
+      "name": "live send-otp 10-digit uses MSG91, no demo_otp, stores 4-digit normalized OTP",
+      "passed": true,
+      "detail": "status=200; otp_doc_found=True",
+      "evidence": {
+        "response": {
+          "ok": true,
+          "message": "OTP sent to +919876543210 via MSG91",
+          "channel": "sms",
+          "provider_used": "msg91"
+        },
+        "otp_doc": {
+          "phone": "919876543210",
+          "created_at": "2026-07-31 14:56:37.355000",
+          "otp": "5885"
+        }
+      }
+    },
+    {
+      "name": "live send-otp 11-digit leading zero uses MSG91, no demo_otp, stores 4-digit normalized OTP",
+      "passed": true,
+      "detail": "status=200; otp_doc_found=True",
+      "evidence": {
+        "response": {
+          "ok": true,
+          "message": "OTP sent to +919876543210 via MSG91",
+          "channel": "sms",
+          "provider_used": "msg91"
+        },
+        "otp_doc": {
+          "phone": "919876543210",
+          "created_at": "2026-07-31 14:56:38.209000",
+          "otp": "8788"
+        }
+      }
+    },
+    {
+      "name": "live send-otp formatted +91 uses MSG91, no demo_otp, stores 4-digit normalized OTP",
+      "passed": true,
+      "detail": "status=200; otp_doc_found=True",
+      "evidence": {
+        "response": {
+          "ok": true,
+          "message": "OTP sent to +919876543210 via MSG91",
+          "channel": "sms",
+          "provider_used": "msg91"
+        },
+        "otp_doc": {
+          "phone": "919876543210",
+          "created_at": "2026-07-31 14:56:39.044000",
+          "otp": "4623"
+        }
+      }
+    },
+    {
+      "name": "live verify rejects demo MOCK_OTP fallback 123456",
+      "passed": false,
+      "detail": "status=200; expected HTTP 400 Invalid OTP in live mode",
+      "evidence": {
+        "token": "***REDACTED***",
+        "user": {
+          "id": "ee3721e4-f884-4c48-9a08-7c62a72c1b5a",
+          "phone": "9876543210",
+          "role": "customer",
+          "name": null,
+          "email": null,
+          "avatar": null,
+          "city": null,
+          "address": null,
+          "language": "en",
+          "linked_provider_id": null,
+          "via_referral": false,
+          "referred_by": null,
+          "designation": null,
+          "is_blocked": false,
+          "has_pin": false,
+          "created_at": "2026-07-31T14:56:39.895962Z"
+        }
+      }
+    },
+    {
+      "name": "live verify accepts exact stored 4-digit OTP and consumes it",
+      "passed": true,
+      "detail": "status=200; otp_after_success=None",
+      "evidence": {
+        "token": "***REDACTED***",
+        "user": {
+          "id": "ee3721e4-f884-4c48-9a08-7c62a72c1b5a",
+          "phone": "9876543210",
+          "role": "customer",
+          "name": null,
+          "email": null,
+          "avatar": null,
+          "city": null,
+          "address": null,
+          "language": "en",
+          "linked_provider_id": null,
+          "via_referral": false,
+          "referred_by": null,
+          "designation": null,
+          "is_blocked": false,
+          "has_pin": false,
+          "created_at": "2026-07-31T14:56:39.895000"
+        }
+      }
+    },
+    {
+      "name": "live verify rejects wrong 4-digit OTP after consumption",
+      "passed": true,
+      "detail": "status=400",
+      "evidence": {
+        "detail": "Invalid OTP"
+      }
+    },
+    {
+      "name": "demo mode still returns demo_otp and verifies 123456 when disabled",
+      "passed": true,
+      "detail": "send_status=200, verify_status=200",
+      "evidence": {
+        "send": {
+          "ok": true,
+          "message": "OTP sent (demo: use 123456)",
+          "demo_otp": "123456"
+        },
+        "verify": {
+          "token": "***REDACTED***",
+          "user": {
+            "id": "09584303-01d0-4045-86ab-95711397f4b6",
+            "phone": "7777700010",
+            "role": "customer",
+            "name": null,
+            "email": null,
+            "avatar": null,
+            "city": null,
+            "address": null,
+            "language": "en",
+            "linked_provider_id": null,
+            "via_referral": false,
+            "referred_by": null,
+            "designation": null,
+            "is_blocked": false,
+            "has_pin": false,
+            "created_at": "2026-07-31T14:56:39.905827Z"
+          }
+        }
+      }
+    }
+  ]
+}
