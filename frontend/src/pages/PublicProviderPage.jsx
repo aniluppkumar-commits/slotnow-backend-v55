@@ -11,6 +11,7 @@ import {
   MessageSquare,
   X,
   ImagePlus,
+  ShieldCheck,
 } from "lucide-react";
 import { toast } from "sonner";
 import { api } from "@/lib/api";
@@ -446,10 +447,19 @@ export default function PublicProviderPage() {
                   <div className="space-y-4">
                     {reviews.slice(0, 6).map((r) => (
                       <div key={r.id} className="border-b border-cream-200 last:border-0 pb-4 last:pb-0">
-                        <div className="flex items-center justify-between mb-1">
-                          <p className="font-bold text-sm text-ink">
-                            {r.customer_name || "Customer"}
-                          </p>
+                        <div className="flex items-center justify-between mb-1 flex-wrap gap-2">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <p className="font-bold text-sm text-ink">
+                              {r.customer_name || "Customer"}
+                            </p>
+                            <span
+                              title="This customer completed a booking with this provider"
+                              className="inline-flex items-center gap-1 text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200"
+                            >
+                              <ShieldCheck size={10} strokeWidth={2.5} />
+                              Verified booking
+                            </span>
+                          </div>
                           <StarRow value={r.rating} size={12} />
                         </div>
                         {r.comment && (

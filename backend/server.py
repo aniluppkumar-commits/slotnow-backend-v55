@@ -122,6 +122,13 @@ class ProviderProfile(BaseModel):
     user_id: str
     business_name: str
     category_id: str
+    # Sub-type inside a category (esp. Healthcare):
+    #   "hospital" | "doctor_clinic" | "diagnostic_center" | "" (legacy / other categories)
+    provider_type: str = ""
+    # Doctor specialization (for doctor_clinic only, e.g. "Neurologist")
+    specialization: str = ""
+    # Free-form service tags used for search (e.g. ["X-ray", "MRI", "Blood test"])
+    service_tags: List[str] = []
     bio: Optional[str] = ""
     city: str
     address: str  # now required
@@ -141,6 +148,9 @@ class ProviderProfile(BaseModel):
 class ProviderProfileUpsert(BaseModel):
     business_name: str
     category_id: str
+    provider_type: Optional[str] = ""
+    specialization: Optional[str] = ""
+    service_tags: Optional[List[str]] = None
     bio: Optional[str] = ""
     city: str
     address: str
@@ -672,6 +682,130 @@ def _slugify(name: str) -> str:
             out.append("-")
             prev_dash = True
     return "".join(out).strip("-") or "cat"
+
+
+# Default lists for the healthcare vertical — used both by the frontend
+# dropdowns and by the customer search page.
+DOCTOR_SPECIALIZATIONS = [
+    "Physician", "Neurologist", "Cardiologist", "Orthopedic", "Gynecologist",
+    "Pediatrician", "ENT Specialist", "Dermatologist", "Dentist",
+    "Psychiatrist", "General Surgeon", "Ophthalmologist", "Urologist",
+    "Gastroenterologist", "Endocrinologist", "Oncologist",
+]
+
+DIAGNOSTIC_SERVICES = [
+    "X-ray", "MRI", "CT scan", "Ultrasound / USG", "ECG",
+    "Blood test / Pathology", "Sonography", "Endoscopy",
+    "Mammography", "PET scan", "Dialysis", "Vaccination",
+]
+
+
+@api.get("/reference/healthcare")
+async def healthcare_reference():
+    """Static reference lists used by provider onboarding and customer search."""
+    return {
+        "provider_types": [
+            {"key": "hospital", "label": "Hospital"},
+            {"key": "doctor_clinic", "label": "Doctor / Clinic"},
+            {"key": "diagnostic_center", "label": "Diagnostic Center"},
+        ],
+        "specializations": DOCTOR_SPECIALIZATIONS,
+        "services": DIAGNOSTIC_SERVICES,
+    }
+
+
+def _haversine_km(lat1: float, lng1: float, lat2: float, lng2: float) -> float:
+    import math
+    r = 6371.0
+    p1, p2 = math.radians(lat1), math.radians(lat2)
+    dp = math.radians(lat2 - lat1)
+    dl = math.radians(lng2 - lng1)
+    a = math.sin(dp / 2) ** 2 + math.cos(p1) * math.cos(p2) * math.sin(dl / 2) ** 2
+    return 2 * r * math.asin(math.sqrt(a))
+
+
+@api.get("/search/providers")
+async def search_providers(
+    q: Optional[str] = None,
+    city: Optional[str] = None,
+    category_id: Optional[str] = None,
+    specialization: Optional[str] = None,
+    service: Optional[str] = None,
+    lat: Optional[float] = None,
+    lng: Optional[float] = None,
+    max_km: Optional[float] = None,
+    limit: int = 50,
+):
+    """Public provider search + optional Haversine-based nearby sort.
+
+    Any combination of filters can be used. When lat+lng are provided, results
+    are enriched with a `distance_km` field and sorted by distance ascending
+    (max_km defaults to 25 km when lat/lng given).
+    """
+    query: dict = {"approved": True}
+    if city:
+        query["city"] = {"$regex": f"^{city}$", "$options": "i"}
+    if category_id:
+        query["category_id"] = category_id
+    if specialization:
+        query["specialization"] = {"$regex": f"^{specialization}$", "$options": "i"}
+    if service:
+        query["service_tags"] = {"$regex": service, "$options": "i"}
+    if q:
+        query["$or"] = [
+            {"business_name": {"$regex": q, "$options": "i"}},
+            {"specialization": {"$regex": q, "$options": "i"}},
+            {"bio": {"$regex": q, "$options": "i"}},
+            {"service_tags": {"$regex": q, "$options": "i"}},
+        ]
+    providers = await db.providers.find(query, {"_id": 0}).to_list(500)
+
+    if lat is not None and lng is not None:
+        radius = max_km if max_km is not None else 25.0
+        enriched = []
+        for p in providers:
+            plat, plng = p.get("latitude"), p.get("longitude")
+            if plat is None or plng is None:
+                continue
+            d = _haversine_km(lat, lng, float(plat), float(plng))
+            if d <= radius:
+                p["distance_km"] = round(d, 2)
+                enriched.append(p)
+        enriched.sort(key=lambda r: r["distance_km"])
+        return enriched[:limit]
+
+    providers.sort(key=lambda r: (-(r.get("rating") or 0), r.get("business_name") or ""))
+    return providers[:limit]
+
+
+@api.get("/city/{city_slug}")
+async def city_public_page(city_slug: str):
+    """Public endpoint powering `/city/:cityName` SEO pages. Groups all approved
+    providers in the given city by category so the page can render a directory."""
+    city_slug = city_slug.lower()
+    all_providers = await db.providers.find({"approved": True}, {"_id": 0}).to_list(2000)
+    matches = [p for p in all_providers if _slugify(p.get("city", "")) == city_slug]
+    if not matches:
+        raise HTTPException(404, "City not found")
+    display_city = matches[0].get("city", city_slug.replace("-", " ").title())
+    cats = await db.categories.find({"active": True}, {"_id": 0}).to_list(100)
+    cat_by_id = {c["id"]: c for c in cats}
+    groups = {}
+    for p in matches:
+        cid = p.get("category_id")
+        if cid not in cat_by_id:
+            continue
+        groups.setdefault(cid, []).append(p)
+    grouped = [
+        {
+            "category": cat_by_id[cid],
+            "providers": sorted(ps, key=lambda r: -(r.get("rating") or 0))[:12],
+            "total": len(ps),
+        }
+        for cid, ps in groups.items()
+    ]
+    grouped.sort(key=lambda g: -g["total"])
+    return {"city": display_city, "slug": city_slug, "groups": grouped, "total": len(matches)}
 
 
 @api.get("/categories/by-slug/{slug}")
@@ -1773,7 +1907,7 @@ async def whatsapp_support_redirect():
     return RedirectResponse(url=target, status_code=302)
 
 
-def _sitemap_xml_response(site_url: str, providers, categories, city_combos=None) -> Response:
+def _sitemap_xml_response(site_url: str, providers, categories, city_combos=None, city_slugs=None) -> Response:
     urls = [
         (f"{site_url}/", "1.0", "weekly"),
         (f"{site_url}/login?role=customer", "0.6", "monthly"),
@@ -1784,6 +1918,8 @@ def _sitemap_xml_response(site_url: str, providers, categories, city_combos=None
         urls.append((f"{site_url}/c/{slug}", "0.8", "weekly"))
     for slug, city_slug in (city_combos or []):
         urls.append((f"{site_url}/c/{slug}/{city_slug}", "0.7", "weekly"))
+    for city_slug in (city_slugs or []):
+        urls.append((f"{site_url}/city/{city_slug}", "0.8", "weekly"))
     for p in providers:
         urls.append((f"{site_url}/p/{p['id']}", "0.7", "weekly"))
     xml_parts = ['<?xml version="1.0" encoding="UTF-8"?>',
@@ -1812,13 +1948,15 @@ async def dynamic_sitemap_api():
     ]).to_list(2000)
     cat_slug_by_id = {c["id"]: _slugify(c["name"]) for c in categories}
     combos = []
+    city_set = set()
     for row in combo_agg:
         cat_id = row["_id"].get("cat")
         city = row["_id"].get("city")
         if cat_id in cat_slug_by_id and city:
             combos.append((cat_slug_by_id[cat_id], _slugify(city)))
+            city_set.add(_slugify(city))
 
-    return _sitemap_xml_response(site_url, providers, categories, combos)
+    return _sitemap_xml_response(site_url, providers, categories, combos, sorted(city_set))
 
 
 @app.on_event("shutdown")

@@ -9,6 +9,8 @@ import Login from "@/pages/Login";
 import LandingPage from "@/pages/LandingPage";
 import PublicProviderPage from "@/pages/PublicProviderPage";
 import CategoryPublicPage from "@/pages/CategoryPublicPage";
+import CityPublicPage from "@/pages/CityPublicPage";
+import CustomerSearch from "@/pages/CustomerSearch";
 import Home from "@/pages/Home";
 import CategoryPage from "@/pages/CategoryPage";
 import ProviderDetail from "@/pages/ProviderDetail";
@@ -80,6 +82,8 @@ function App() {
             <Route path="/p/:id" element={<PublicProviderPage />} />
             <Route path="/c/:slug" element={<CategoryPublicPage />} />
             <Route path="/c/:slug/:city" element={<CategoryPublicPage />} />
+            <Route path="/city/:cityName" element={<CityPublicPage />} />
+            <Route path="/search" element={<CustomerSearch />} />
             <Route path="/login" element={<Login />} />
 
             {/* Customer */}

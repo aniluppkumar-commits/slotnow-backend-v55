@@ -203,6 +203,13 @@ export default function LandingPage() {
             </span>
           </Link>
           <div className="flex items-center gap-2">
+            <Link
+              to="/search"
+              data-testid="landing-search-link"
+              className="hidden sm:inline-block text-sm font-semibold text-ink-soft hover:text-forest px-3 py-2 rounded-lg transition-colors"
+            >
+              Search
+            </Link>
             <a
               href="#categories"
               className="hidden sm:inline-block text-sm font-semibold text-ink-soft hover:text-forest px-3 py-2 rounded-lg transition-colors"
@@ -246,6 +253,13 @@ export default function LandingPage() {
             >
               Book Now
               <ArrowRight size={18} />
+            </Link>
+            <Link
+              to="/search"
+              data-testid="hero-search-cta"
+              className="inline-flex items-center gap-2 bg-white text-ink font-bold px-6 py-3.5 rounded-2xl border-2 border-cream-300 hover:border-forest hover:text-forest transition-all"
+            >
+              Find near me
             </Link>
             <Link
               to="/login?role=provider"

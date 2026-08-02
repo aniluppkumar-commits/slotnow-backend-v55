@@ -19,6 +19,9 @@ export default function ProviderOnboarding() {
   const [form, setForm] = useState({
     business_name: "",
     category_id: "",
+    provider_type: "",
+    specialization: "",
+    service_tags: [],
     bio: "",
     city: "",
     address: "",
@@ -26,6 +29,7 @@ export default function ProviderOnboarding() {
     image: "",
     location_link: "",
   });
+  const [reference, setReference] = useState(null);
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
@@ -57,6 +61,12 @@ export default function ProviderOnboarding() {
           api.get("/providers/me/profile").catch(() => ({ data: null })),
         ]);
         setCategories(catRes.data || []);
+        try {
+          const refRes = await api.get("/reference/healthcare");
+          setReference(refRes.data);
+        } catch {
+          setReference({ provider_types: [], specializations: [], services: [] });
+        }
         if (meRes.data) {
           setExisting(meRes.data);
           // Backend stores map link piggy-backed inside address — split before showing.
@@ -143,6 +153,80 @@ export default function ProviderOnboarding() {
                 <option key={c.id} value={c.id}>{`${c.name} / ${c.name_hi}`}</option>
               ))}            </select>
           </Field>
+          {(() => {
+            const selCat = categories.find((c) => c.id === form.category_id);
+            const isHealthcare = selCat?.name?.toLowerCase() === "healthcare";
+            if (!isHealthcare) return null;
+            const isClinic = form.provider_type === "doctor_clinic";
+            const showServices =
+              form.provider_type === "hospital" ||
+              form.provider_type === "diagnostic_center";
+            return (
+              <>
+                <Field label="Provider type" required>
+                  <select
+                    data-testid="onboarding-provider-type"
+                    value={form.provider_type}
+                    onChange={(e) => setForm({ ...form, provider_type: e.target.value })}
+                    className="w-full bg-transparent outline-none text-ink font-medium"
+                  >
+                    <option value="">— Select type —</option>
+                    {(reference?.provider_types || []).map((pt) => (
+                      <option key={pt.key} value={pt.key}>{pt.label}</option>
+                    ))}
+                  </select>
+                </Field>
+                {isClinic && (
+                  <Field label="Doctor specialization">
+                    <select
+                      data-testid="onboarding-specialization"
+                      value={form.specialization}
+                      onChange={(e) => setForm({ ...form, specialization: e.target.value })}
+                      className="w-full bg-transparent outline-none text-ink font-medium"
+                    >
+                      <option value="">— Select specialization —</option>
+                      {(reference?.specializations || []).map((s) => (
+                        <option key={s} value={s}>{s}</option>
+                      ))}
+                    </select>
+                  </Field>
+                )}
+                {showServices && (
+                  <Field label="Services offered">
+                    <div
+                      data-testid="onboarding-services"
+                      className="flex flex-wrap gap-2 py-1"
+                    >
+                      {(reference?.services || []).map((s) => {
+                        const on = form.service_tags?.includes(s);
+                        return (
+                          <button
+                            type="button"
+                            key={s}
+                            onClick={() =>
+                              setForm((f) => ({
+                                ...f,
+                                service_tags: on
+                                  ? (f.service_tags || []).filter((x) => x !== s)
+                                  : [...(f.service_tags || []), s],
+                              }))
+                            }
+                            className={`text-xs font-semibold px-3 py-1.5 rounded-full border transition-all ${
+                              on
+                                ? "bg-forest text-white border-forest"
+                                : "bg-white text-ink border-cream-300 hover:border-forest"
+                            }`}
+                          >
+                            {s}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </Field>
+                )}
+              </>
+            );
+          })()}
           <Field label={t("bio")}>
             <textarea
               data-testid="onboarding-bio"
