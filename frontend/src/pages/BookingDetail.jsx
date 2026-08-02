@@ -200,15 +200,19 @@ export default function BookingDetail() {
               #{booking.token_number ?? "—"}
             </div>
             {queuePos && queuePos.position != null && (
-              <p className="text-sm text-cream-200 mt-1">
+              <div
+                data-testid="booking-queue-position"
+                className="mt-2 px-4 py-1.5 bg-white/10 rounded-full text-sm font-bold text-cream-100 backdrop-blur"
+              >
                 {queuePos.position === 0
-                  ? t("youre_up_next")
-                  : `${queuePos.position} ${t("ahead_of_you")}`}
-              </p>
+                  ? "🟢 " + t("youre_up_next")
+                  : `You are #${queuePos.position + 1} in queue · ${queuePos.position} ahead`}
+              </div>
             )}
             {queuePos?.current_token != null && (
-              <p className="text-xs text-cream-200/70 mt-0.5">
+              <p className="text-xs text-cream-200/70 mt-1">
                 {t("now_serving")}: #{queuePos.current_token}
+                <span className="ml-1 opacity-60">· Auto-refreshing every 4s</span>
               </p>
             )}
           </div>

@@ -1,0 +1,40 @@
+{
+  "summary": "SlotNow iteration 41 verification for (a) Admin SMS reminder_* fields, (b) Bulk Availability Schedule Grid page, (c) Customer Live Queue View pill on BookingDetail. Backend: 8/8 executed (1 correctly skipped) in /app/backend/tests/test_iter41.py — covering GET/PUT round-trip of reminder_template_id/reminder_var_ahead/reminder_var_name on /api/admin/settings/sms, admin-only + admin-phone-lockdown gating, /api/queue/my-position per-staff `wait` counting for hospital sub-doctor bookings (creates a same-day shift override on Cardio staff, books it, verifies wait=0 + staff_id echoed + reminder20_sent + reminder3_sent both TRUE, cleans up), analytics [7][24] heatmap regression, closed-override still blocks POST /bookings. Iter40 regression pytest still 18/18 pass. Frontend E2E via Playwright: admin/settings/sms shows all three admin-setting-reminder-* fields — typed values persist across PUT+reload (200 OK). /provider dashboard shows both provider-manage-staff and provider-schedule-grid cards side-by-side. /provider/schedule-grid renders [data-testid=schedule-grid] with grid-row-{staff_id} for both Cardio + Neuro, exactly 7 grid-cell-{sid}-{jsDay} cells per row, 7 grid-add-{sid}-{jsDay} buttons per row, and grid-copy-{sid}-1/2 (Mon/Tue) for Cardio which has existing shifts. grid-add-modal opens with grid-form-start/end/slot/max and grid-form-save — save fires POST /api/providers/me/staff/{id}/availability → 200. grid-copy-modal opens with 7 grid-copy-target-* buttons and grid-copy-confirm; source-day button is properly disabled. BookingDetail /bookings/{id} for the customer's confirmed booking renders [data-testid=booking-queue-position] as the prominent pill ('🟢 You’re up next!' for position 0). useLivePolling is active (~7 network fetches observed over ~9s while the tab is visible, ~4s cadence).",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "GET /api/admin/settings/sms", "issue": "Server does not merge SmsSettings() defaults over legacy stored docs. If the settings row was created before iter41, GET omits reminder_template_id/reminder_var_ahead/reminder_var_name until the first PUT — frontend then renders empty strings for the new inputs on first load (harmless, self-heals on Save). Recommend spreading `{**SmsSettings().model_dump(), **doc}` on GET so the new keys always surface."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "BookingDetail.jsx queuePos derivation", "issue": "For active (pending/confirmed) bookings that are NOT on today's date, /queue/my-position returns `{has_booking:false}`; the fallback `Math.max(0, 0 - 0 - 1) = 0` sets queuePos.position=0 and the prominent pill shows '🟢 You’re up next!' even though the appointment is days away. This misleads customers. Recommend guarding: only set queuePos when qp.has_booking === true AND qp.booking?.id === b.id, otherwise leave queuePos=null so the pill hides for future-dated bookings.", "selector": "[data-testid=booking-queue-position]", "priority": "MEDIUM"}
+    ],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "BookingDetail live-token card", "issues": ["'· Auto-refreshing every 4s' hint sits inside the same block that also gates on `queuePos.current_token != null`. When has_booking=false today, current_token stays null and the hint never renders — losing the reassurance UX. Move the auto-refresh hint outside the current_token conditional (still under isActive) so it always shows while polling."]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iter41.py",
+    "/app/test_reports/pytest/iter41.xml"
+  ],
+  "action_items": [
+    "(MEDIUM) In BookingDetail, do NOT show 'You’re up next!' pill for bookings not scheduled for today — gate on qp.has_booking===true AND qp.booking.id===b.id before setQueuePos.",
+    "(LOW) On GET /api/admin/settings/sms, merge stored doc over SmsSettings() defaults so legacy rows still surface the new reminder_* keys on first load.",
+    "(LOW) Move 'Auto-refreshing every 4s' hint out of the current_token-null conditional so the reassurance is always visible while useLivePolling is running."
+  ],
+  "critical_code_review_comments": [
+    "server.py is 3083 lines — split into routers is still overdue.",
+    "/queue/my-position uses `token_number > 0` in the ahead filter, which correctly excludes tokens that were never assigned; but ALSO silently returns wait=0 whenever the customer's own token_number is 0 (unassigned) — consider surfacing a distinct state instead of implying zero people ahead.",
+    "HospitalScheduleGrid.jsx Copy modal POSTs one availability rule per (source_shift × target_day) — verified once via UI, but there is no client-side dedupe; if the target day already contains an identical shift, the backend will happily create a duplicate row. Consider skipping targets where an equivalent shift already exists.",
+    "Admin SMS Settings save flow uses PUT /api/admin/settings/sms (Pydantic strict) — if the stored doc predates iter41, GET may return without new fields; the UI defensively defaults to '' but future field additions will require the same care."
+  ],
+  "updated_files": ["/app/backend/tests/test_iter41.py"],
+  "success_rate": {"backend": "100% (8/8 executed, iter40 regression 18/18)", "frontend": "83% (5/6 flows fully green; BookingDetail pill logic surfaces a UX bug for future-dated active bookings)"},
+  "test_credentials": "admin 9412575970/1234, hospital provider 9000000007/1234 (id 43b3a047-c937-4cf2-a707-7682ec732b34), customer 9000009999/1234, Cardio staff 4723b155-43f1-4a5e-9784-4cdf2782c37b, Neuro staff 7d7977aa-7d25-413d-8dd7-4d8bcbbbed51. Blocked admin phone for lockdown regression: 9999999999.",
+  "seed_data_creation": "TestQueueAheadIntegration creates one same-day shift override (23:00-23:45) on Cardio + one booking on it, then deletes both in a finally block. TestOverrideRegression creates and deletes one closed override on Cardio for today+60d. Admin SMS settings PUT reset back to the original document at end of test_put_persists_reminder_fields. The Playwright add-modal test created one shift on Neuro Wed 09:00-10:00 (id under provider 43b3a047…, staff 7d7977aa…) — this remains in the DB; main agent may want to clean it up manually if it interferes with future weekday-3 assertions.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Run `pytest backend/tests/test_iter41.py backend/tests/test_iter40_overrides_reminders_analytics.py backend/tests/test_hospital_staff_schedule.py -v` for full backend regression. Frontend E2E must set both slotnow_token AND slotnow_user in localStorage (NOT `token`/`user`) to bypass /login. Customer BookingDetail route is `/bookings/{id}` (plural). The customer 9000009999 has pre-seeded active bookings on 2026-08-03 and 2026-08-05 — /queue/my-position only counts TODAY (2026-08-02 under docker clock) so `has_booking:false`; to exercise the per-staff `wait` math you must create a same-day booking (see TestQueueAheadIntegration in test_iter41.py). Cardio schedule = Mon 10-13, Tue 15-18; Neuro = Mon 17-20 — Add-shift Playwright test used Neuro Wed 09:00-10:00 which may now exist as an artifact. AdminSettings Save button label is 'Save SMS settings'; toast waits ~2s. In HospitalScheduleGrid, jsDay uses JavaScript getDay() convention (0=Sun..6=Sat), NOT Python weekday()."
+}

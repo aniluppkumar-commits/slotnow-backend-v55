@@ -41,6 +41,10 @@ const SMS_DEFAULTS = {
   dlt_entity_id: "",
   dlt_variable_name: "num",
   enabled: false,
+  // Second DLT template for queue-position reminders (20 / 3 patients ahead)
+  reminder_template_id: "",
+  reminder_var_ahead: "num",
+  reminder_var_name: "name",
 };
 
 const PAYMENT_DEFAULTS = {
@@ -336,6 +340,46 @@ export default function AdminSettings() {
                   value={form.dlt_variable_name || ""}
                   onChange={(e) => set("dlt_variable_name", e.target.value)}
                   placeholder="num"
+                  className="w-full bg-cream border border-cream-300 rounded-xl px-3 py-2.5 text-ink font-medium outline-none focus:ring-2 focus:ring-forest/20 font-mono text-sm"
+                />
+              </Field>
+              {/* Queue-reminder DLT template — used for the "20 / 3 patients ahead"
+                  smart SMS. Keep empty until the DLT template is approved; queue
+                  reminders will still be logged into queue_reminders for audit. */}
+              <div className="col-span-full pt-3 mt-2 border-t border-cream-300">
+                <p className="text-xs font-bold uppercase tracking-widest text-ink-soft">Queue reminder template (optional)</p>
+                <p className="text-[11px] text-ink-muted mt-0.5">
+                  Second DLT-approved template used ONLY for the smart queue reminders (20 & 3 patients ahead).
+                  Leave blank while awaiting DLT approval — reminders are still logged, just not dispatched.
+                </p>
+              </div>
+              <Field label="Reminder template ID" hint="DLT template with variables {{name}} and {{num}} (patients ahead).">
+                <input
+                  data-testid="admin-setting-reminder-template-id"
+                  type="text"
+                  value={form.reminder_template_id || ""}
+                  onChange={(e) => set("reminder_template_id", e.target.value)}
+                  placeholder="1707169999999999999"
+                  className="w-full bg-cream border border-cream-300 rounded-xl px-3 py-2.5 text-ink font-medium outline-none focus:ring-2 focus:ring-forest/20 font-mono text-sm"
+                />
+              </Field>
+              <Field label="Reminder — 'patients ahead' variable" hint="Variable placeholder for the number of patients ahead (default: 'num').">
+                <input
+                  data-testid="admin-setting-reminder-var-ahead"
+                  type="text"
+                  value={form.reminder_var_ahead || ""}
+                  onChange={(e) => set("reminder_var_ahead", e.target.value)}
+                  placeholder="num"
+                  className="w-full bg-cream border border-cream-300 rounded-xl px-3 py-2.5 text-ink font-medium outline-none focus:ring-2 focus:ring-forest/20 font-mono text-sm"
+                />
+              </Field>
+              <Field label="Reminder — 'patient name' variable" hint="Variable placeholder for the patient's name (default: 'name').">
+                <input
+                  data-testid="admin-setting-reminder-var-name"
+                  type="text"
+                  value={form.reminder_var_name || ""}
+                  onChange={(e) => set("reminder_var_name", e.target.value)}
+                  placeholder="name"
                   className="w-full bg-cream border border-cream-300 rounded-xl px-3 py-2.5 text-ink font-medium outline-none focus:ring-2 focus:ring-forest/20 font-mono text-sm"
                 />
               </Field>

@@ -202,16 +202,28 @@ export default function ProviderDashboard() {
 
         {/* Hospital staff shortcut (only for hospital type) */}
         {profile?.id && profile?.provider_type === "hospital" && (
-          <button
-            data-testid="provider-manage-staff"
-            onClick={() => navigate("/provider/staff")}
-            className="w-full text-left bg-white border border-cream-300 rounded-2xl p-4 hover:border-forest transition-colors"
-          >
-            <p className="font-heading font-bold text-ink text-sm">Manage doctors & services</p>
-            <p className="text-[11px] text-ink-muted">
-              Add doctors and diagnostic services under your hospital
-            </p>
-          </button>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <button
+              data-testid="provider-manage-staff"
+              onClick={() => navigate("/provider/staff")}
+              className="text-left bg-white border border-cream-300 rounded-2xl p-4 hover:border-forest transition-colors"
+            >
+              <p className="font-heading font-bold text-ink text-sm">Manage doctors & services</p>
+              <p className="text-[11px] text-ink-muted">
+                Add doctors and diagnostic services under your hospital
+              </p>
+            </button>
+            <button
+              data-testid="provider-schedule-grid"
+              onClick={() => navigate("/provider/schedule-grid")}
+              className="text-left bg-white border border-cream-300 rounded-2xl p-4 hover:border-forest transition-colors"
+            >
+              <p className="font-heading font-bold text-ink text-sm">Bulk schedule grid</p>
+              <p className="text-[11px] text-ink-muted">
+                Fill 5-6 doctors' weekly shifts in one view & copy days across
+              </p>
+            </button>
+          </div>
         )}
 
         {/* Manage */}

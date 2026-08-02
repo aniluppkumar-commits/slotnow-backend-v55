@@ -2399,7 +2399,12 @@ async def queue_status_public(provider_id: str, date: Optional[str] = None):
 
 @api.get("/queue/my-position")
 async def my_queue_position(user: User = Depends(current_user)):
-    """Customer: today's active booking + queue state."""
+    """Customer: today's active booking + queue state.
+
+    For hospital sub-doctor bookings, the queue is scoped per staff so we count
+    active bookings in the same (provider, staff, date) with a smaller
+    token_number to derive the true 'patients ahead' count.
+    """
     await require_role(user, "customer")
     today = await get_today_str()
     booking = await db.bookings.find_one(
@@ -2412,14 +2417,27 @@ async def my_queue_position(user: User = Depends(current_user)):
     ) or {"current_token": 0, "last_assigned": 0}
     prov = await db.providers.find_one({"id": booking["provider_id"]}, {"_id": 0}) or {}
     enriched = await _enrich_booking(booking)
+    your_token = booking.get("token_number", 0)
+    # Per-staff wait: count active bookings ahead of you for the SAME staff scope
+    ahead_q: dict = {
+        "provider_id": booking["provider_id"],
+        "date": today,
+        "status": {"$in": ["pending", "confirmed"]},
+        "is_walkin": False,
+        "token_number": {"$lt": your_token, "$gt": 0},
+    }
+    if booking.get("staff_id"):
+        ahead_q["staff_id"] = booking["staff_id"]
+    ahead = await db.bookings.count_documents(ahead_q)
     return {
         "has_booking": True,
         "booking": enriched,
         "provider_on_duty": prov.get("on_duty", True),
         "current_token": state.get("current_token", 0),
         "last_assigned": state.get("last_assigned", 0),
-        "your_token": booking.get("token_number", 0),
-        "wait": max(0, booking.get("token_number", 0) - max(state.get("current_token", 0), 1)),
+        "your_token": your_token,
+        "wait": ahead,
+        "staff_id": booking.get("staff_id"),
     }
 
 
