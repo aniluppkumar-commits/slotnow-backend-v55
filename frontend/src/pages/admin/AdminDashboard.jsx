@@ -28,16 +28,19 @@ export default function AdminDashboard() {
   const [q, setQ] = useState("");
   const [busyId, setBusyId] = useState(null);
   const [bulkBusy, setBulkBusy] = useState(false);
+  const [subs, setSubs] = useState(null);
 
   const load = useCallback(async () => {
     try {
-      const [sRes, pRes] = await Promise.all([
+      const [sRes, pRes, subRes] = await Promise.all([
         api.get("/admin/stats").catch(() => ({ data: null })),
         api.get("/admin/providers").catch(() => ({ data: [] })),
+        api.get("/admin/subscription-analytics").catch(() => ({ data: null })),
       ]);
       setStats(sRes.data);
       const list = Array.isArray(pRes.data) ? pRes.data : (pRes.data?.items || []);
       setProviders(list);
+      setSubs(subRes.data);
     } finally {
       setLoading(false);
     }
@@ -161,6 +164,49 @@ export default function AdminDashboard() {
           </div>
         ) : (
           <p className="text-xs text-ink-soft italic">Stats endpoint returned no data</p>
+        )}
+
+        {subs && (
+          <div className="bg-white border border-cream-300 rounded-2xl p-4" data-testid="admin-subs-card">
+            <div className="flex items-start justify-between gap-2 mb-3">
+              <div>
+                <p className="text-[10px] font-bold uppercase tracking-widest text-accent">Subscriptions</p>
+                <h3 className="font-heading font-black text-ink">Provider Pro plans</h3>
+              </div>
+              <div className="text-right">
+                <p className="font-heading text-2xl font-black text-forest">
+                  ₹{(subs.mrr_paise / 100).toLocaleString("en-IN")}
+                </p>
+                <p className="text-[10px] font-bold uppercase tracking-widest text-ink-muted">MRR</p>
+              </div>
+            </div>
+            <div className="grid grid-cols-3 gap-2 mb-3 text-center">
+              <div className="bg-emerald-50 rounded-lg py-2">
+                <p className="text-xl font-black text-emerald-800">{subs.active_count}</p>
+                <p className="text-[10px] font-bold text-emerald-700 uppercase">Active</p>
+              </div>
+              <div className="bg-amber-50 rounded-lg py-2">
+                <p className="text-xl font-black text-amber-800">{subs.expired_count}</p>
+                <p className="text-[10px] font-bold text-amber-700 uppercase">Expired</p>
+              </div>
+              <div className="bg-cream rounded-lg py-2">
+                <p className="text-xl font-black text-ink">{subs.total_subscriptions}</p>
+                <p className="text-[10px] font-bold text-ink-muted uppercase">Total</p>
+              </div>
+            </div>
+            {subs.by_plan?.length > 0 && (
+              <div className="space-y-1.5">
+                {subs.by_plan.map((row) => (
+                  <div key={row.plan_id} className="flex items-center justify-between text-xs bg-cream rounded-lg px-3 py-1.5">
+                    <span className="font-bold text-ink">{row.plan_name}</span>
+                    <span className="text-ink-soft">
+                      {row.active} active · ₹{(row.monthly_paise / 100).toLocaleString("en-IN")}/mo
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
         )}
 
         {/* Quick actions */}

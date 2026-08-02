@@ -301,6 +301,45 @@ export default function LandingPage() {
         </div>
       </section>
 
+      {/* Featured providers strip */}
+      {providers.filter((p) => p.is_featured).length > 0 && (
+        <section className="max-w-6xl mx-auto px-4 sm:px-6 pt-4 pb-2">
+          <div className="flex items-end justify-between gap-4 mb-4">
+            <div>
+              <p className="text-xs font-bold uppercase tracking-widest text-accent mb-1">
+                ★ Featured
+              </p>
+              <h2 className="font-heading text-2xl sm:text-3xl font-black text-ink">
+                Handpicked for you
+              </h2>
+            </div>
+          </div>
+          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            {providers.filter((p) => p.is_featured).slice(0, 3).map((p) => (
+              <Link
+                key={p.id}
+                to={`/p/${p.id}`}
+                data-testid={`landing-featured-${p.id}`}
+                className="bg-gradient-to-br from-white to-cream rounded-2xl border-2 border-accent/40 hover:border-accent hover:shadow-xl transition-all overflow-hidden"
+              >
+                {p.image && (
+                  <div className="h-32 w-full bg-cream-200 overflow-hidden">
+                    <img src={p.image} alt={p.business_name} className="w-full h-full object-cover" loading="lazy" />
+                  </div>
+                )}
+                <div className="p-4">
+                  <span className="inline-block text-[10px] font-bold uppercase tracking-widest text-accent-dark bg-accent/10 px-2 py-0.5 rounded-full mb-1">
+                    ★ Featured
+                  </span>
+                  <p className="font-bold text-ink truncate">{p.business_name}</p>
+                  {p.city && <p className="text-xs text-ink-muted">{p.city}</p>}
+                </div>
+              </Link>
+            ))}
+          </div>
+        </section>
+      )}
+
       {/* Categories */}
       <section id="categories" className="max-w-6xl mx-auto px-4 sm:px-6 py-16">
         <div className="flex items-end justify-between mb-8 gap-4 flex-wrap">

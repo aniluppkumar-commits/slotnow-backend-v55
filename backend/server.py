@@ -2024,7 +2024,123 @@ async def admin_providers(user: User = Depends(current_user), approved: Optional
     q = {}
     if approved is not None:
         q["approved"] = approved
-    return await db.providers.find(q, {"_id": 0}).sort("created_at", -1).to_list(500)
+    providers = await db.providers.find(q, {"_id": 0}).sort("created_at", -1).to_list(500)
+    # Enrich each provider with current subscription status for admin visibility.
+    now = datetime.now(timezone.utc)
+    subs = await db.subscriptions.find({}, {"_id": 0}).to_list(5000)
+    latest_by_provider = {}
+    for s in subs:
+        prev = latest_by_provider.get(s.get("provider_id"))
+        if not prev or (s.get("created_at") and s["created_at"] > prev.get("created_at", datetime.min.replace(tzinfo=timezone.utc))):
+            latest_by_provider[s["provider_id"]] = s
+    for p in providers:
+        s = latest_by_provider.get(p["id"])
+        p["subscription_plan"] = s.get("plan_id") if s else None
+        if s and s.get("status") == "active" and s.get("expires_at") and s["expires_at"] > now:
+            p["subscription_status"] = "active"
+            p["subscription_expires_at"] = s["expires_at"].isoformat() if hasattr(s["expires_at"], "isoformat") else s["expires_at"]
+        elif s:
+            p["subscription_status"] = "expired" if s.get("status") == "active" else s.get("status")
+        else:
+            p["subscription_status"] = "none"
+    return providers
+
+
+@api.get("/admin/subscription-analytics")
+async def admin_subscription_analytics(user: User = Depends(current_user)):
+    """Overview card data: active subs, MRR, breakdown by plan (30-day equivalent)."""
+    await require_role(user, "admin")
+    now = datetime.now(timezone.utc)
+    subs = await db.subscriptions.find({}, {"_id": 0}).to_list(5000)
+    plans_by_id = {p["id"]: p for p in SUBSCRIPTION_PLANS}
+    active = [s for s in subs if s.get("status") == "active" and s.get("expires_at") and s["expires_at"] > now]
+    expired = [s for s in subs if s.get("status") == "active" and s.get("expires_at") and s["expires_at"] <= now]
+    mrr_paise = 0
+    by_plan: dict = {}
+    for s in active:
+        plan = plans_by_id.get(s.get("plan_id"))
+        if not plan:
+            continue
+        # Normalise every plan's contribution to 30-day equivalent for MRR.
+        monthly_paise = int(round(plan["price_paise"] * 30.0 / max(1, plan["duration_days"])))
+        mrr_paise += monthly_paise
+        row = by_plan.setdefault(plan["id"], {"plan_id": plan["id"], "plan_name": plan["name"], "active": 0, "monthly_paise": 0})
+        row["active"] += 1
+        row["monthly_paise"] += monthly_paise
+    return {
+        "active_count": len(active),
+        "expired_count": len(expired),
+        "total_subscriptions": len(subs),
+        "mrr_paise": mrr_paise,
+        "by_plan": list(by_plan.values()),
+    }
+
+
+@api.get("/admin/referrals")
+async def admin_referrals(user: User = Depends(current_user)):
+    """Referral tracking + commission-status view. Groups users referred by each
+    marketer / provider (via ``referred_by``) and enriches referred providers
+    with their current subscription status so commissions can be reconciled."""
+    await require_role(user, "admin")
+    now = datetime.now(timezone.utc)
+    all_users = await db.users.find({}, {"_id": 0}).to_list(5000)
+    by_phone = {u.get("phone"): u for u in all_users if u.get("phone")}
+    providers = await db.providers.find({}, {"_id": 0}).to_list(5000)
+    prov_by_user = {p["user_id"]: p for p in providers}
+    subs = await db.subscriptions.find({}, {"_id": 0}).to_list(5000)
+    latest_sub_by_provider = {}
+    for s in subs:
+        prev = latest_sub_by_provider.get(s.get("provider_id"))
+        if not prev or (s.get("created_at") and s["created_at"] > prev.get("created_at", datetime.min.replace(tzinfo=timezone.utc))):
+            latest_sub_by_provider[s["provider_id"]] = s
+
+    def _sub_status(prov_id):
+        s = latest_sub_by_provider.get(prov_id)
+        if not s:
+            return "none", None, None
+        if s.get("status") == "active" and s.get("expires_at") and s["expires_at"] > now:
+            return "active", s.get("plan_id"), s["expires_at"].isoformat() if hasattr(s["expires_at"], "isoformat") else s["expires_at"]
+        if s.get("status") == "active":
+            return "expired", s.get("plan_id"), s["expires_at"].isoformat() if s.get("expires_at") and hasattr(s["expires_at"], "isoformat") else s.get("expires_at")
+        return s.get("status", "none"), s.get("plan_id"), None
+
+    referrers = {}
+    for u in all_users:
+        if not u.get("via_referral") or not u.get("referred_by"):
+            continue
+        key = u["referred_by"]
+        entry = referrers.setdefault(key, {
+            "referrer_phone": key,
+            "referrer_name": (by_phone.get(key) or {}).get("name", ""),
+            "total": 0, "customers": 0, "providers": 0, "active_subs": 0,
+            "referred": [],
+        })
+        entry["total"] += 1
+        prov = prov_by_user.get(u["id"])
+        sub_status, sub_plan, sub_expires = "none", None, None
+        if prov:
+            entry["providers"] += 1
+            sub_status, sub_plan, sub_expires = _sub_status(prov["id"])
+            if sub_status == "active":
+                entry["active_subs"] += 1
+        else:
+            entry["customers"] += 1
+        entry["referred"].append({
+            "user_id": u["id"],
+            "name": u.get("name", ""),
+            "phone": u.get("phone", ""),
+            "role": u.get("role", "customer"),
+            "created_at": u.get("created_at").isoformat() if hasattr(u.get("created_at"), "isoformat") else u.get("created_at"),
+            "is_provider": bool(prov),
+            "provider_id": prov.get("id") if prov else None,
+            "business_name": prov.get("business_name") if prov else None,
+            "subscription_status": sub_status,
+            "subscription_plan": sub_plan,
+            "subscription_expires_at": sub_expires,
+        })
+    rows = list(referrers.values())
+    rows.sort(key=lambda r: (-r["active_subs"], -r["providers"], -r["total"]))
+    return {"referrers": rows, "count": len(rows)}
 
 
 @api.put("/admin/providers/{pid}/approve")

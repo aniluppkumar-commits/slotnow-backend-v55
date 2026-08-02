@@ -6,23 +6,44 @@ import { Loader2, Users, Share2, Search, Trophy } from "lucide-react";
 export default function AdminReferrals() {
   const [users, setUsers] = useState([]);
   const [bookings, setBookings] = useState([]);
+  const [refData, setRefData] = useState(null);  // rich data from /admin/referrals endpoint
   const [loading, setLoading] = useState(true);
   const [q, setQ] = useState("");
 
   useEffect(() => {
     (async () => {
       try {
-        const [uRes, bRes] = await Promise.all([
+        const [uRes, bRes, rRes] = await Promise.all([
           api.get("/admin/users").catch(() => ({ data: [] })),
           api.get("/admin/bookings").catch(() => ({ data: [] })),
+          api.get("/admin/referrals").catch(() => ({ data: null })),
         ]);
         setUsers(Array.isArray(uRes.data) ? uRes.data : uRes.data?.items || []);
         setBookings(Array.isArray(bRes.data) ? bRes.data : bRes.data?.items || []);
+        setRefData(rRes.data);
       } finally {
         setLoading(false);
       }
     })();
   }, []);
+
+  const subInfoByPhone = useMemo(() => {
+    const map = {};
+    (refData?.referrers || []).forEach((r) => {
+      (r.referred || []).forEach((u) => {
+        if (u.phone) {
+          map[u.phone] = {
+            business_name: u.business_name,
+            is_provider: u.is_provider,
+            subscription_status: u.subscription_status,
+            subscription_plan: u.subscription_plan,
+            subscription_expires_at: u.subscription_expires_at,
+          };
+        }
+      });
+    });
+    return map;
+  }, [refData]);
 
   const referralAgg = useMemo(() => {
     // Group users by referred_by (the referrer's phone). Referred users have via_referral=true.
@@ -139,14 +160,33 @@ export default function AdminReferrals() {
                         </span>
                         <span className="ml-auto font-bold text-ink">{rate}%</span>
                       </div>
-                      {/* Referred list preview */}
+                      {/* Referred list preview with subscription status */}
                       {r.referred.length > 0 && (
                         <div className="mt-2 flex flex-wrap gap-1">
-                          {r.referred.slice(0, 6).map((u) => (
-                            <span key={u.id} className="text-[10px] bg-cream-200 text-ink-soft px-1.5 py-0.5 rounded">
-                              +91 {u.phone}
-                            </span>
-                          ))}
+                          {r.referred.slice(0, 6).map((u) => {
+                            const info = subInfoByPhone[u.phone];
+                            const status = info?.subscription_status;
+                            const isProvider = info?.is_provider;
+                            const cls = status === "active"
+                              ? "bg-emerald-100 text-emerald-800"
+                              : status === "expired"
+                              ? "bg-amber-100 text-amber-800"
+                              : isProvider
+                              ? "bg-forest-faint text-forest"
+                              : "bg-cream-200 text-ink-soft";
+                            const label = status === "active"
+                              ? " · Active"
+                              : status === "expired"
+                              ? " · Expired"
+                              : isProvider
+                              ? " · Provider"
+                              : "";
+                            return (
+                              <span key={u.id} className={`text-[10px] px-1.5 py-0.5 rounded ${cls}`}>
+                                +91 {u.phone}{label}
+                              </span>
+                            );
+                          })}
                           {r.referred.length > 6 && (
                             <span className="text-[10px] text-ink-muted">+{r.referred.length - 6} more</span>
                           )}
