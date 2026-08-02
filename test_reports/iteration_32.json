@@ -1,0 +1,45 @@
+{
+  "summary": "SlotNow iteration 42 verification of 6 UI fixes + backend regression. Backend: 6/6 iter42 tests pass in /app/backend/tests/test_iter42.py (category.name on GET /providers/{id} ✓, freeform 'Other' specialization on POST /providers/me/staff ✓, /search/providers?lat=&lng= sort-by-distance shape ✓); iter40 + iter41 suites remain green (44/47 passing, 3 pre-existing failures in test_hospital_staff_schedule.py unrelated to this iteration — Cardio-Mon booking now 400s with 'day marked unavailable', pre-existing closed-override artifact). Frontend E2E: (1) /login on mobile (420w) renders 2× /logo.png imgs and 0× SlotNowMark SVG ✓ (2) Landing/CustomerSearch/PublicProviderPage/CityPublicPage/CategoryPublicPage all render /logo.png at h-12 w-12 (grep-verified across all 5 headers) ✓ (3) /home shows home-nearby-btn + home-doctor-type + home-filters-clear; selecting a doctor-type fires GET /search/providers?specialization=Physician&limit=60, clicking Nearby (with granted geolocation permission @12.9716,77.5946) fires GET /search/providers?lat=12.9716&lng=77.5946&limit=60, Clear resets doctor-type to '' ✓ (4) /book/{hospital_id} renders [data-testid=staff-group-doctor] with 'Doctors (2)' heading; [data-testid=staff-group-service] correctly ABSENT since TestHospital only has doctor-kind staff (matches spec) ✓ (5) /provider/queue as hospital provider — Walk-in modal does NOT render walkin-vehicle-reg / walkin-vehicle-model ✓ (6) /provider/services — service-type-input has 'hidden' class ✓ (7) /provider/staff Add doctor modal — Specialization dropdown last option = '__other__' 'Other (specify below)'; selecting it reveals [data-testid=staff-spec-other] input; page renders 'Other Services' heading ✓.",
+  "backend_issues": {
+    "critical": [
+      {"endpoint": "GET /api/providers/me", "issue": "Endpoint does NOT exist in backend (returns 404 'Not found'). Frontend ProviderQueue.jsx line 27 and ProviderServices.jsx line 22 both call api.get('/providers/me').catch(()=>({data:null})) expecting the {provider,services,category,has_availability} shape that /providers/{provider_id} returns. Because the 404 is swallowed, `profile` stays null, catName stays undefined, isAutomobileProvider(profile)===false ALWAYS. For a real Automobile provider, walkin-vehicle-reg/walkin-vehicle-model inputs will NEVER appear and service-type-input will ALWAYS have 'hidden' — feature 2 & 3 gating is broken end-to-end for the Automobile use case even though it happens to produce the correct 'hidden' outcome for the hospital happy-path. Observed 5+ concurrent 404s on /api/providers/me while loading /provider/queue in the E2E run.", "priority": "HIGH"}
+    ],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "ProviderQueue.jsx / ProviderServices.jsx", "issue": "Both files call api.get('/providers/me') which 404s. Either (a) backend must add a GET /api/providers/me alias that returns {provider,services,category,...} for the authenticated provider, OR (b) frontend must call GET /api/providers/me/profile (which works, returns profile with category_id only) and then join with GET /api/categories to derive category.name. Without one of these, the Automobile-only vehicle fields will never appear for actual Automobile providers.", "selector": "n/a (network layer)", "priority": "HIGH"}
+    ],
+    "integration_issues": [
+      {"flow": "ProviderQueue walk-in modal for Automobile category", "issue": "Because /providers/me 404s, isAutomobile is always false — walk-in vehicle inputs will NEVER show for a real Automobile provider (regression from the intent of feature #2).", "affected_selectors": ["[data-testid=walkin-vehicle-reg]", "[data-testid=walkin-vehicle-model]"]},
+      {"flow": "ProviderServices vehicle-type gating", "issue": "Same root cause — service-type-input keeps 'hidden' class even when provider IS Automobile. Regression from feature #3 intent.", "affected_selectors": ["[data-testid=service-type-input]"]}
+    ],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iter42.py",
+    "/app/test_reports/pytest/iter42.xml",
+    "/app/test_reports/pytest/iter42_full.xml"
+  ],
+  "action_items": [
+    "(HIGH) Fix isAutomobile gating: either add backend GET /api/providers/me (returning same shape as /providers/{id}, resolved from user.id → provider) OR change ProviderQueue.jsx & ProviderServices.jsx to hit /providers/me/profile + /categories and derive category.name client-side. Without this, features #2 and #3 don't actually work for Automobile providers.",
+    "(LOW) Pre-existing test_hospital_staff_schedule.py has 3 failures (Cardio Mon slots + booking) because Cardio is unavailable-marked on the test day. This is stale test seed state, not an iter42 regression. Main agent may want to clean the override.",
+    "(LOW / iter41 carryover) BookingDetail queuePos still shows 'You're up next' for non-today active bookings — from iter41 report; not re-tested this iteration but still open."
+  ],
+  "critical_code_review_comments": [
+    "providerType.js correctly normalizes case and reads provider.category_name || provider.category?.name — clean helper. The bug is upstream: the API being called doesn't return anything (404).",
+    "ProviderQueue.jsx and ProviderServices.jsx use .catch(() => ({ data: null })) around /providers/me — this silently masks the 404. Consider logging or surfacing a warning so future breakages are caught.",
+    "server.py exposes /providers/{provider_id} publicly returning {provider,services,category,...} — an authenticated-shortcut /providers/me returning the same shape would be a 5-line addition and unblock feature #2/#3.",
+    "Home.jsx re-fetches on [doctorType, geo] change and correctly skips the initial mount when both are empty (line 54) — good perf. clearFilters resets both — good.",
+    "Search.providers Haversine fallback: providers list without `location` GeoJSON field (most seeded rows have latitude:null, longitude:null on TestHospital) means lat/lng search returns [] for them. This is functionally correct but worth surfacing an empty-state UX on /home when Nearby yields 0 results.",
+    "HospitalStaff.jsx strips specialization_choice from payload before POST (line 87) — clean. Good."
+  ],
+  "updated_files": ["/app/backend/tests/test_iter42.py"],
+  "success_rate": {"backend": "100% (6/6 iter42 tests pass; 44/47 across iter40+41+42 with 3 pre-existing hospital-schedule failures)", "frontend": "83% (5/6 features fully verified; features #2 and #3 pass for the hospital happy-path but the underlying isAutomobile mechanism is broken due to /providers/me 404 — feature intent is not met for Automobile providers)"},
+  "test_credentials": "customer 9000009999/1234, hospital provider 9000000007/1234 (id 43b3a047-c937-4cf2-a707-7682ec732b34), admin 9412575970/1234. No Automobile provider was promoted (would require mongo write) — flagged in action items.",
+  "seed_data_creation": "TestStaffCustomSpecialization creates one TEST_CustomSpec_<uuid> hospital staff row and deletes it in a finally block. No other seed data touched.",
+  "retest_needed": true,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "The frontend calls GET /api/providers/me in ProviderQueue.jsx (line 27) and ProviderServices.jsx (line 22) but backend has NO such endpoint — only /providers/me/profile (returns profile without category object) and /providers/{provider_id} (public, returns {provider,services,category,...}). E2E happens to show the 'correct' outcome for a hospital because isAutomobile ends up false either way. To exercise the real Automobile path once main agent fixes the endpoint, promote QuickWheels (user 8888800002, provider id 3610a6f1-4cf4-4f03-94c5-b9795ccefd9b) or any pin-enabled provider to category name 'Automobile' via mongo — DO NOT touch TestHospital (43b3a047…). Iter42 pytest file is /app/backend/tests/test_iter42.py and it currently asserts /providers/me returns 404 as a documented gap — flip that assertion to 200 + category.name once the endpoint is added.",
+  "rca of the issue": "Root cause of the /providers/me 404: server.py only defines @api.get('/providers/{provider_id}') (line 1181) and @api.get('/providers/me/profile') (line 1193). FastAPI matches '/providers/me' against the {provider_id} route → looks up db.providers.find_one({id:'me'}) → returns None → 404 'Not found'. Frontend swallows the 404 via .catch, leaving profile=null, so isAutomobileProvider(null)===false always. Mitigation options: (1) add @api.get('/providers/me') returning the same {provider,services,category,...} bundle for the authenticated user's provider, OR (2) in the two frontend consumers, use /providers/me/profile + join /categories client-side."
+}

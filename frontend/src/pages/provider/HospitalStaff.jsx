@@ -75,15 +75,17 @@ export default function HospitalStaff() {
 
   const submit = async () => {
     if (!form.name?.trim()) return toast.error("Name is required");
-    if (form.kind === "doctor" && !form.specialization) {
-      return toast.error("Please select specialization");
+    if (form.kind === "doctor" && !form.specialization?.trim()) {
+      return toast.error("Please select or type specialization");
     }
     if (form.kind === "service" && (!form.service_tags || form.service_tags.length === 0)) {
       return toast.error("Please select at least one service");
     }
     setSaving(true);
     try {
-      await api.post("/providers/me/staff", form);
+      // Strip UI-only helper field before hitting the API
+      const { specialization_choice, ...payload } = form;
+      await api.post("/providers/me/staff", payload);
       toast.success(form.kind === "doctor" ? "Doctor added" : "Service center added");
       closeModal();
       load();
@@ -174,7 +176,7 @@ export default function HospitalStaff() {
           <div className="flex items-center justify-between mb-3">
             <div className="flex items-center gap-2">
               <Building2 size={16} className="text-accent" />
-              <h2 className="font-heading font-black text-lg">Service centers</h2>
+              <h2 className="font-heading font-black text-lg">Other Services</h2>
               <span className="text-xs text-ink-muted">({services.length})</span>
             </div>
             <button
@@ -261,15 +263,36 @@ export default function HospitalStaff() {
                   </label>
                   <select
                     data-testid="staff-spec"
-                    value={form.specialization || ""}
-                    onChange={(e) => setForm({ ...form, specialization: e.target.value })}
+                    value={form.specialization_choice ?? (
+                      form.specialization && !(reference?.specializations || []).includes(form.specialization)
+                        ? "__other__"
+                        : (form.specialization || "")
+                    )}
+                    onChange={(e) => {
+                      const v = e.target.value;
+                      if (v === "__other__") {
+                        setForm({ ...form, specialization_choice: "__other__", specialization: form.specialization && !(reference?.specializations || []).includes(form.specialization) ? form.specialization : "" });
+                      } else {
+                        setForm({ ...form, specialization_choice: v, specialization: v });
+                      }
+                    }}
                     className="w-full px-3 py-2 rounded-xl bg-cream border border-cream-300 focus:border-forest focus:outline-none text-sm"
                   >
                     <option value="">— Select —</option>
                     {(reference?.specializations || []).map((s) => (
                       <option key={s} value={s}>{s}</option>
                     ))}
+                    <option value="__other__">Other (specify below)</option>
                   </select>
+                  {form.specialization_choice === "__other__" && (
+                    <input
+                      data-testid="staff-spec-other"
+                      value={form.specialization || ""}
+                      onChange={(e) => setForm({ ...form, specialization: e.target.value })}
+                      placeholder="Type doctor type / specialization"
+                      className="w-full mt-2 px-3 py-2 rounded-xl bg-cream border border-cream-300 focus:border-forest focus:outline-none text-sm"
+                    />
+                  )}
                 </div>
               )}
               {modalKind === "service" && (

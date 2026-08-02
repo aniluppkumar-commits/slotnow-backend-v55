@@ -196,7 +196,7 @@ export default function LandingPage() {
       <header className="sticky top-0 z-40 backdrop-blur-xl bg-cream/90 border-b border-cream-300">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 py-3 flex items-center justify-between">
           <Link to="/" data-testid="landing-brand" className="flex items-center gap-2.5">
-            <img src="/logo.png" alt="SlotNow" className="h-10 w-10 object-contain" />
+            <img src="/logo.png" alt="SlotNow" className="h-12 w-12 object-contain" />
             <span className="font-heading font-extrabold text-2xl tracking-tight">
               <span className="text-forest">Slot</span>
               <span className="text-accent">Now</span>
@@ -544,7 +544,7 @@ export default function LandingPage() {
           <div className="grid md:grid-cols-4 gap-8">
             <div className="md:col-span-2">
               <div className="flex items-center gap-2.5 mb-4">
-                <img src="/logo.png" alt="SlotNow" className="h-9 w-9 object-contain bg-white rounded-lg p-1" />
+                <img src="/logo.png" alt="SlotNow" className="h-12 w-12 object-contain bg-white rounded-lg p-1" />
                 <span className="font-heading font-extrabold text-2xl">
                   <span className="text-white">Slot</span>
                   <span className="text-accent">Now</span>

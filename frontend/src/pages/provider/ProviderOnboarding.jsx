@@ -223,15 +223,38 @@ export default function ProviderOnboarding() {
                   <Field label="Doctor specialization">
                     <select
                       data-testid="onboarding-specialization"
-                      value={form.specialization}
-                      onChange={(e) => setForm({ ...form, specialization: e.target.value })}
+                      value={form.specialization_choice ?? (
+                        form.specialization && !(reference?.specializations || []).includes(form.specialization)
+                          ? "__other__"
+                          : (form.specialization || "")
+                      )}
+                      onChange={(e) => {
+                        const v = e.target.value;
+                        if (v === "__other__") {
+                          setForm({ ...form, specialization_choice: "__other__", specialization: form.specialization && !(reference?.specializations || []).includes(form.specialization) ? form.specialization : "" });
+                        } else {
+                          setForm({ ...form, specialization_choice: v, specialization: v });
+                        }
+                      }}
                       className="w-full bg-transparent outline-none text-ink font-medium"
                     >
                       <option value="">— Select specialization —</option>
                       {(reference?.specializations || []).map((s) => (
                         <option key={s} value={s}>{s}</option>
                       ))}
+                      <option value="__other__">Other (specify below)</option>
                     </select>
+                  </Field>
+                )}
+                {isClinic && form.specialization_choice === "__other__" && (
+                  <Field label="Custom specialization">
+                    <input
+                      data-testid="onboarding-specialization-other"
+                      value={form.specialization || ""}
+                      onChange={(e) => setForm({ ...form, specialization: e.target.value })}
+                      placeholder="Type doctor type / specialization"
+                      className="w-full bg-transparent outline-none text-ink font-medium"
+                    />
                   </Field>
                 )}
                 {showServices && (

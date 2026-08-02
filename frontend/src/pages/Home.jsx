@@ -6,7 +6,8 @@ import { useI18n } from "@/i18n";
 import AppShell from "@/components/AppShell";
 import CategoryIcon from "@/components/CategoryIcon";
 import { catStyle } from "@/lib/utils-app";
-import { Search, Star, MapPin, Bell, TrendingUp, Loader2 } from "lucide-react";
+import { Search, Star, MapPin, Bell, TrendingUp, Loader2, Locate, X } from "lucide-react";
+import { toast } from "sonner";
 
 export default function Home() {
   const navigate = useNavigate();
@@ -17,20 +18,27 @@ export default function Home() {
   const [notifCount, setNotifCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const [query, setQuery] = useState("");
+  const [specializations, setSpecializations] = useState([]);
+  const [doctorType, setDoctorType] = useState("");
+  const [geo, setGeo] = useState(null); // { lat, lng }
+  const [locating, setLocating] = useState(false);
+  const [searching, setSearching] = useState(false);
 
   useEffect(() => {
     let mounted = true;
     (async () => {
       try {
-        const [catRes, provRes, notifRes] = await Promise.all([
+        const [catRes, provRes, notifRes, refRes] = await Promise.all([
           api.get("/categories"),
           api.get("/providers"),
           api.get("/notifications").catch(() => ({ data: [] })),
+          api.get("/reference/healthcare").catch(() => ({ data: { specializations: [] } })),
         ]);
         if (!mounted) return;
         setCategories(catRes.data || []);
         setProviders(provRes.data || []);
         setNotifCount((notifRes.data || []).filter((n) => !n.read).length);
+        setSpecializations(refRes.data?.specializations || []);
       } catch (err) {
         console.error("Home data load failed:", err);
       } finally {
@@ -39,6 +47,44 @@ export default function Home() {
     })();
     return () => (mounted = false);
   }, []);
+
+  // Re-fetch providers whenever the smart filters change (nearby / doctor type).
+  useEffect(() => {
+    // Only re-run when a smart filter is active; otherwise keep the initial /providers list.
+    if (!doctorType && !geo) return;
+    const params = new URLSearchParams();
+    if (doctorType) params.set("specialization", doctorType);
+    if (geo) {
+      params.set("lat", String(geo.lat));
+      params.set("lng", String(geo.lng));
+    }
+    params.set("limit", "60");
+    setSearching(true);
+    api
+      .get(`/search/providers?${params.toString()}`)
+      .then((r) => setProviders(r.data || []))
+      .catch(() => setProviders([]))
+      .finally(() => setSearching(false));
+  }, [doctorType, geo]);
+
+  const useMyLocation = () => {
+    if (!navigator.geolocation) return toast.error("Location not supported");
+    setLocating(true);
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        setGeo({ lat: pos.coords.latitude, lng: pos.coords.longitude });
+        setLocating(false);
+        toast.success("Showing providers nearby you");
+      },
+      () => { setLocating(false); toast.error("Could not access location"); },
+      { enableHighAccuracy: true, timeout: 8000 },
+    );
+  };
+
+  const clearFilters = () => {
+    setDoctorType("");
+    setGeo(null);
+  };
 
   const filtered = useMemo(() => {
     if (!query.trim()) return providers;
@@ -85,7 +131,7 @@ export default function Home() {
         </div>
 
         {/* Search */}
-        <div className="relative mb-6">
+        <div className="relative mb-3">
           <Search
             size={18}
             className="absolute left-4 top-1/2 -translate-y-1/2 text-ink-soft"
@@ -98,6 +144,51 @@ export default function Home() {
             onChange={(e) => setQuery(e.target.value)}
             className="w-full bg-white border border-cream-300 rounded-2xl pl-11 pr-4 py-3.5 text-sm text-ink placeholder:text-ink-muted focus:ring-2 focus:ring-forest/15 focus:border-forest outline-none transition-all"
           />
+        </div>
+
+        {/* Smart filters: Nearby + Doctor Type */}
+        <div className="flex flex-wrap items-center gap-2 mb-6">
+          <button
+            data-testid="home-nearby-btn"
+            onClick={useMyLocation}
+            disabled={locating}
+            className={`inline-flex items-center gap-1.5 text-xs font-bold px-3 py-2 rounded-full transition-all disabled:opacity-60 ${
+              geo
+                ? "bg-forest text-cream-100"
+                : "bg-white text-ink border border-cream-300 hover:border-forest"
+            }`}
+          >
+            {locating ? <Loader2 size={13} className="animate-spin" /> : <Locate size={13} />}
+            {geo ? "Nearby (active)" : "Find nearby"}
+          </button>
+          <div className="relative inline-flex">
+            <select
+              data-testid="home-doctor-type"
+              value={doctorType}
+              onChange={(e) => setDoctorType(e.target.value)}
+              className={`appearance-none pl-3 pr-8 py-2 rounded-full text-xs font-bold border ${
+                doctorType
+                  ? "bg-forest text-cream-100 border-forest"
+                  : "bg-white text-ink border-cream-300 hover:border-forest"
+              } focus:outline-none`}
+            >
+              <option value="">Doctor type</option>
+              {specializations.map((s) => (
+                <option key={s} value={s}>{s}</option>
+              ))}
+            </select>
+            <svg className={`pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 ${doctorType ? "text-cream-100" : "text-ink-muted"}`} width="10" height="6" viewBox="0 0 10 6" fill="none"><path d="M1 1L5 5L9 1" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/></svg>
+          </div>
+          {(doctorType || geo) && (
+            <button
+              data-testid="home-filters-clear"
+              onClick={clearFilters}
+              className="inline-flex items-center gap-1 text-xs font-semibold text-rose-500 hover:underline"
+            >
+              <X size={12} /> Clear
+            </button>
+          )}
+          {searching && <Loader2 size={13} className="animate-spin text-forest" />}
         </div>
 
         {/* Categories */}

@@ -6,8 +6,7 @@ import { useI18n } from "@/i18n";
 import { generateTimeSlots, nextNDays, formatTime, todayISO } from "@/lib/utils-app";
 import { Loader2, Clock, IndianRupee, Calendar as CalIcon, CheckCircle2, Car } from "lucide-react";
 import { toast } from "sonner";
-
-const AUTOMOBILE_CAT_ID = "333a2602-2d4a-4e16-a9da-3e004b0e14fd";
+import { isAutomobileProvider } from "@/lib/providerType";
 
 export default function BookSlot() {
   const { providerId } = useParams();
@@ -31,7 +30,7 @@ export default function BookSlot() {
   const [loadingSlots, setLoadingSlots] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
-  const isAutomobile = provider?.category_id === AUTOMOBILE_CAT_ID;
+  const isAutomobile = isAutomobileProvider(provider);
 
   const days = useMemo(() => nextNDays(14), []);
 
@@ -39,7 +38,7 @@ export default function BookSlot() {
     (async () => {
       try {
         const { data } = await api.get(`/providers/${providerId}`);
-        setProvider(data.provider);
+        setProvider({ ...data.provider, category_name: data.category?.name });
         setServices(data.services || []);
         if (data.services?.length) setSelectedService(data.services[0]);
         // Load hospital sub-staff so customer can pick a specific doctor / service
@@ -161,47 +160,58 @@ export default function BookSlot() {
 
         {/* Hospital sub-doctor / service picker (only for hospitals) */}
         {staffList.length > 0 && (
-          <section data-testid="booking-staff-picker">
-            <h3 className="text-xs font-bold uppercase tracking-[0.15em] text-ink-soft mb-3">
-              Choose doctor / service
-            </h3>
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-              {staffList.map((s) => {
-                const on = selectedStaff?.id === s.id;
-                return (
-                  <button
-                    key={s.id}
-                    type="button"
-                    onClick={() => {
-                      setSelectedStaff(s);
-                      const next = new URLSearchParams(searchParams);
-                      next.set("staff", s.id);
-                      setSearchParams(next, { replace: true });
-                    }}
-                    data-testid={`book-staff-${s.id}`}
-                    className={`text-left p-3 rounded-xl border transition-all ${
-                      on
-                        ? "bg-forest text-white border-forest shadow-md"
-                        : "bg-white border-cream-300 hover:border-forest"
-                    }`}
+          <section data-testid="booking-staff-picker" className="space-y-4">
+            {["doctor", "service"].map((kind) => {
+              const group = staffList.filter((s) => s.kind === kind);
+              if (group.length === 0) return null;
+              return (
+                <div key={kind}>
+                  <h3
+                    data-testid={`staff-group-${kind}`}
+                    className="text-xs font-bold uppercase tracking-[0.15em] text-ink-soft mb-3"
                   >
-                    <p className={`font-bold text-sm truncate ${on ? "text-white" : "text-ink"}`}>
-                      {s.name}
-                    </p>
-                    {s.specialization && (
-                      <p className={`text-[11px] font-semibold truncate ${on ? "text-white/85" : "text-forest"}`}>
-                        {s.specialization}
-                      </p>
-                    )}
-                    {s.kind === "service" && s.service_tags?.length > 0 && (
-                      <p className={`text-[10px] truncate ${on ? "text-white/70" : "text-ink-muted"}`}>
-                        {s.service_tags.slice(0, 2).join(", ")}
-                      </p>
-                    )}
-                  </button>
-                );
-              })}
-            </div>
+                    {kind === "doctor" ? "Doctors" : "Other Services"} ({group.length})
+                  </h3>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                    {group.map((s) => {
+                      const on = selectedStaff?.id === s.id;
+                      return (
+                        <button
+                          key={s.id}
+                          type="button"
+                          onClick={() => {
+                            setSelectedStaff(s);
+                            const next = new URLSearchParams(searchParams);
+                            next.set("staff", s.id);
+                            setSearchParams(next, { replace: true });
+                          }}
+                          data-testid={`book-staff-${s.id}`}
+                          className={`text-left p-3 rounded-xl border transition-all ${
+                            on
+                              ? "bg-forest text-white border-forest shadow-md"
+                              : "bg-white border-cream-300 hover:border-forest"
+                          }`}
+                        >
+                          <p className={`font-bold text-sm truncate ${on ? "text-white" : "text-ink"}`}>
+                            {s.name}
+                          </p>
+                          {s.specialization && (
+                            <p className={`text-[11px] font-semibold truncate ${on ? "text-white/85" : "text-forest"}`}>
+                              {s.specialization}
+                            </p>
+                          )}
+                          {s.kind === "service" && s.service_tags?.length > 0 && (
+                            <p className={`text-[10px] truncate ${on ? "text-white/70" : "text-ink-muted"}`}>
+                              {s.service_tags.slice(0, 2).join(", ")}
+                            </p>
+                          )}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })}
             {!selectedStaff && (
               <p className="text-[11px] text-amber-700 mt-2">
                 Please select a doctor or service to continue.

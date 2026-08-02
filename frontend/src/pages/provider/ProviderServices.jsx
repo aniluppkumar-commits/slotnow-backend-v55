@@ -4,6 +4,7 @@ import AppShell from "@/components/AppShell";
 import { useI18n } from "@/i18n";
 import { Loader2, Plus, Trash2, IndianRupee, Clock } from "lucide-react";
 import { toast } from "sonner";
+import { isAutomobileProvider } from "@/lib/providerType";
 
 export default function ProviderServices() {
   const { t } = useI18n();
@@ -11,11 +12,19 @@ export default function ProviderServices() {
   const [loading, setLoading] = useState(true);
   const [form, setForm] = useState({ name: "", duration_min: 30, price: 500, description: "", service_type: "" });
   const [saving, setSaving] = useState(false);
+  const [profile, setProfile] = useState(null);
+  const isAutomobile = isAutomobileProvider(profile);
 
   const load = async () => {
     try {
-      const { data } = await api.get("/providers/me/services");
-      setServices(data || []);
+      const [svcRes, profRes] = await Promise.all([
+        api.get("/providers/me/services"),
+        api.get("/providers/me").catch(() => ({ data: null })),
+      ]);
+      setServices(svcRes.data || []);
+      const prov = profRes.data?.provider || profRes.data;
+      const catName = profRes.data?.category?.name || prov?.category_name;
+      setProfile(prov ? { ...prov, category_name: catName } : null);
     } finally {
       setLoading(false);
     }
@@ -101,8 +110,8 @@ export default function ProviderServices() {
             data-testid="service-type-input"
             value={form.service_type}
             onChange={(e) => setForm({ ...form, service_type: e.target.value })}
-            placeholder="Service type (optional, e.g., 'Two Wheeler')"
-            className="w-full bg-cream border border-cream-300 rounded-xl px-3 py-2.5 text-ink outline-none focus:ring-2 focus:ring-forest/20"
+            placeholder="Vehicle type (optional, e.g., 'Two Wheeler')"
+            className={`w-full bg-cream border border-cream-300 rounded-xl px-3 py-2.5 text-ink outline-none focus:ring-2 focus:ring-forest/20 ${isAutomobile ? "" : "hidden"}`}
           />
           <button
             data-testid="service-add-btn"

@@ -6,6 +6,7 @@ import useLivePolling from "@/hooks/useLivePolling";
 import QueueRow from "@/components/QueueRow";
 import { Loader2, ChevronRight, UserPlus, RotateCcw, X } from "lucide-react";
 import { toast } from "sonner";
+import { isAutomobileProvider } from "@/lib/providerType";
 
 export default function ProviderQueue() {
   const { t } = useI18n();
@@ -15,18 +16,25 @@ export default function ProviderQueue() {
   const [walkOpen, setWalkOpen] = useState(false);
   const [walk, setWalk] = useState({ name: "", phone: "", vehicle_reg_no: "", vehicle_model: "", service_type: "Paid" });
   const [services, setServices] = useState([]);
+  const [profile, setProfile] = useState(null);
+  const isAutomobile = isAutomobileProvider(profile);
 
   const load = useCallback(async () => {
     try {
-      const [qRes, sRes] = await Promise.all([
+      const [qRes, sRes, pRes] = await Promise.all([
         api.get("/queue/today").catch(() => ({ data: [] })),
         api.get("/providers/me/services").catch(() => ({ data: [] })),
+        api.get("/providers/me").catch(() => ({ data: null })),
       ]);
       const arr = Array.isArray(qRes.data)
         ? qRes.data
         : (qRes.data?.queue || qRes.data?.items || qRes.data?.bookings || []);
       setQueue(arr);
       setServices(Array.isArray(sRes.data) ? sRes.data : []);
+      // /providers/me returns { provider, services, reviews, category, has_availability }
+      const prov = pRes.data?.provider || pRes.data;
+      const catName = pRes.data?.category?.name || prov?.category_name;
+      setProfile(prov ? { ...prov, category_name: catName } : null);
     } finally {
       setLoading(false);
     }
@@ -177,20 +185,24 @@ export default function ProviderQueue() {
                 placeholder="Phone (optional)"
                 className="w-full bg-cream border border-cream-300 rounded-xl px-3 py-2.5 text-ink outline-none focus:ring-2 focus:ring-forest/20"
               />
-              <input
-                data-testid="walkin-vehicle-reg"
-                value={walk.vehicle_reg_no}
-                onChange={(e) => setWalk({ ...walk, vehicle_reg_no: e.target.value })}
-                placeholder="Vehicle reg no (optional)"
-                className="w-full bg-cream border border-cream-300 rounded-xl px-3 py-2.5 text-ink outline-none focus:ring-2 focus:ring-forest/20"
-              />
-              <input
-                data-testid="walkin-vehicle-model"
-                value={walk.vehicle_model}
-                onChange={(e) => setWalk({ ...walk, vehicle_model: e.target.value })}
-                placeholder="Vehicle model (optional)"
-                className="w-full bg-cream border border-cream-300 rounded-xl px-3 py-2.5 text-ink outline-none focus:ring-2 focus:ring-forest/20"
-              />
+              {isAutomobile && (
+                <>
+                  <input
+                    data-testid="walkin-vehicle-reg"
+                    value={walk.vehicle_reg_no}
+                    onChange={(e) => setWalk({ ...walk, vehicle_reg_no: e.target.value })}
+                    placeholder="Vehicle reg no (optional)"
+                    className="w-full bg-cream border border-cream-300 rounded-xl px-3 py-2.5 text-ink outline-none focus:ring-2 focus:ring-forest/20"
+                  />
+                  <input
+                    data-testid="walkin-vehicle-model"
+                    value={walk.vehicle_model}
+                    onChange={(e) => setWalk({ ...walk, vehicle_model: e.target.value })}
+                    placeholder="Vehicle model (optional)"
+                    className="w-full bg-cream border border-cream-300 rounded-xl px-3 py-2.5 text-ink outline-none focus:ring-2 focus:ring-forest/20"
+                  />
+                </>
+              )}
               <div>
                 <label className="text-[10px] uppercase tracking-wider font-bold text-ink-muted mb-1 block">
                   Service type

@@ -3,7 +3,6 @@ import { useNavigate, useLocation } from "react-router-dom";
 import { useAuth } from "@/context/AuthContext";
 import { useI18n } from "@/i18n";
 import { useBackendCapabilities } from "@/hooks/useBackendCapabilities";
-import { SlotNowMark } from "@/components/SlotNowLogo";
 import api from "@/lib/api";
 import {
   Phone,
@@ -201,7 +200,7 @@ export default function Login() {
           <div className="absolute -top-24 -right-24 w-96 h-96 rounded-full bg-accent/25 blur-3xl" aria-hidden="true" />
           <div className="absolute -bottom-32 -left-16 w-[28rem] h-[28rem] rounded-full bg-white/5 blur-3xl" aria-hidden="true" />
           <a href="/" className="relative inline-flex items-center gap-2.5 self-start">
-            <img src="/logo.png" alt="SlotNow" className="h-10 w-10 object-contain bg-white rounded-lg p-1" />
+            <img src="/logo.png" alt="SlotNow" className="h-12 w-12 object-contain bg-white rounded-lg p-1" />
             <span className="font-heading font-extrabold text-2xl tracking-tight">
               <span className="text-white">Slot</span>
               <span className="text-accent">Now</span>
@@ -230,7 +229,7 @@ export default function Login() {
           <div className="w-full max-w-md">
             {/* Mobile brand (visible on small screens only) */}
             <div className="lg:hidden flex flex-col items-center gap-1 mb-6">
-              <SlotNowMark size={72} />
+              <img src="/logo.png" alt="SlotNow" className="h-20 w-20 object-contain" />
               <span className="font-heading font-extrabold tracking-tight text-3xl mt-1">
                 <span className="text-forest">Slot</span>
                 <span className="text-accent">Now</span>
