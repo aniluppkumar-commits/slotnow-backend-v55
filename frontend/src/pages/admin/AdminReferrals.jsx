@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import api from "@/lib/api";
 import AppShell from "@/components/AppShell";
-import { Loader2, Users, Share2, Search, Trophy, PhoneCall } from "lucide-react";
+import { Loader2, Users, Share2, Search, Trophy } from "lucide-react";
 
 export default function AdminReferrals() {
   const [users, setUsers] = useState([]);
@@ -127,12 +127,9 @@ export default function AdminReferrals() {
                           {r.referrer_role}
                         </span>
                       </div>
-                      <a
-                        href={`tel:+91${r.referrer_phone}`}
-                        className="text-[11px] text-forest font-semibold flex items-center gap-1 mt-0.5"
-                      >
-                        <PhoneCall size={10} /> +91 {r.referrer_phone}
-                      </a>
+                      <p className="text-[11px] text-ink-soft flex items-center gap-1 mt-0.5">
+                        +91 {r.referrer_phone}
+                      </p>
                       <div className="flex items-center gap-3 text-[11px] mt-2">
                         <span className="text-ink-soft">
                           <strong className="text-ink">{r.total}</strong> referred

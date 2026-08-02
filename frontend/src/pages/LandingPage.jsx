@@ -10,19 +10,18 @@ import {
   MapPin,
   Star,
   ChevronDown,
-  Phone,
   Mail,
-  MessageCircle,
   ArrowRight,
 } from "lucide-react";
 import { api } from "@/lib/api";
+import WhatsAppIcon from "@/components/WhatsAppIcon";
 
-// SlotNow production contact — footer defaults. Update here to change site-wide.
+// SlotNow support contact — email is public, WhatsApp opens via a
+// backend redirect (`/api/whatsapp`) so our phone number never appears in the
+// frontend HTML/JS bundle.
 const CONTACT = {
-  phone: "+91 94125 75970",
-  phoneHref: "+919412575970",
-  email: "support@slotnow.co.in",
-  whatsapp: "919412575970",
+  email: "support@savingplus.in",
+  whatsappRedirect: "/api/whatsapp",
 };
 
 const FEATURES = [
@@ -223,48 +222,43 @@ export default function LandingPage() {
 
       {/* Hero */}
       <section className="relative overflow-hidden">
-        <div className="max-w-6xl mx-auto px-4 sm:px-6 pt-14 pb-16 md:pt-20 md:pb-24 grid md:grid-cols-2 gap-10 items-center">
-          <div className="animate-fade-up">
-            <div className="inline-flex items-center gap-2 bg-white border border-cream-300 rounded-full px-3 py-1.5 mb-5 shadow-sm">
-              <Sparkles size={14} className="text-accent" />
-              <span className="text-xs font-bold text-ink">India&apos;s fastest booking app</span>
-            </div>
-            <h1 className="font-heading text-4xl sm:text-5xl lg:text-6xl font-black leading-[1.05] tracking-tight text-ink">
-              Book appointments <br className="hidden md:block" />
-              <span className="text-forest">in seconds.</span>
-            </h1>
-            <p className="mt-5 text-base sm:text-lg text-ink-soft max-w-lg leading-relaxed">
-              Skip the phone-calls and long queues. Reserve your slot at doctors, salons,
-              garages, tutors and more — all in one place.
-            </p>
-            <div className="mt-8 flex flex-wrap gap-3">
-              <Link
-                to="/login?role=customer"
-                data-testid="hero-book-cta"
-                className="inline-flex items-center gap-2 bg-forest text-white font-bold px-6 py-3.5 rounded-2xl hover:bg-forest-dark transition-all shadow-lg shadow-forest/25 hover:-translate-y-0.5"
-              >
-                Book Now
-                <ArrowRight size={18} />
-              </Link>
-              <Link
-                to="/login?role=provider"
-                data-testid="hero-provider-cta"
-                className="inline-flex items-center gap-2 bg-white text-ink font-bold px-6 py-3.5 rounded-2xl border-2 border-cream-300 hover:border-forest hover:text-forest transition-all"
-              >
-                List Your Business
-              </Link>
-            </div>
-            <div className="mt-8 flex flex-wrap items-center gap-6 text-sm text-ink-muted">
-              <div className="flex items-center gap-2"><ShieldCheck size={16} className="text-forest" /> Verified providers</div>
-              <div className="flex items-center gap-2"><CalendarClock size={16} className="text-forest" /> Live queue updates</div>
-              <div className="flex items-center gap-2"><Users size={16} className="text-forest" /> 4-role platform</div>
-            </div>
+        <div className="absolute inset-0 -z-10">
+          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[1100px] h-[1100px] max-w-[130%] rounded-full bg-gradient-to-br from-forest/8 via-accent/5 to-transparent blur-3xl" />
+        </div>
+        <div className="max-w-4xl mx-auto px-4 sm:px-6 pt-16 pb-20 md:pt-24 md:pb-28 text-center animate-fade-up">
+          <div className="inline-flex items-center gap-2 bg-white border border-cream-300 rounded-full px-3 py-1.5 mb-6 shadow-sm">
+            <Sparkles size={14} className="text-accent" />
+            <span className="text-xs font-bold text-ink">India&apos;s fastest booking app</span>
           </div>
-          <div className="relative animate-fade-up">
-            <div className="absolute -inset-6 bg-gradient-to-br from-forest/10 via-accent/10 to-transparent rounded-[3rem] blur-2xl" aria-hidden="true" />
-            <div className="relative bg-white rounded-3xl border border-cream-300 shadow-2xl p-8 md:p-10 flex items-center justify-center">
-              <img src="/logo.png" alt="SlotNow logo" className="w-full max-w-[280px] md:max-w-[340px] object-contain" />
-            </div>
+          <h1 className="font-heading text-4xl sm:text-5xl lg:text-6xl font-black leading-[1.05] tracking-tight text-ink">
+            Book appointments <br className="hidden md:block" />
+            <span className="text-forest">in seconds.</span>
+          </h1>
+          <p className="mt-5 text-base sm:text-lg text-ink-soft max-w-xl mx-auto leading-relaxed">
+            Skip the phone-calls and long queues. Reserve your slot at doctors, salons,
+            garages, tutors and more — all in one place.
+          </p>
+          <div className="mt-8 flex flex-wrap gap-3 justify-center">
+            <Link
+              to="/login?role=customer"
+              data-testid="hero-book-cta"
+              className="inline-flex items-center gap-2 bg-forest text-white font-bold px-6 py-3.5 rounded-2xl hover:bg-forest-dark transition-all shadow-lg shadow-forest/25 hover:-translate-y-0.5"
+            >
+              Book Now
+              <ArrowRight size={18} />
+            </Link>
+            <Link
+              to="/login?role=provider"
+              data-testid="hero-provider-cta"
+              className="inline-flex items-center gap-2 bg-white text-ink font-bold px-6 py-3.5 rounded-2xl border-2 border-cream-300 hover:border-forest hover:text-forest transition-all"
+            >
+              List Your Business
+            </Link>
+          </div>
+          <div className="mt-8 flex flex-wrap items-center gap-6 text-sm text-ink-muted justify-center">
+            <div className="flex items-center gap-2"><ShieldCheck size={16} className="text-forest" /> Verified providers</div>
+            <div className="flex items-center gap-2"><CalendarClock size={16} className="text-forest" /> Live queue updates</div>
+            <div className="flex items-center gap-2"><Users size={16} className="text-forest" /> 4-role platform</div>
           </div>
         </div>
       </section>
@@ -521,12 +515,15 @@ export default function LandingPage() {
               <ul className="space-y-2 text-sm">
                 <li>
                   <a
-                    href={`tel:${CONTACT.phoneHref}`}
-                    data-testid="footer-phone"
+                    href={CONTACT.whatsappRedirect}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    data-testid="footer-whatsapp"
                     className="inline-flex items-center gap-2 hover:text-white"
+                    aria-label="Chat with SlotNow on WhatsApp"
                   >
-                    <Phone size={14} className="text-accent" />
-                    {CONTACT.phone}
+                    <WhatsAppIcon size={14} className="text-accent" />
+                    WhatsApp chat
                   </a>
                 </li>
                 <li>
@@ -537,18 +534,6 @@ export default function LandingPage() {
                   >
                     <Mail size={14} className="text-accent" />
                     {CONTACT.email}
-                  </a>
-                </li>
-                <li>
-                  <a
-                    href={`https://wa.me/${CONTACT.whatsapp}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    data-testid="footer-whatsapp"
-                    className="inline-flex items-center gap-2 hover:text-white"
-                  >
-                    <MessageCircle size={14} className="text-accent" />
-                    WhatsApp chat
                   </a>
                 </li>
               </ul>

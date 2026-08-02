@@ -79,6 +79,7 @@ function App() {
             <Route path="/" element={<LandingPage />} />
             <Route path="/p/:id" element={<PublicProviderPage />} />
             <Route path="/c/:slug" element={<CategoryPublicPage />} />
+            <Route path="/c/:slug/:city" element={<CategoryPublicPage />} />
             <Route path="/login" element={<Login />} />
 
             {/* Customer */}

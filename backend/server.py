@@ -254,6 +254,7 @@ class Review(BaseModel):
     provider_id: str
     rating: int
     comment: Optional[str] = ""
+    photos: List[str] = []  # up to 3 data-URL images (client-compressed)
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 
@@ -261,6 +262,7 @@ class ReviewCreate(BaseModel):
     booking_id: str
     rating: int
     comment: Optional[str] = ""
+    photos: Optional[List[str]] = None  # up to 3 data-URLs; enforced server-side
 
 
 class Notification(BaseModel):
@@ -599,7 +601,16 @@ async def pin_login(req: PinLoginRequest):
             return {"token": token, "user": User(**admin_doc).model_dump(mode="json")}
 
     user_doc = await db.users.find_one(
-        {"phone": {"$in": [req.phone, phone_12]}, "role": req.role},
+        {
+            "phone": {
+                "$in": [
+                    req.phone,
+                    phone_12,
+                    phone_12[2:] if phone_12.startswith("91") and len(phone_12) == 12 else phone_12,
+                ]
+            },
+            "role": req.role,
+        },
         {"_id": 0},
     )
     if not user_doc or not user_doc.get("pin_hash"):
@@ -1227,7 +1238,8 @@ async def add_review(r: ReviewCreate, user: User = Depends(current_user)):
     rev = Review(
         booking_id=r.booking_id, customer_id=user.id,
         customer_name=user.name or "Customer", provider_id=b["provider_id"],
-        rating=r.rating, comment=r.comment or "",
+        rating=max(1, min(5, r.rating)), comment=(r.comment or "").strip()[:1000],
+        photos=[p for p in (r.photos or []) if isinstance(p, str) and p.startswith("data:image/")][:3],
     )
     await db.reviews.insert_one(rev.model_dump())
     all_reviews = await db.reviews.find({"provider_id": b["provider_id"]}, {"_id": 0}).to_list(1000)
@@ -1738,10 +1750,30 @@ async def root():
     return {"status": "ok", "service": "slotnow-backend"}
 
 
-from fastapi.responses import Response  # noqa: E402
+from fastapi.responses import Response, RedirectResponse  # noqa: E402
+from urllib.parse import quote_plus  # noqa: E402
 
 
-def _sitemap_xml_response(site_url: str, providers, categories) -> Response:
+# SlotNow support WhatsApp number is intentionally not exposed via the API or the
+# static frontend. It lives ONLY here and is reached via a 302 redirect below.
+_SUPPORT_WA_NUMBER = os.environ.get("SUPPORT_WA_NUMBER", "919412575970")
+
+
+@app.get("/api/whatsapp", include_in_schema=False)
+async def whatsapp_support_redirect():
+    """302 redirect to WhatsApp chat with SlotNow support.
+
+    The number is never rendered in the frontend HTML/JS bundle — it only appears
+    inside the redirect ``Location`` header (and eventually inside the user's
+    WhatsApp app once the chat opens). Uses a signed message so the recipient's
+    chat header reads as coming to SlotNow support.
+    """
+    text = "Hi SlotNow support — I need help with my SlotNow booking."
+    target = f"https://wa.me/{_SUPPORT_WA_NUMBER}?text={quote_plus(text)}"
+    return RedirectResponse(url=target, status_code=302)
+
+
+def _sitemap_xml_response(site_url: str, providers, categories, city_combos=None) -> Response:
     urls = [
         (f"{site_url}/", "1.0", "weekly"),
         (f"{site_url}/login?role=customer", "0.6", "monthly"),
@@ -1750,6 +1782,8 @@ def _sitemap_xml_response(site_url: str, providers, categories) -> Response:
     for c in categories:
         slug = _slugify(c["name"])
         urls.append((f"{site_url}/c/{slug}", "0.8", "weekly"))
+    for slug, city_slug in (city_combos or []):
+        urls.append((f"{site_url}/c/{slug}/{city_slug}", "0.7", "weekly"))
     for p in providers:
         urls.append((f"{site_url}/p/{p['id']}", "0.7", "weekly"))
     xml_parts = ['<?xml version="1.0" encoding="UTF-8"?>',
@@ -1765,11 +1799,26 @@ def _sitemap_xml_response(site_url: str, providers, categories) -> Response:
 @app.get("/api/sitemap.xml", include_in_schema=False)
 async def dynamic_sitemap_api():
     """Public dynamic sitemap. Includes homepage, login, all active categories
-    (as /c/:slug), and all approved providers (as /p/:id). Google-friendly."""
+    (as /c/:slug), all category×city combos (as /c/:slug/:city), and all approved
+    providers (as /p/:id). Google-friendly."""
     site_url = os.environ.get("PUBLIC_SITE_URL", "https://slotnow.co.in").rstrip("/")
     categories = await db.categories.find({"active": True}, {"_id": 0}).to_list(200)
     providers = await db.providers.find({"approved": True}, {"_id": 0, "id": 1}).to_list(2000)
-    return _sitemap_xml_response(site_url, providers, categories)
+
+    # Build category × city combos by aggregating unique (category, city) pairs
+    combo_agg = await db.providers.aggregate([
+        {"$match": {"approved": True, "city": {"$exists": True, "$nin": [None, ""]}}},
+        {"$group": {"_id": {"cat": "$category_id", "city": "$city"}}},
+    ]).to_list(2000)
+    cat_slug_by_id = {c["id"]: _slugify(c["name"]) for c in categories}
+    combos = []
+    for row in combo_agg:
+        cat_id = row["_id"].get("cat")
+        city = row["_id"].get("city")
+        if cat_id in cat_slug_by_id and city:
+            combos.append((cat_slug_by_id[cat_id], _slugify(city)))
+
+    return _sitemap_xml_response(site_url, providers, categories, combos)
 
 
 @app.on_event("shutdown")

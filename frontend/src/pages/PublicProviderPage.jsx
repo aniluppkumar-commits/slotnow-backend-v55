@@ -3,19 +3,20 @@ import { Link, useParams, useNavigate } from "react-router-dom";
 import {
   MapPin,
   Star,
-  Phone,
   ArrowRight,
   Sparkles,
   Clock,
   IndianRupee,
   ChevronLeft,
-  MessageCircle,
   MessageSquare,
   X,
+  ImagePlus,
 } from "lucide-react";
 import { toast } from "sonner";
 import { api } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
+import WhatsAppIcon from "@/components/WhatsAppIcon";
+import { compressImageToDataURL } from "@/lib/image";
 
 const SITE_URL = "https://slotnow.co.in";
 
@@ -86,6 +87,7 @@ export default function PublicProviderPage() {
   const [reviewOpen, setReviewOpen] = useState(false);
   const [rating, setRating] = useState(0);
   const [comment, setComment] = useState("");
+  const [photos, setPhotos] = useState([]); // array of data URLs
   const [submitting, setSubmitting] = useState(false);
   const [reviewsRefresh, setReviewsRefresh] = useState(0);
 
@@ -225,16 +227,37 @@ export default function PublicProviderPage() {
         booking_id: eligibility.booking_id,
         rating,
         comment: comment.trim(),
+        photos,
       });
       toast.success("Thanks for your review!");
       setReviewOpen(false);
       setRating(0);
       setComment("");
+      setPhotos([]);
       setReviewsRefresh((v) => v + 1);
     } catch (e) {
       toast.error(e?.response?.data?.detail || "Could not submit review");
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  const onAddPhoto = async (e) => {
+    const files = Array.from(e.target.files || []);
+    e.target.value = "";
+    if (!files.length) return;
+    const room = Math.max(0, 3 - photos.length);
+    if (room === 0) {
+      toast.error("You can attach up to 3 photos");
+      return;
+    }
+    try {
+      const compressed = await Promise.all(
+        files.slice(0, room).map((f) => compressImageToDataURL(f, { maxDim: 800, quality: 0.72 }))
+      );
+      setPhotos((prev) => [...prev, ...compressed]);
+    } catch (err) {
+      toast.error(err?.message || "Could not add photo");
     }
   };
 
@@ -359,15 +382,6 @@ export default function PublicProviderPage() {
                   >
                     Book appointment <ArrowRight size={16} />
                   </button>
-                  {provider.phone && (
-                    <a
-                      href={`tel:+91${provider.phone.replace(/[^\d]/g, "").slice(-10)}`}
-                      data-testid="pp-call"
-                      className="inline-flex items-center gap-2 bg-white text-ink font-bold px-6 py-3.5 rounded-2xl border-2 border-cream-300 hover:border-forest hover:text-forest"
-                    >
-                      <Phone size={16} /> Call
-                    </a>
-                  )}
                 </div>
               </div>
             </div>
@@ -441,6 +455,26 @@ export default function PublicProviderPage() {
                         {r.comment && (
                           <p className="text-sm text-ink-soft">{r.comment}</p>
                         )}
+                        {Array.isArray(r.photos) && r.photos.length > 0 && (
+                          <div className="flex gap-2 mt-2 flex-wrap">
+                            {r.photos.map((src, i) => (
+                              <a
+                                key={i}
+                                href={src}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="block w-16 h-16 rounded-lg overflow-hidden border border-cream-300 hover:border-forest"
+                              >
+                                <img
+                                  src={src}
+                                  alt=""
+                                  className="w-full h-full object-cover"
+                                  loading="lazy"
+                                />
+                              </a>
+                            ))}
+                          </div>
+                        )}
                       </div>
                     ))}
                   </div>
@@ -497,12 +531,13 @@ export default function PublicProviderPage() {
               </div>
               <div className="flex items-center gap-4">
                 <a
-                  href="https://wa.me/919412575970"
+                  href="/api/whatsapp"
                   target="_blank"
                   rel="noopener noreferrer"
                   className="inline-flex items-center gap-1 hover:text-white"
+                  aria-label="Chat with SlotNow on WhatsApp"
                 >
-                  <MessageCircle size={14} className="text-accent" /> WhatsApp
+                  <WhatsAppIcon size={14} className="text-accent" /> WhatsApp
                 </a>
                 <Link to="/" className="hover:text-white">
                   Home
@@ -577,6 +612,46 @@ export default function PublicProviderPage() {
                 className="w-full px-3 py-2.5 rounded-xl bg-cream border border-cream-300 focus:border-forest focus:outline-none text-sm resize-none"
               />
               <p className="text-[11px] text-ink-muted mt-1">{comment.length}/500</p>
+            </div>
+            <div className="mb-5">
+              <label className="block text-xs font-bold text-ink-soft uppercase tracking-wider mb-2">
+                Photos (optional, up to 3)
+              </label>
+              <div className="flex flex-wrap gap-2">
+                {photos.map((src, i) => (
+                  <div key={i} className="relative w-20 h-20">
+                    <img
+                      src={src}
+                      alt=""
+                      className="w-full h-full object-cover rounded-lg border border-cream-300"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setPhotos((p) => p.filter((_, idx) => idx !== i))}
+                      className="absolute -top-1.5 -right-1.5 bg-ink text-white rounded-full w-5 h-5 flex items-center justify-center shadow"
+                      aria-label="Remove photo"
+                    >
+                      <X size={12} />
+                    </button>
+                  </div>
+                ))}
+                {photos.length < 3 && (
+                  <label
+                    className="w-20 h-20 rounded-lg border-2 border-dashed border-cream-300 text-ink-muted hover:border-forest hover:text-forest flex flex-col items-center justify-center cursor-pointer text-[10px] font-bold"
+                    data-testid="review-photo-add"
+                  >
+                    <ImagePlus size={20} />
+                    ADD
+                    <input
+                      type="file"
+                      accept="image/*"
+                      multiple
+                      onChange={onAddPhoto}
+                      className="hidden"
+                    />
+                  </label>
+                )}
+              </div>
             </div>
             <div className="flex gap-3">
               <button

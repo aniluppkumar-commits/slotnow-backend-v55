@@ -19,6 +19,7 @@ import {
   ShieldAlert,
 } from "lucide-react";
 import { toast } from "sonner";
+import PublicPageShare from "@/components/PublicPageShare";
 
 export default function ProviderDashboard() {
   const { t } = useI18n();
@@ -179,6 +180,15 @@ export default function ProviderDashboard() {
           <Stat label="Done" value={completed.length} testid="stat-done" />
           <Stat label={<span className="flex items-center justify-center gap-0.5"><IndianRupee size={11} /> Rev</span>} value={revenue} testid="stat-revenue" />
         </div>
+
+        {/* Share public page */}
+        {profile?.id && (
+          <PublicPageShare
+            providerId={profile.id}
+            businessName={profile.business_name}
+            approved={profile.approved}
+          />
+        )}
 
         {/* Manage */}
         <div className="bg-white border border-cream-300 rounded-2xl divide-y divide-cream-300">

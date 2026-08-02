@@ -1,16 +1,32 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { Link, useParams, useSearchParams } from "react-router-dom";
+import { Link, useParams, useNavigate } from "react-router-dom";
 import {
   MapPin,
   Star,
   Search,
   ArrowRight,
   ChevronLeft,
-  MessageCircle,
 } from "lucide-react";
 import { api } from "@/lib/api";
+import WhatsAppIcon from "@/components/WhatsAppIcon";
 
 const SITE_URL = "https://slotnow.co.in";
+
+function citySlug(name) {
+  return (name || "")
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+}
+
+function titleCase(s) {
+  return (s || "")
+    .split("-")
+    .filter(Boolean)
+    .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+    .join(" ");
+}
 
 function useSeoTags({ title, description, image, canonical }) {
   useEffect(() => {
@@ -51,9 +67,9 @@ function useSeoTags({ title, description, image, canonical }) {
 }
 
 export default function CategoryPublicPage() {
-  const { slug } = useParams();
-  const [searchParams, setSearchParams] = useSearchParams();
-  const cityFilter = searchParams.get("city") || "";
+  const { slug, city: cityParam } = useParams();
+  const navigate = useNavigate();
+  const cityDisplay = cityParam ? titleCase(cityParam) : "";
   const [data, setData] = useState(null);
   const [error, setError] = useState(null);
   const [query, setQuery] = useState("");
@@ -62,7 +78,7 @@ export default function CategoryPublicPage() {
     let cancelled = false;
     setData(null);
     setError(null);
-    const params = cityFilter ? `?city=${encodeURIComponent(cityFilter)}` : "";
+    const params = cityDisplay ? `?city=${encodeURIComponent(cityDisplay)}` : "";
     api
       .get(`/categories/by-slug/${slug}${params}`)
       .then((r) => {
@@ -74,7 +90,7 @@ export default function CategoryPublicPage() {
     return () => {
       cancelled = true;
     };
-  }, [slug, cityFilter]);
+  }, [slug, cityDisplay]);
 
   const category = data?.category;
   const providers = data?.providers || [];
@@ -91,14 +107,14 @@ export default function CategoryPublicPage() {
     );
   }, [providers, query]);
 
-  const canonical = cityFilter
-    ? `${SITE_URL}/c/${slug}?city=${encodeURIComponent(cityFilter)}`
+  const canonical = cityDisplay
+    ? `${SITE_URL}/c/${slug}/${citySlug(cityDisplay)}`
     : `${SITE_URL}/c/${slug}`;
   const seoTitle = category
-    ? `${category.name}${cityFilter ? ` in ${cityFilter}` : ""} — Book appointments online | SlotNow`
+    ? `${category.name}${cityDisplay ? ` in ${cityDisplay}` : ""} — Book appointments online | SlotNow`
     : "SlotNow — Book appointments in seconds";
   const seoDesc = category
-    ? `Book ${category.name.toLowerCase()} appointments${cityFilter ? ` in ${cityFilter}` : " across India"} with verified providers on SlotNow. Real-time slots, live queue updates and zero waiting.`
+    ? `Book ${category.name.toLowerCase()} appointments${cityDisplay ? ` in ${cityDisplay}` : " across India"} with verified providers on SlotNow. Real-time slots, live queue updates and zero waiting.`
     : "SlotNow — India's fastest appointment booking platform.";
   const seoImage = `${SITE_URL}/logo.png`;
 
@@ -205,11 +221,11 @@ export default function CategoryPublicPage() {
               <div className="flex-1 min-w-[240px]">
                 <h1 className="font-heading text-3xl sm:text-4xl lg:text-5xl font-black leading-tight text-ink">
                   Book {category.name}
-                  {cityFilter ? ` in ${cityFilter}` : ""}
+                  {cityDisplay ? ` in ${cityDisplay}` : ""}
                 </h1>
                 <p className="mt-2 text-ink-soft">
                   {providers.length} verified provider{providers.length === 1 ? "" : "s"}
-                  {cityFilter ? ` in ${cityFilter}` : " across India"} — real-time slots,
+                  {cityDisplay ? ` in ${cityDisplay}` : " across India"} — real-time slots,
                   live queue updates, zero waiting.
                 </p>
               </div>
@@ -230,9 +246,9 @@ export default function CategoryPublicPage() {
                   className="w-full pl-9 pr-4 py-2.5 rounded-xl bg-white border border-cream-300 focus:border-forest focus:outline-none text-sm"
                 />
               </div>
-              {cityFilter && (
+              {cityDisplay && (
                 <button
-                  onClick={() => setSearchParams({})}
+                  onClick={() => navigate(`/c/${slug}`)}
                   data-testid="cat-clear-city"
                   className="inline-flex items-center gap-1 text-xs font-semibold text-forest hover:underline"
                 >
@@ -244,26 +260,27 @@ export default function CategoryPublicPage() {
             {/* City chips */}
             {cities.length > 0 && (
               <div className="mt-4 flex flex-wrap gap-2">
-                {cities.map((c) => (
-                  <button
-                    key={c.name}
-                    onClick={() =>
-                      setSearchParams(
-                        cityFilter === c.name ? {} : { city: c.name }
-                      )
-                    }
-                    data-testid={`cat-city-${c.name}`}
-                    className={`inline-flex items-center gap-1 px-3 py-1.5 rounded-full text-xs font-semibold border transition-all ${
-                      cityFilter === c.name
-                        ? "bg-forest text-white border-forest"
-                        : "bg-white text-ink border-cream-300 hover:border-forest"
-                    }`}
-                  >
-                    <MapPin size={12} />
-                    {c.name}
-                    <span className="opacity-70">({c.count})</span>
-                  </button>
-                ))}
+                {cities.map((c) => {
+                  const active = citySlug(c.name) === (cityParam || "");
+                  return (
+                    <button
+                      key={c.name}
+                      onClick={() =>
+                        navigate(active ? `/c/${slug}` : `/c/${slug}/${citySlug(c.name)}`)
+                      }
+                      data-testid={`cat-city-${c.name}`}
+                      className={`inline-flex items-center gap-1 px-3 py-1.5 rounded-full text-xs font-semibold border transition-all ${
+                        active
+                          ? "bg-forest text-white border-forest"
+                          : "bg-white text-ink border-cream-300 hover:border-forest"
+                      }`}
+                    >
+                      <MapPin size={12} />
+                      {c.name}
+                      <span className="opacity-70">({c.count})</span>
+                    </button>
+                  );
+                })}
               </div>
             )}
           </section>
@@ -335,12 +352,13 @@ export default function CategoryPublicPage() {
               </div>
               <div className="flex items-center gap-4">
                 <a
-                  href="https://wa.me/919412575970"
+                  href="/api/whatsapp"
                   target="_blank"
                   rel="noopener noreferrer"
                   className="inline-flex items-center gap-1 hover:text-white"
+                  aria-label="Chat with SlotNow on WhatsApp"
                 >
-                  <MessageCircle size={14} className="text-accent" /> WhatsApp
+                  <WhatsAppIcon size={14} className="text-accent" /> WhatsApp
                 </a>
                 <Link to="/" className="hover:text-white">
                   Home

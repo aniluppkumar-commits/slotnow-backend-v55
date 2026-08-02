@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { PhoneCall, MessageCircle, ChevronUp, ChevronDown } from "lucide-react";
+import { MessageCircle, ChevronUp, ChevronDown } from "lucide-react";
 import { StatusBadge, formatTime, formatDate } from "@/lib/utils-app";
 import WhatsAppModal from "@/components/WhatsAppModal";
 import PatientHistoryModal from "@/components/PatientHistoryModal";
@@ -122,14 +122,6 @@ export default function QueueRow({
         </div>
         {phone && (
           <div className="flex gap-2 mt-2 pt-2 border-t border-cream-300">
-            <a
-              data-testid={`queue-call-${b.id}`}
-              href={`tel:+91${phone}`}
-              onClick={(e) => e.stopPropagation()}
-              className="flex-1 flex items-center justify-center gap-1 text-[11px] font-bold bg-emerald-50 text-emerald-800 py-1.5 rounded-lg hover:bg-emerald-100"
-            >
-              <PhoneCall size={12} strokeWidth={2.5} /> Call
-            </a>
             <button
               data-testid={`queue-wa-${b.id}`}
               onClick={(e) => {

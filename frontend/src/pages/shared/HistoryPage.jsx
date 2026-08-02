@@ -9,7 +9,6 @@ import PatientHistoryModal from "@/components/PatientHistoryModal";
 import {
   Loader2,
   Calendar,
-  PhoneCall,
   MessageCircle,
   Printer,
   Trash2,
@@ -279,15 +278,6 @@ function HistoryRow({ b, canDelete, busy, onDelete, onWhatsApp, onOpenHistory })
           )}
           <div className="flex items-center justify-between gap-2 mt-2 print:hidden">
             <div className="flex gap-1.5">
-              {phone && (
-                <a
-                  data-testid={`history-call-${b.id}`}
-                  href={`tel:+91${phone}`}
-                  className="flex items-center gap-1 text-[11px] font-bold bg-emerald-50 text-emerald-800 px-2.5 py-1.5 rounded-lg hover:bg-emerald-100"
-                >
-                  <PhoneCall size={12} strokeWidth={2.5} /> Call
-                </a>
-              )}
               {phone && (
                 <button
                   data-testid={`history-whatsapp-${b.id}`}
