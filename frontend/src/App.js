@@ -6,6 +6,7 @@ import { AuthProvider, useAuth } from "@/context/AuthContext";
 import { I18nProvider } from "@/i18n";
 import RequireAuth from "@/components/RequireAuth";
 import Login from "@/pages/Login";
+import LandingPage from "@/pages/LandingPage";
 import Home from "@/pages/Home";
 import CategoryPage from "@/pages/CategoryPage";
 import ProviderDetail from "@/pages/ProviderDetail";
@@ -55,7 +56,7 @@ function RequireRole({ roles, children }) {
         ? "/admin"
         : user.role === "receptionist"
         ? "/receptionist"
-        : "/";
+        : "/home";
     return <Navigate to={home} replace />;
   }
   return children;
@@ -72,10 +73,12 @@ function App() {
               toastOptions={TOAST_OPTIONS}
             />
             <Routes>
+            {/* Public */}
+            <Route path="/" element={<LandingPage />} />
             <Route path="/login" element={<Login />} />
 
             {/* Customer */}
-            <Route path="/" element={<RequireAuth><RequireRole roles="customer"><Home /></RequireRole></RequireAuth>} />
+            <Route path="/home" element={<RequireAuth><RequireRole roles="customer"><Home /></RequireRole></RequireAuth>} />
             <Route path="/category/:id" element={<RequireAuth><RequireRole roles="customer"><CategoryPage /></RequireRole></RequireAuth>} />
             <Route path="/provider/:id" element={<RequireAuth><RequireRole roles="customer"><ProviderDetail /></RequireRole></RequireAuth>} />
             <Route path="/book/:providerId" element={<RequireAuth><RequireRole roles="customer"><BookSlot /></RequireRole></RequireAuth>} />

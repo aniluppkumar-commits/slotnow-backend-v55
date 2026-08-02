@@ -76,7 +76,7 @@ export default function MyBookings() {
             {tab === "upcoming" && (
               <button
                 data-testid="bookings-browse-btn"
-                onClick={() => navigate("/")}
+                onClick={() => navigate("/home")}
                 className="mt-2 bg-forest text-cream-100 px-6 py-2.5 rounded-xl text-sm font-bold hover:bg-forest-dark transition-colors"
               >
                 {t("browse_providers")}

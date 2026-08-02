@@ -44,7 +44,10 @@ export default function Login() {
     return ref || sessionStorage.getItem("slotnow_ref") || null;
   });
 
-  const [role, setRole] = useState("customer");
+  const [role, setRole] = useState(() => {
+    const r = new URLSearchParams(window.location.search).get("role");
+    return ["customer", "provider", "receptionist", "admin"].includes(r) ? r : "customer";
+  });
   const [mode, setMode] = useState("otp"); // "otp" | "pin" | "email"
   const [step, setStep] = useState(1);
   const [phone, setPhone] = useState("");
@@ -83,7 +86,7 @@ export default function Login() {
       case "receptionist":
         return "/receptionist";
       default:
-        return "/";
+        return "/home";
     }
   };
 

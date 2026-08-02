@@ -3,25 +3,69 @@
     <head>
         <meta charset="utf-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1" />
-        <meta name="theme-color" content="#000000" />
-        <meta name="description" content="A product of emergent.sh" />
+        <meta name="theme-color" content="#1D2E5B" />
+
+        <!-- Primary SEO -->
+        <title>SlotNow — Book appointments in seconds | Doctors, Salons, Automobile & more</title>
+        <meta name="description" content="SlotNow is India's fastest appointment booking platform. Reserve real-time slots at doctors, salons, garages, tutors and coaches. Skip queues with live position updates." />
+        <meta name="keywords" content="SlotNow, slot now, book appointment, doctor booking, salon booking, garage booking, appointment app India, online booking, skip queue, live queue, service booking" />
+        <meta name="author" content="SlotNow" />
+        <meta name="robots" content="index, follow" />
+        <link rel="canonical" href="https://slotnow.co.in/" />
+
+        <!-- Open Graph / Facebook / WhatsApp -->
+        <meta property="og:type" content="website" />
+        <meta property="og:site_name" content="SlotNow" />
+        <meta property="og:url" content="https://slotnow.co.in/" />
+        <meta property="og:title" content="SlotNow — Book appointments in seconds" />
+        <meta property="og:description" content="India's fastest appointment booking platform. Real-time slots at doctors, salons, garages, tutors and more. Skip queues with live position updates." />
+        <meta property="og:image" content="https://slotnow.co.in/logo.png" />
+        <meta property="og:image:alt" content="SlotNow logo" />
+        <meta property="og:locale" content="en_IN" />
+
+        <!-- Twitter -->
+        <meta name="twitter:card" content="summary_large_image" />
+        <meta name="twitter:title" content="SlotNow — Book appointments in seconds" />
+        <meta name="twitter:description" content="India's fastest appointment booking platform. Real-time slots at doctors, salons, garages, tutors and more." />
+        <meta name="twitter:image" content="https://slotnow.co.in/logo.png" />
+
+        <!-- Favicons -->
+        <link rel="icon" type="image/png" href="/logo.png" />
+        <link rel="apple-touch-icon" href="/logo.png" />
+
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
         <link href="https://fonts.googleapis.com/css2?family=Inter:wght@600&family=Outfit:wght@400;500;600;700;800;900&family=Manrope:wght@400;500;600;700&family=Noto+Sans+Devanagari:wght@400;500;700&display=swap" rel="stylesheet" />
-        <!--
-        manifest.json provides metadata used when your web app is installed on a
-        user's mobile device or desktop. See https://developers.google.com/web/fundamentals/web-app-manifest/
-        -->
-        <!--
-        Notice the use of %PUBLIC_URL% in the tags above.
-        It will be replaced with the URL of the `public` folder during the build.
-        Only files inside the `public` folder can be referenced from the HTML.
 
-        Unlike "/favicon.ico" or "favicon.ico", "%PUBLIC_URL%/favicon.ico" will
-        work correctly both with client-side routing and a non-root public URL.
-        Learn how to configure a non-root public URL by running `npm run build`.
-        -->
-        <title>SlotNow</title>
+        <!-- JSON-LD: Organization + WebSite for Google -->
+        <script type="application/ld+json">
+        {
+          "@context": "https://schema.org",
+          "@graph": [
+            {
+              "@type": "Organization",
+              "@id": "https://slotnow.co.in/#org",
+              "name": "SlotNow",
+              "url": "https://slotnow.co.in/",
+              "logo": "https://slotnow.co.in/logo.png",
+              "sameAs": []
+            },
+            {
+              "@type": "WebSite",
+              "@id": "https://slotnow.co.in/#website",
+              "url": "https://slotnow.co.in/",
+              "name": "SlotNow",
+              "publisher": { "@id": "https://slotnow.co.in/#org" },
+              "inLanguage": "en-IN",
+              "potentialAction": {
+                "@type": "SearchAction",
+                "target": "https://slotnow.co.in/?q={search_term_string}",
+                "query-input": "required name=search_term_string"
+              }
+            }
+          ]
+        }
+        </script>
         <script>window.addEventListener("error",function(e){if(e.error instanceof DOMException&&e.error.name==="DataCloneError"&&e.message&&e.message.includes("PerformanceServerTiming")){e.stopImmediatePropagation();e.preventDefault()}},true);</script>
         <script src="https://assets.emergent.sh/scripts/emergent-main.js"></script>
     </head>

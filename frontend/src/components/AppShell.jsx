@@ -19,9 +19,9 @@ export function AppShell({ children, title, showBack = false, showHeader = true,
 
   return (
     <div className="min-h-screen bg-cream">
-      <div className="max-w-md mx-auto md:max-w-2xl lg:max-w-3xl relative min-h-screen bg-cream md:bg-white md:shadow-2xl md:border-x md:border-cream-300">
+      <div className="max-w-md mx-auto md:max-w-4xl lg:max-w-6xl relative min-h-screen bg-cream md:bg-white md:shadow-2xl md:border-x md:border-cream-300">
         {showHeader && (
-          <header className="sticky top-0 z-40 backdrop-blur-xl bg-cream/85 md:bg-white/90 border-b border-cream-300 px-4 py-3 flex items-center justify-between gap-3">
+          <header className="sticky top-0 z-40 backdrop-blur-xl bg-cream/85 md:bg-white/90 border-b border-cream-300 px-4 md:px-8 py-3 flex items-center justify-between gap-3">
             <div className="flex items-center gap-2 min-w-0">
               {showBack && (
                 <button
@@ -55,7 +55,7 @@ function BottomNav() {
   if (!user) return null;
 
   const customerItems = [
-    { to: "/", label: t("hello") === "नमस्ते" ? "होम" : "Home", icon: Home, testId: "nav-home-btn", exact: true },
+    { to: "/home", label: t("hello") === "नमस्ते" ? "होम" : "Home", icon: Home, testId: "nav-home-btn", exact: true },
     { to: "/bookings", label: t("upcoming") === "आगामी" ? "बुकिंग" : "Bookings", icon: CalendarCheck, testId: "nav-bookings-btn" },
     { to: "/notifications", label: t("notifications") === "सूचनाएँ" ? "अलर्ट" : "Alerts", icon: Bell, testId: "nav-notifications-btn" },
     { to: "/profile", label: t("profile") === "प्रोफ़ाइल" ? "प्रोफ़ाइल" : "Profile", icon: User, testId: "nav-profile-btn" },
