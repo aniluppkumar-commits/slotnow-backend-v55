@@ -91,6 +91,7 @@ export default function PublicProviderPage() {
   const [photos, setPhotos] = useState([]); // array of data URLs
   const [submitting, setSubmitting] = useState(false);
   const [reviewsRefresh, setReviewsRefresh] = useState(0);
+  const [staff, setStaff] = useState([]);
 
   useEffect(() => {
     let cancelled = false;
@@ -108,6 +109,22 @@ export default function PublicProviderPage() {
       cancelled = true;
     };
   }, [id, reviewsRefresh]);
+
+  // Hospital-type providers: fetch child staff (doctors + service centers)
+  useEffect(() => {
+    if (!provider || provider.provider_type !== "hospital") {
+      setStaff([]);
+      return;
+    }
+    let cancelled = false;
+    api
+      .get(`/providers/${id}/staff`)
+      .then((r) => !cancelled && setStaff(Array.isArray(r.data) ? r.data : []))
+      .catch(() => !cancelled && setStaff([]));
+    return () => {
+      cancelled = true;
+    };
+  }, [id, provider]);
 
   // Check review eligibility only when a customer is logged in
   useEffect(() => {
@@ -392,6 +409,93 @@ export default function PublicProviderPage() {
           <section className="max-w-6xl mx-auto px-4 sm:px-6 py-8 grid md:grid-cols-3 gap-6">
             {/* Services */}
             <div className="md:col-span-2 space-y-6">
+              {/* Hospital: doctors and service centers */}
+              {provider.provider_type === "hospital" && staff.length > 0 && (
+                <>
+                  {staff.filter((s) => s.kind === "doctor").length > 0 && (
+                    <div className="bg-white rounded-2xl p-6 border border-cream-300" data-testid="pp-doctors">
+                      <div className="flex items-center gap-2 mb-4">
+                        <Sparkles size={16} className="text-forest" />
+                        <h2 className="font-heading text-xl font-black">Our doctors</h2>
+                        <span className="text-xs text-ink-muted">
+                          ({staff.filter((s) => s.kind === "doctor").length})
+                        </span>
+                      </div>
+                      <div className="grid sm:grid-cols-2 gap-3">
+                        {staff.filter((s) => s.kind === "doctor").map((d) => (
+                          <button
+                            key={d.id}
+                            onClick={() =>
+                              navigate("/login?role=customer", {
+                                state: { from: { pathname: `/book/${id}?staff=${d.id}` } },
+                              })
+                            }
+                            data-testid={`pp-doctor-${d.id}`}
+                            className="text-left flex gap-3 p-3 rounded-xl border border-cream-300 hover:border-forest hover:shadow-md transition-all"
+                          >
+                            {d.photo ? (
+                              <img src={d.photo} alt="" className="w-12 h-12 rounded-lg object-cover" />
+                            ) : (
+                              <div className="w-12 h-12 rounded-lg bg-forest/10 text-forest flex items-center justify-center font-heading font-black">
+                                {d.name?.[0] || "D"}
+                              </div>
+                            )}
+                            <div className="flex-1 min-w-0">
+                              <p className="font-bold text-ink truncate">{d.name}</p>
+                              {d.specialization && (
+                                <p className="text-xs text-forest font-semibold">{d.specialization}</p>
+                              )}
+                              <p className="mt-1 inline-flex items-center gap-1 text-[11px] font-semibold text-accent">
+                                Book <ArrowRight size={10} />
+                              </p>
+                            </div>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  {staff.filter((s) => s.kind === "service").length > 0 && (
+                    <div className="bg-white rounded-2xl p-6 border border-cream-300" data-testid="pp-service-centers">
+                      <div className="flex items-center gap-2 mb-4">
+                        <Sparkles size={16} className="text-accent" />
+                        <h2 className="font-heading text-xl font-black">Diagnostic services</h2>
+                      </div>
+                      <div className="grid sm:grid-cols-2 gap-3">
+                        {staff.filter((s) => s.kind === "service").map((c) => (
+                          <button
+                            key={c.id}
+                            onClick={() =>
+                              navigate("/login?role=customer", {
+                                state: { from: { pathname: `/book/${id}?staff=${c.id}` } },
+                              })
+                            }
+                            data-testid={`pp-service-${c.id}`}
+                            className="text-left p-4 rounded-xl border border-cream-300 hover:border-forest hover:shadow-md transition-all"
+                          >
+                            <p className="font-bold text-ink truncate">{c.name}</p>
+                            {c.service_tags?.length > 0 && (
+                              <div className="mt-1 flex flex-wrap gap-1">
+                                {c.service_tags.slice(0, 4).map((t) => (
+                                  <span
+                                    key={t}
+                                    className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-cream text-ink-soft"
+                                  >
+                                    {t}
+                                  </span>
+                                ))}
+                              </div>
+                            )}
+                            {c.address && (
+                              <p className="text-[11px] text-ink-muted mt-1 truncate">{c.address}</p>
+                            )}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </>
+              )}
+
               {services.length > 0 && (
                 <div className="bg-white rounded-2xl p-6 border border-cream-300">
                   <div className="flex items-center gap-2 mb-4">

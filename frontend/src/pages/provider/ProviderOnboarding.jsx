@@ -100,7 +100,12 @@ export default function ProviderOnboarding() {
       await api.post("/providers/me/profile", payload);
       await refreshMe();
       toast.success(t("provider_profile_updated"));
-      navigate("/provider", { replace: true });
+      // Guide hospital-type providers to add doctors/services as the next natural step
+      if (form.provider_type === "hospital") {
+        navigate("/provider/staff", { replace: true });
+      } else {
+        navigate("/provider", { replace: true });
+      }
     } catch (e) {
       toast.error(e.response?.data?.detail || "Failed to save");
     } finally {
@@ -121,6 +126,44 @@ export default function ProviderOnboarding() {
   return (
     <AppShell title={t("become_provider")}>
       <div className="px-4 sm:px-6 pt-4 space-y-5">
+        {(() => {
+          // Simple progress indicator — counts required fields complete.
+          const req = [
+            !!form.business_name,
+            !!form.category_id,
+            !!form.city,
+            !!form.address,
+          ];
+          const done = req.filter(Boolean).length;
+          const pct = Math.round((done / req.length) * 100);
+          return (
+            <div className="bg-white border border-cream-300 rounded-2xl p-4">
+              <div className="flex items-center justify-between mb-2">
+                <p className="text-xs font-bold uppercase tracking-wider text-ink-muted">
+                  Setup progress
+                </p>
+                <p className="text-xs font-bold text-forest">{done}/{req.length} complete</p>
+              </div>
+              <div className="h-2 bg-cream-200 rounded-full overflow-hidden">
+                <div
+                  className="h-full bg-forest transition-all"
+                  style={{ width: `${pct}%` }}
+                />
+              </div>
+              <div className="mt-3 grid grid-cols-3 gap-2 text-[11px]">
+                <div className={`px-2 py-1.5 rounded-lg font-bold text-center ${form.business_name && form.category_id ? "bg-forest/10 text-forest" : "bg-cream-200 text-ink-muted"}`}>
+                  1. Basics
+                </div>
+                <div className={`px-2 py-1.5 rounded-lg font-bold text-center ${form.city && form.address ? "bg-forest/10 text-forest" : "bg-cream-200 text-ink-muted"}`}>
+                  2. Location
+                </div>
+                <div className={`px-2 py-1.5 rounded-lg font-bold text-center ${form.image ? "bg-forest/10 text-forest" : "bg-cream-200 text-ink-muted"}`}>
+                  3. Photo
+                </div>
+              </div>
+            </div>
+          );
+        })()}
         <div className="bg-forest-faint rounded-2xl p-4 flex items-start gap-3">
           <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center text-forest shrink-0">
             <Store size={20} />

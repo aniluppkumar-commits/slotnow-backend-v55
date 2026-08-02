@@ -225,6 +225,10 @@ class Booking(BaseModel):
     service_type: Optional[str] = None  # "Paid" | "Free"
     vehicle_reg_no: Optional[str] = None
     vehicle_model: Optional[str] = None
+    # Hospital sub-doctor / sub-service (HospitalStaff.id) when booked under a hospital
+    staff_id: Optional[str] = None
+    staff_name: Optional[str] = ""
+    staff_kind: Optional[str] = None  # "doctor" | "service"
     token_number: int = 0
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
@@ -238,6 +242,7 @@ class BookingCreate(BaseModel):
     service_type: Optional[str] = None  # Automobile only: "Paid" | "Free"
     vehicle_reg_no: Optional[str] = None
     vehicle_model: Optional[str] = None
+    staff_id: Optional[str] = None  # optional hospital sub-doctor/service
 
 
 class BookingUpdate(BaseModel):
@@ -1559,6 +1564,15 @@ async def create_booking(b: BookingCreate, user: User = Depends(current_user)):
         raise HTTPException(409, "You already have a booking with this provider in this shift")
 
     token = await next_token_for(b.provider_id, b.date)
+    staff_name = ""
+    staff_kind = None
+    if b.staff_id:
+        st = await db.hospital_staff.find_one(
+            {"id": b.staff_id, "hospital_id": b.provider_id, "active": True}, {"_id": 0}
+        )
+        if st:
+            staff_name = st.get("name", "")
+            staff_kind = st.get("kind")
     booking = Booking(
         customer_id=user.id,
         customer_name=user.name or "",
@@ -1575,6 +1589,9 @@ async def create_booking(b: BookingCreate, user: User = Depends(current_user)):
         service_type=service_type,
         vehicle_reg_no=vehicle_reg_no,
         vehicle_model=vehicle_model,
+        staff_id=b.staff_id,
+        staff_name=staff_name,
+        staff_kind=staff_kind,
         token_number=token,
     )
     await db.bookings.insert_one(booking.model_dump())

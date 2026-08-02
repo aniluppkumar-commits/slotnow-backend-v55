@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useMemo } from "react";
-import { useParams, useNavigate } from "react-router-dom";
+import { useParams, useNavigate, useSearchParams } from "react-router-dom";
 import api from "@/lib/api";
 import AppShell from "@/components/AppShell";
 import { useI18n } from "@/i18n";
@@ -11,6 +11,8 @@ const AUTOMOBILE_CAT_ID = "333a2602-2d4a-4e16-a9da-3e004b0e14fd";
 
 export default function BookSlot() {
   const { providerId } = useParams();
+  const [searchParams] = useSearchParams();
+  const staffParam = searchParams.get("staff");
   const navigate = useNavigate();
   const { t } = useI18n();
   const [provider, setProvider] = useState(null);
@@ -93,6 +95,7 @@ export default function BookSlot() {
         date: selectedDate,
         start_time: selectedTime,
         notes: notes || null,
+        staff_id: staffParam || undefined,
       };
       if (isAutomobile) {
         payload.vehicle_reg_no = vehicleReg || null;

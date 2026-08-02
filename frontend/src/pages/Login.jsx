@@ -194,29 +194,63 @@ export default function Login() {
   };
 
   return (
-    <div className="min-h-screen bg-cream flex items-center justify-center px-4 py-8">
-      <div className="w-full max-w-md">
-        <div className="bg-white border border-cream-300 rounded-3xl p-6 sm:p-8 shadow-[0_4px_24px_rgba(29,46,91,0.06)] relative">
-          {/* Language toggle top-right */}
-          <button
-            data-testid="login-lang-toggle"
-            onClick={() => setLang(lang === "hi" ? "en" : "hi")}
-            className="absolute top-4 right-4 flex items-center gap-1 bg-cream-200 hover:bg-cream-300 text-ink text-xs font-bold px-2.5 py-1.5 rounded-full transition-colors"
-          >
-            <Languages size={12} strokeWidth={2.5} />
-            {lang === "hi" ? "हिं" : "EN"}
-          </button>
-
-          {/* Logo lockup */}
-          <div className="flex flex-col items-center gap-1 mb-6">
-            <SlotNowMark size={72} />
-            <span className="font-heading font-extrabold tracking-tight text-3xl mt-1">
-              <span className="text-forest">Slot</span>
+    <div className="min-h-screen bg-cream text-ink">
+      <div className="grid lg:grid-cols-2 min-h-screen">
+        {/* Marketing panel (desktop only) */}
+        <aside className="hidden lg:flex flex-col justify-between relative overflow-hidden bg-gradient-to-br from-forest via-forest-dark to-ink text-white p-12 xl:p-16">
+          <div className="absolute -top-24 -right-24 w-96 h-96 rounded-full bg-accent/25 blur-3xl" aria-hidden="true" />
+          <div className="absolute -bottom-32 -left-16 w-[28rem] h-[28rem] rounded-full bg-white/5 blur-3xl" aria-hidden="true" />
+          <a href="/" className="relative inline-flex items-center gap-2.5 self-start">
+            <img src="/logo.png" alt="SlotNow" className="h-10 w-10 object-contain bg-white rounded-lg p-1" />
+            <span className="font-heading font-extrabold text-2xl tracking-tight">
+              <span className="text-white">Slot</span>
               <span className="text-accent">Now</span>
             </span>
-            <p className="text-sm text-ink-soft">{t("book_appointments_seconds")}</p>
-            <p className="text-[11px] text-ink-muted">{t("by_saving_plus")}</p>
+          </a>
+          <div className="relative max-w-md">
+            <h2 className="font-heading text-4xl xl:text-5xl font-black leading-[1.05] tracking-tight">
+              Book appointments <br />
+              <span className="text-accent">in seconds.</span>
+            </h2>
+            <p className="mt-4 text-white/75 leading-relaxed">
+              Log in to manage your bookings, queue, and dashboard — or book your next
+              doctor / salon / garage slot from anywhere in India.
+            </p>
+            <ul className="mt-8 space-y-3 text-sm text-white/80">
+              <li className="flex items-center gap-2"><span className="w-1.5 h-1.5 rounded-full bg-accent" /> Real-time queue and slot updates</li>
+              <li className="flex items-center gap-2"><span className="w-1.5 h-1.5 rounded-full bg-accent" /> Verified providers, zero waiting</li>
+              <li className="flex items-center gap-2"><span className="w-1.5 h-1.5 rounded-full bg-accent" /> One app for customers, providers, admins</li>
+            </ul>
           </div>
+          <p className="relative text-xs text-white/50">© {new Date().getFullYear()} SlotNow · Made in India</p>
+        </aside>
+
+        {/* Form panel */}
+        <main className="flex items-center justify-center px-4 py-10 sm:px-8 lg:px-12">
+          <div className="w-full max-w-md">
+            {/* Mobile brand (visible on small screens only) */}
+            <div className="lg:hidden flex flex-col items-center gap-1 mb-6">
+              <SlotNowMark size={72} />
+              <span className="font-heading font-extrabold tracking-tight text-3xl mt-1">
+                <span className="text-forest">Slot</span>
+                <span className="text-accent">Now</span>
+              </span>
+              <p className="text-sm text-ink-soft">{t("book_appointments_seconds")}</p>
+            </div>
+            <div className="bg-white border border-cream-300 lg:border-transparent lg:bg-transparent rounded-3xl p-6 sm:p-8 lg:p-0 shadow-[0_4px_24px_rgba(29,46,91,0.06)] lg:shadow-none relative">
+              <button
+                data-testid="login-lang-toggle"
+                onClick={() => setLang(lang === "hi" ? "en" : "hi")}
+                className="absolute top-4 right-4 lg:top-0 lg:right-0 flex items-center gap-1 bg-cream-200 hover:bg-cream-300 text-ink text-xs font-bold px-2.5 py-1.5 rounded-full transition-colors"
+              >
+                <Languages size={12} strokeWidth={2.5} />
+                {lang === "hi" ? "हिं" : "EN"}
+              </button>
+
+              <div className="hidden lg:block mb-6">
+                <h1 className="font-heading text-3xl font-black text-ink">Welcome back</h1>
+                <p className="text-sm text-ink-muted mt-1">Sign in to your SlotNow account</p>
+              </div>
 
           {step === 1 && (
             <>
@@ -502,7 +536,9 @@ export default function Login() {
               </div>
             </form>
           )}
-        </div>
+            </div>
+          </div>
+        </main>
       </div>
     </div>
   );
