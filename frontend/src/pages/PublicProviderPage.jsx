@@ -10,8 +10,12 @@ import {
   IndianRupee,
   ChevronLeft,
   MessageCircle,
+  MessageSquare,
+  X,
 } from "lucide-react";
+import { toast } from "sonner";
 import { api } from "@/lib/api";
+import { useAuth } from "@/context/AuthContext";
 
 const SITE_URL = "https://slotnow.co.in";
 
@@ -75,8 +79,15 @@ function StarRow({ value = 0, size = 14 }) {
 export default function PublicProviderPage() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const { user } = useAuth();
   const [data, setData] = useState(null);
   const [error, setError] = useState(null);
+  const [eligibility, setEligibility] = useState(null);
+  const [reviewOpen, setReviewOpen] = useState(false);
+  const [rating, setRating] = useState(0);
+  const [comment, setComment] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [reviewsRefresh, setReviewsRefresh] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
@@ -93,7 +104,25 @@ export default function PublicProviderPage() {
     return () => {
       cancelled = true;
     };
-  }, [id]);
+  }, [id, reviewsRefresh]);
+
+  // Check review eligibility only when a customer is logged in
+  useEffect(() => {
+    if (!user || user.role !== "customer") {
+      setEligibility(null);
+      return;
+    }
+    let cancelled = false;
+    api
+      .get(`/providers/${id}/reviewable-booking`)
+      .then((r) => {
+        if (!cancelled) setEligibility(r.data);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [id, user, reviewsRefresh]);
 
   const provider = data?.provider;
   const services = data?.services || [];
@@ -162,6 +191,52 @@ export default function PublicProviderPage() {
   const bookHref = `/book/${id}`;
   const goBook = () =>
     navigate("/login?role=customer", { state: { from: { pathname: bookHref } } });
+
+  const onReviewClick = () => {
+    if (!user) {
+      toast.message("Please log in as customer to leave a review");
+      navigate("/login?role=customer", { state: { from: { pathname: `/p/${id}` } } });
+      return;
+    }
+    if (user.role !== "customer") {
+      toast.error("Only customers can leave reviews");
+      return;
+    }
+    if (!eligibility?.eligible) {
+      if (eligibility?.reason === "already_reviewed") {
+        toast.message("You have already reviewed this provider.");
+      } else {
+        toast.message("Complete a booking with this provider to leave a review.");
+      }
+      return;
+    }
+    setReviewOpen(true);
+  };
+
+  const submitReview = async () => {
+    if (rating < 1) {
+      toast.error("Please select a rating");
+      return;
+    }
+    if (!eligibility?.booking_id) return;
+    setSubmitting(true);
+    try {
+      await api.post("/reviews", {
+        booking_id: eligibility.booking_id,
+        rating,
+        comment: comment.trim(),
+      });
+      toast.success("Thanks for your review!");
+      setReviewOpen(false);
+      setRating(0);
+      setComment("");
+      setReviewsRefresh((v) => v + 1);
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || "Could not submit review");
+    } finally {
+      setSubmitting(false);
+    }
+  };
 
   if (error === "not_found") {
     return (
@@ -332,12 +407,28 @@ export default function PublicProviderPage() {
               )}
 
               {/* Reviews */}
-              {reviews.length > 0 && (
-                <div className="bg-white rounded-2xl p-6 border border-cream-300">
-                  <div className="flex items-center gap-2 mb-4">
+              <div className="bg-white rounded-2xl p-6 border border-cream-300">
+                <div className="flex items-center justify-between gap-2 mb-4 flex-wrap">
+                  <div className="flex items-center gap-2">
                     <Star size={16} className="text-accent fill-accent" />
                     <h2 className="font-heading text-xl font-black">Reviews</h2>
+                    {reviews.length > 0 && (
+                      <span className="text-xs text-ink-muted">({reviews.length})</span>
+                    )}
                   </div>
+                  <button
+                    onClick={onReviewClick}
+                    data-testid="pp-leave-review"
+                    className="inline-flex items-center gap-1.5 text-sm font-semibold px-3 py-2 rounded-xl bg-accent/10 text-accent-dark hover:bg-accent/20 border border-accent/20 transition-colors"
+                  >
+                    <MessageSquare size={14} /> Leave a review
+                  </button>
+                </div>
+                {reviews.length === 0 ? (
+                  <p className="text-sm text-ink-muted">
+                    No reviews yet. Be the first to share your experience after booking.
+                  </p>
+                ) : (
                   <div className="space-y-4">
                     {reviews.slice(0, 6).map((r) => (
                       <div key={r.id} className="border-b border-cream-200 last:border-0 pb-4 last:pb-0">
@@ -353,8 +444,8 @@ export default function PublicProviderPage() {
                       </div>
                     ))}
                   </div>
-                </div>
-              )}
+                )}
+              </div>
             </div>
 
             {/* Address / Contact */}
@@ -420,6 +511,92 @@ export default function PublicProviderPage() {
             </div>
           </footer>
         </>
+      )}
+
+      {/* Leave a review modal */}
+      {reviewOpen && (
+        <div
+          data-testid="review-modal"
+          className="fixed inset-0 z-50 bg-ink/60 backdrop-blur-sm flex items-center justify-center p-4"
+          onClick={() => !submitting && setReviewOpen(false)}
+        >
+          <div
+            className="bg-white rounded-2xl w-full max-w-md p-6 shadow-2xl animate-fade-up"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-start justify-between mb-4">
+              <div>
+                <h3 className="font-heading text-xl font-black text-ink">Leave a review</h3>
+                <p className="text-sm text-ink-muted mt-0.5">
+                  Sharing helps other customers choose confidently.
+                </p>
+              </div>
+              <button
+                onClick={() => !submitting && setReviewOpen(false)}
+                className="text-ink-muted hover:text-ink"
+                aria-label="Close"
+              >
+                <X size={20} />
+              </button>
+            </div>
+            <div className="mb-4">
+              <label className="block text-xs font-bold text-ink-soft uppercase tracking-wider mb-2">
+                Your rating
+              </label>
+              <div className="flex items-center gap-1.5">
+                {[1, 2, 3, 4, 5].map((n) => (
+                  <button
+                    key={n}
+                    type="button"
+                    onClick={() => setRating(n)}
+                    data-testid={`review-star-${n}`}
+                    className="p-1 rounded hover:bg-cream-100"
+                  >
+                    <Star
+                      size={30}
+                      className={
+                        n <= rating
+                          ? "text-accent fill-accent"
+                          : "text-cream-300 fill-cream-300"
+                      }
+                    />
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div className="mb-5">
+              <label className="block text-xs font-bold text-ink-soft uppercase tracking-wider mb-2">
+                Comment (optional)
+              </label>
+              <textarea
+                data-testid="review-comment"
+                value={comment}
+                onChange={(e) => setComment(e.target.value.slice(0, 500))}
+                rows={4}
+                placeholder="Tell us about your experience…"
+                className="w-full px-3 py-2.5 rounded-xl bg-cream border border-cream-300 focus:border-forest focus:outline-none text-sm resize-none"
+              />
+              <p className="text-[11px] text-ink-muted mt-1">{comment.length}/500</p>
+            </div>
+            <div className="flex gap-3">
+              <button
+                onClick={() => !submitting && setReviewOpen(false)}
+                className="flex-1 py-3 rounded-xl border-2 border-cream-300 font-bold text-ink hover:border-forest"
+                disabled={submitting}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={submitReview}
+                data-testid="review-submit"
+                disabled={submitting || rating < 1}
+                className="flex-1 py-3 rounded-xl bg-forest text-white font-bold hover:bg-forest-dark disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {submitting ? "Submitting…" : "Submit review"}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

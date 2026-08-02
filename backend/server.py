@@ -649,6 +649,42 @@ async def list_categories():
     return docs
 
 
+def _slugify(name: str) -> str:
+    s = (name or "").lower().strip()
+    out = []
+    prev_dash = False
+    for ch in s:
+        if ch.isalnum():
+            out.append(ch)
+            prev_dash = False
+        elif not prev_dash:
+            out.append("-")
+            prev_dash = True
+    return "".join(out).strip("-") or "cat"
+
+
+@api.get("/categories/by-slug/{slug}")
+async def category_by_slug(slug: str, city: Optional[str] = None):
+    """Public endpoint for /c/:slug pages. Returns the category and its approved
+    providers (optionally filtered by city for long-tail SEO)."""
+    slug = slug.lower()
+    cats = await db.categories.find({"active": True}, {"_id": 0}).to_list(100)
+    match = next((c for c in cats if _slugify(c["name"]) == slug or _slugify(c.get("name_hi", "")) == slug), None)
+    if not match:
+        raise HTTPException(404, "Category not found")
+    query = {"category_id": match["id"], "approved": True}
+    if city:
+        query["city"] = {"$regex": f"^{city}$", "$options": "i"}
+    providers = await db.providers.find(query, {"_id": 0}).sort("rating", -1).to_list(200)
+    cities_agg = await db.providers.aggregate([
+        {"$match": {"category_id": match["id"], "approved": True, "city": {"$exists": True, "$nin": [None, ""]}}},
+        {"$group": {"_id": "$city", "count": {"$sum": 1}}},
+        {"$sort": {"count": -1}},
+    ]).to_list(20)
+    cities = [{"name": c["_id"], "count": c["count"]} for c in cities_agg if c["_id"]]
+    return {"category": match, "providers": providers, "cities": cities, "slug": slug}
+
+
 @api.post("/categories")
 async def create_category(c: CategoryCreate, user: User = Depends(current_user)):
     await require_role(user, "admin")
@@ -1202,6 +1238,26 @@ async def add_review(r: ReviewCreate, user: User = Depends(current_user)):
     return rev.model_dump(mode="json")
 
 
+@api.get("/providers/{provider_id}/reviewable-booking")
+async def reviewable_booking(provider_id: str, user: User = Depends(current_user)):
+    """Return the most recent completed booking of the current customer with this
+    provider that has NOT been reviewed yet. Used by the public provider page to
+    show a personalised "Leave a review" CTA only to eligible customers."""
+    if user.role != "customer":
+        return {"eligible": False, "reason": "not_customer"}
+    booking = await db.bookings.find_one(
+        {"customer_id": user.id, "provider_id": provider_id, "status": "completed"},
+        {"_id": 0},
+        sort=[("created_at", -1)],
+    )
+    if not booking:
+        return {"eligible": False, "reason": "no_completed_booking"}
+    already = await db.reviews.find_one({"booking_id": booking["id"]}, {"_id": 0})
+    if already:
+        return {"eligible": False, "reason": "already_reviewed", "review_id": already.get("id")}
+    return {"eligible": True, "booking_id": booking["id"]}
+
+
 # ---------- Notifications ----------
 @api.get("/notifications")
 async def list_notifications(user: User = Depends(current_user)):
@@ -1680,6 +1736,40 @@ async def health_check():
 @app.get("/")
 async def root():
     return {"status": "ok", "service": "slotnow-backend"}
+
+
+from fastapi.responses import Response  # noqa: E402
+
+
+def _sitemap_xml_response(site_url: str, providers, categories) -> Response:
+    urls = [
+        (f"{site_url}/", "1.0", "weekly"),
+        (f"{site_url}/login?role=customer", "0.6", "monthly"),
+        (f"{site_url}/login?role=provider", "0.6", "monthly"),
+    ]
+    for c in categories:
+        slug = _slugify(c["name"])
+        urls.append((f"{site_url}/c/{slug}", "0.8", "weekly"))
+    for p in providers:
+        urls.append((f"{site_url}/p/{p['id']}", "0.7", "weekly"))
+    xml_parts = ['<?xml version="1.0" encoding="UTF-8"?>',
+                 '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">']
+    for loc, prio, freq in urls:
+        xml_parts.append(
+            f"  <url><loc>{loc}</loc><changefreq>{freq}</changefreq><priority>{prio}</priority></url>"
+        )
+    xml_parts.append("</urlset>")
+    return Response(content="\n".join(xml_parts), media_type="application/xml")
+
+
+@app.get("/api/sitemap.xml", include_in_schema=False)
+async def dynamic_sitemap_api():
+    """Public dynamic sitemap. Includes homepage, login, all active categories
+    (as /c/:slug), and all approved providers (as /p/:id). Google-friendly."""
+    site_url = os.environ.get("PUBLIC_SITE_URL", "https://slotnow.co.in").rstrip("/")
+    categories = await db.categories.find({"active": True}, {"_id": 0}).to_list(200)
+    providers = await db.providers.find({"approved": True}, {"_id": 0, "id": 1}).to_list(2000)
+    return _sitemap_xml_response(site_url, providers, categories)
 
 
 @app.on_event("shutdown")

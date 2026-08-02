@@ -7,4 +7,4 @@ Disallow: /bookings
 Disallow: /profile
 Disallow: /notifications
 
-Sitemap: https://slotnow.co.in/sitemap.xml
+Sitemap: https://slotnow.co.in/api/sitemap.xml

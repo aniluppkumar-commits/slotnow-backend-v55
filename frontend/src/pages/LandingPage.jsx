@@ -118,6 +118,14 @@ const LOGIN_OPTIONS = [
   { role: "admin", label: "Admin", desc: "Platform management" },
 ];
 
+function slugify(name) {
+  return (name || "")
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "") || "cat";
+}
+
 function LoginMenu() {
   const [open, setOpen] = useState(false);
   const ref = useRef(null);
@@ -306,7 +314,7 @@ export default function LandingPage() {
             {categories.map((c) => (
               <Link
                 key={c.id}
-                to="/login?role=customer"
+                to={`/c/${slugify(c.name)}`}
                 data-testid={`landing-cat-${c.id}`}
                 className="group bg-white rounded-2xl p-5 border border-cream-300 hover:border-forest hover:shadow-xl hover:-translate-y-1 transition-all"
               >
