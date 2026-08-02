@@ -177,6 +177,7 @@ class Service(BaseModel):
     duration_min: int = 30
     price: int
     active: bool = True
+    photo: Optional[str] = None  # data URL / hosted URL (optional)
 
 
 class ServiceCreate(BaseModel):
@@ -185,6 +186,7 @@ class ServiceCreate(BaseModel):
     description: Optional[str] = ""
     duration_min: int = 30
     price: int
+    photo: Optional[str] = None
 
 
 class AvailabilityRule(BaseModel):
@@ -261,6 +263,10 @@ class Booking(BaseModel):
     staff_kind: Optional[str] = None  # "doctor" | "service"
     token_number: int = 0
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    # Set the moment the booking transitions to 'completed' (queue/next OR
+    # PUT /bookings/{id} status=completed). Used to compute the customer's
+    # actual wait time vs. their scheduled slot for the "Wait-time history".
+    completed_at: Optional[datetime] = None
 
 
 class BookingCreate(BaseModel):
@@ -1877,6 +1883,22 @@ async def _enrich_bookings(items: List[dict]) -> List[dict]:
             b["customer"] = {"name": cust.get("name") or "Guest", "phone": cust.get("phone", ""), "address": cust.get("address", ""), "via_referral": bool(cust.get("via_referral"))}
         else:
             b["customer"] = {"name": "Guest", "phone": "", "address": "", "via_referral": False}
+        # Actual wait time (minutes served AFTER scheduled slot) — only for completed bookings
+        if b.get("status") == "completed" and b.get("completed_at"):
+            try:
+                sched_dt = datetime.strptime(
+                    f"{b['date']} {b['start_time']}", "%Y-%m-%d %H:%M"
+                ).replace(tzinfo=IST)
+                ca = b["completed_at"]
+                if isinstance(ca, str):
+                    ca = datetime.fromisoformat(ca.replace("Z", "+00:00"))
+                if ca.tzinfo is None:
+                    ca = ca.replace(tzinfo=timezone.utc)
+                b["waited_min"] = max(0, int((ca - sched_dt).total_seconds() / 60))
+            except Exception:
+                b["waited_min"] = None
+        else:
+            b["waited_min"] = None
         out.append(b)
     return out
 
@@ -2174,6 +2196,9 @@ async def update_booking(booking_id: str, u: BookingUpdate, user: User = Depends
         svc = await db.services.find_one({"id": b.get("service_id", "")}, {"_id": 0})
         dur = svc["duration_min"] if svc else 30
         updates["end_time"] = _min_to_time(_time_to_min(u.start_time) + dur)
+    # Stamp completed_at when transitioning to 'completed' (drives wait-time history)
+    if u.status == "completed" and not b.get("completed_at"):
+        updates["completed_at"] = datetime.now(timezone.utc)
     await db.bookings.update_one({"id": booking_id}, {"$set": updates})
     fresh = await db.bookings.find_one({"id": booking_id}, {"_id": 0})
     if u.status == "confirmed" and b.get("customer_id"):
@@ -2350,7 +2375,7 @@ async def queue_next(user: User = Depends(current_user), date: Optional[str] = N
             completed_staff_ids.add(row.get("staff_id"))
         await db.bookings.update_many(
             {"provider_id": pid, "date": d, "token_number": prev, "status": {"$in": ["pending", "confirmed"]}},
-            {"$set": {"status": "completed"}},
+            {"$set": {"status": "completed", "completed_at": datetime.now(timezone.utc)}},
         )
     new_token = prev + 1
     if new_token > state.get("last_assigned", 0):
@@ -2567,6 +2592,90 @@ async def provider_analytics(
         "heatmap": heatmap,  # [7][24]
         "per_staff": list(per_staff.values()),
         "hospital_staff": [{"id": s["id"], "name": s.get("name"), "kind": s.get("kind")} for s in hospital_staff],
+    }
+
+
+# ---------- Customer wait-time history ----------
+@api.get("/customers/me/wait-history")
+async def customer_wait_history(user: User = Depends(current_user), limit: int = Query(20, ge=1, le=100)):
+    """Return the customer's completed bookings enriched with `waited_min`
+    (minutes served AFTER the scheduled slot start), plus aggregate stats
+    used by the Home page 'Peak-hour avoider' widget.
+
+    Falls back gracefully when a completed booking is missing `completed_at`
+    (e.g. old rows before this field existed) — those rows are still returned
+    but with `waited_min: null`.
+    """
+    await require_role(user, "customer")
+    rows = await db.bookings.find(
+        {"customer_id": user.id, "status": "completed"},
+        {"_id": 0},
+    ).sort("created_at", -1).to_list(limit)
+    history = []
+    total_wait = 0
+    counted = 0
+    by_weekday: dict[int, dict] = {}   # 0=Mon..6=Sun → {"sum": int, "n": int}
+    by_hour: dict[int, dict] = {}       # 0..23         → {"sum": int, "n": int}
+    for b in rows:
+        waited: Optional[int] = None
+        completed_at = b.get("completed_at")
+        try:
+            sched_dt = datetime.strptime(
+                f"{b['date']} {b['start_time']}", "%Y-%m-%d %H:%M"
+            ).replace(tzinfo=IST)
+        except Exception:
+            sched_dt = None
+        if completed_at and sched_dt:
+            # completed_at is stored in UTC; treat as aware
+            if completed_at.tzinfo is None:
+                completed_at = completed_at.replace(tzinfo=timezone.utc)
+            waited = max(0, int((completed_at - sched_dt).total_seconds() / 60))
+            total_wait += waited
+            counted += 1
+            wd = sched_dt.weekday()
+            hr = int(b["start_time"].split(":")[0])
+            by_weekday.setdefault(wd, {"sum": 0, "n": 0})
+            by_weekday[wd]["sum"] += waited
+            by_weekday[wd]["n"] += 1
+            by_hour.setdefault(hr, {"sum": 0, "n": 0})
+            by_hour[hr]["sum"] += waited
+            by_hour[hr]["n"] += 1
+        history.append({
+            "id": b["id"],
+            "provider_id": b["provider_id"],
+            "service_name": b.get("service_name"),
+            "staff_name": b.get("staff_name"),
+            "date": b["date"],
+            "start_time": b["start_time"],
+            "waited_min": waited,
+        })
+    avg_wait = round(total_wait / counted) if counted else None
+    # Best / worst weekday & hour recommendations (only when we have ≥ 3 samples)
+    def _best_worst(bucket: dict) -> dict:
+        if not bucket:
+            return {"best": None, "worst": None}
+        with_avg = [(k, v["sum"] / v["n"]) for k, v in bucket.items() if v["n"] > 0]
+        if not with_avg:
+            return {"best": None, "worst": None}
+        with_avg.sort(key=lambda x: x[1])
+        return {"best": with_avg[0], "worst": with_avg[-1]}
+    hint = None
+    if counted >= 3:
+        hint_hour = _best_worst(by_hour)
+        if hint_hour["best"] and hint_hour["worst"] and hint_hour["best"][0] != hint_hour["worst"][0]:
+            hint = (
+                f"Try booking around {int(hint_hour['best'][0]):02d}:00 — "
+                f"your avg wait there is only ~{int(hint_hour['best'][1])} min "
+                f"vs ~{int(hint_hour['worst'][1])} min at {int(hint_hour['worst'][0]):02d}:00."
+            )
+    return {
+        "count": len(history),
+        "counted_for_avg": counted,
+        "avg_wait_min": avg_wait,
+        "history": history,
+        "by_weekday": {str(k): round(v["sum"] / v["n"]) for k, v in by_weekday.items() if v["n"] > 0},
+        "by_hour": {str(k): round(v["sum"] / v["n"]) for k, v in by_hour.items() if v["n"] > 0},
+        "hint": hint,
     }
 
 

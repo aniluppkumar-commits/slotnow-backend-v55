@@ -2,16 +2,18 @@ import React, { useEffect, useState } from "react";
 import api from "@/lib/api";
 import AppShell from "@/components/AppShell";
 import { useI18n } from "@/i18n";
-import { Loader2, Plus, Trash2, IndianRupee, Clock } from "lucide-react";
+import { Loader2, Plus, Trash2, IndianRupee, Clock, Image as ImageIcon, X } from "lucide-react";
 import { toast } from "sonner";
 import { isAutomobileProvider } from "@/lib/providerType";
+import { compressImageToDataURL } from "@/lib/image";
 
 export default function ProviderServices() {
   const { t } = useI18n();
   const [services, setServices] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [form, setForm] = useState({ name: "", duration_min: 30, price: 500, description: "", service_type: "" });
+  const [form, setForm] = useState({ name: "", duration_min: 30, price: 500, description: "", service_type: "", photo: "" });
   const [saving, setSaving] = useState(false);
+  const [photoUploading, setPhotoUploading] = useState(false);
   const [profile, setProfile] = useState(null);
   const isAutomobile = isAutomobileProvider(profile);
 
@@ -44,14 +46,29 @@ export default function ProviderServices() {
         price: Number(form.price) || 0,
         description: form.description || null,
         service_type: form.service_type || null,
+        photo: form.photo || null,
       });
-      setForm({ name: "", duration_min: 30, price: 500, description: "", service_type: "" });
+      setForm({ name: "", duration_min: 30, price: 500, description: "", service_type: "", photo: "" });
       await load();
       toast.success("Service added");
     } catch (e) {
       toast.error(e.response?.data?.detail || "Failed");
     } finally {
       setSaving(false);
+    }
+  };
+
+  const onPhoto = async (e) => {
+    const f = e.target.files?.[0];
+    if (!f) return;
+    setPhotoUploading(true);
+    try {
+      const data = await compressImageToDataURL(f, { maxDim: 800, quality: 0.72 });
+      setForm((prev) => ({ ...prev, photo: data }));
+    } catch {
+      toast.error("Could not upload photo");
+    } finally {
+      setPhotoUploading(false);
     }
   };
 
@@ -113,6 +130,39 @@ export default function ProviderServices() {
             placeholder="Vehicle type (optional, e.g., 'Two Wheeler')"
             className={`w-full bg-cream border border-cream-300 rounded-xl px-3 py-2.5 text-ink outline-none focus:ring-2 focus:ring-forest/20 ${isAutomobile ? "" : "hidden"}`}
           />
+          {/* Service photo (optional) */}
+          <div>
+            <label className="block text-[10px] uppercase tracking-wider font-bold text-ink-muted mb-1">
+              Service photo (optional)
+            </label>
+            <div className="flex items-center gap-3">
+              {form.photo ? (
+                <div className="relative">
+                  <img src={form.photo} alt="preview" className="w-16 h-16 rounded-xl object-cover border border-cream-300" />
+                  <button
+                    type="button"
+                    onClick={() => setForm({ ...form, photo: "" })}
+                    className="absolute -top-1.5 -right-1.5 bg-rose-500 text-white rounded-full p-0.5"
+                    aria-label="Remove photo"
+                  ><X size={12} /></button>
+                </div>
+              ) : (
+                <div className="w-16 h-16 rounded-xl bg-cream border border-dashed border-cream-300 flex items-center justify-center text-ink-muted">
+                  <ImageIcon size={20} />
+                </div>
+              )}
+              <label className="flex-1 cursor-pointer bg-cream border border-cream-300 rounded-xl px-3 py-2.5 text-sm text-ink-soft hover:bg-cream-200 text-center">
+                {photoUploading ? "Uploading…" : (form.photo ? "Replace photo" : "Choose photo")}
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={onPhoto}
+                  className="hidden"
+                  data-testid="service-photo-input"
+                />
+              </label>
+            </div>
+          </div>
           <button
             data-testid="service-add-btn"
             onClick={add}
@@ -134,7 +184,14 @@ export default function ProviderServices() {
           <div className="space-y-2">
             {services.map((s) => (
               <div key={s.id} data-testid={`svc-item-${s.id}`} className="bg-white border border-cream-300 rounded-xl p-4 flex justify-between items-start gap-3">
-                <div className="min-w-0">
+                {s.photo && (
+                  <img
+                    src={s.photo}
+                    alt={s.name}
+                    className="w-14 h-14 rounded-xl object-cover border border-cream-300 shrink-0"
+                  />
+                )}
+                <div className="min-w-0 flex-1">
                   <p className="font-bold text-ink text-sm">{s.name}</p>
                   {s.description && <p className="text-xs text-ink-soft mt-0.5">{s.description}</p>}
                   <div className="flex items-center gap-3 text-[11px] text-ink-muted mt-1.5">

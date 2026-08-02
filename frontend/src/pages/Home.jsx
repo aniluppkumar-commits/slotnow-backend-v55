@@ -6,7 +6,7 @@ import { useI18n } from "@/i18n";
 import AppShell from "@/components/AppShell";
 import CategoryIcon from "@/components/CategoryIcon";
 import { catStyle } from "@/lib/utils-app";
-import { Search, Star, MapPin, Bell, TrendingUp, Loader2, Locate, X } from "lucide-react";
+import { Search, Star, MapPin, Bell, TrendingUp, Loader2, Locate, X, Timer, Sparkles } from "lucide-react";
 import { toast } from "sonner";
 
 export default function Home() {
@@ -23,22 +23,25 @@ export default function Home() {
   const [geo, setGeo] = useState(null); // { lat, lng }
   const [locating, setLocating] = useState(false);
   const [searching, setSearching] = useState(false);
+  const [waitStats, setWaitStats] = useState(null);
 
   useEffect(() => {
     let mounted = true;
     (async () => {
       try {
-        const [catRes, provRes, notifRes, refRes] = await Promise.all([
+        const [catRes, provRes, notifRes, refRes, wtRes] = await Promise.all([
           api.get("/categories"),
           api.get("/providers"),
           api.get("/notifications").catch(() => ({ data: [] })),
           api.get("/reference/healthcare").catch(() => ({ data: { specializations: [] } })),
+          api.get("/customers/me/wait-history").catch(() => ({ data: null })),
         ]);
         if (!mounted) return;
         setCategories(catRes.data || []);
         setProviders(provRes.data || []);
         setNotifCount((notifRes.data || []).filter((n) => !n.read).length);
         setSpecializations(refRes.data?.specializations || []);
+        setWaitStats(wtRes.data);
       } catch (err) {
         console.error("Home data load failed:", err);
       } finally {
@@ -190,6 +193,36 @@ export default function Home() {
           )}
           {searching && <Loader2 size={13} className="animate-spin text-forest" />}
         </div>
+
+        {/* Wait-time history widget — only for customers with ≥1 completed booking */}
+        {waitStats && waitStats.avg_wait_min != null && (
+          <button
+            data-testid="home-wait-history-widget"
+            onClick={() => navigate("/bookings?tab=completed")}
+            className="w-full text-left mb-6 bg-gradient-to-br from-forest to-forest-dark text-white rounded-2xl p-4 shadow-md flex items-center gap-3 hover:shadow-lg transition-shadow"
+          >
+            <div className="bg-white/15 rounded-xl p-2.5 shrink-0">
+              <Timer size={20} className="text-cream-100" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="flex items-baseline gap-1.5">
+                <span data-testid="wait-avg-min" className="text-2xl font-heading font-black text-cream-100">
+                  {waitStats.avg_wait_min}
+                </span>
+                <span className="text-xs text-cream-200 font-bold">min avg wait</span>
+                <span className="ml-auto text-[10px] text-cream-200/70">Last {waitStats.counted_for_avg} visits</span>
+              </div>
+              {waitStats.hint ? (
+                <p data-testid="wait-hint" className="text-[11px] text-cream-100/90 mt-0.5 flex items-start gap-1">
+                  <Sparkles size={11} className="mt-0.5 shrink-0" />
+                  <span className="truncate">{waitStats.hint}</span>
+                </p>
+              ) : (
+                <p className="text-[11px] text-cream-100/80 mt-0.5">Tap to see your booking history & avoid peak hours</p>
+              )}
+            </div>
+          </button>
+        )}
 
         {/* Categories */}
         <section className="mb-8">

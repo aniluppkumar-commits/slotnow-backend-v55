@@ -4,7 +4,7 @@ import api from "@/lib/api";
 import AppShell from "@/components/AppShell";
 import { useI18n } from "@/i18n";
 import { StatusBadge, formatDate, formatTime } from "@/lib/utils-app";
-import { Calendar, Loader2, MapPin, CalendarX2 } from "lucide-react";
+import { Calendar, Loader2, MapPin, CalendarX2, Timer } from "lucide-react";
 
 export default function MyBookings() {
   const { t } = useI18n();
@@ -128,6 +128,22 @@ function BookingCard({ booking, onClick }) {
       {p.city && (
         <div className="flex items-center gap-1 text-[11px] text-ink-muted mt-2">
           <MapPin size={11} strokeWidth={2} /> {p.city}
+        </div>
+      )}
+      {/* Actual wait vs. scheduled slot — helps customers spot peak-hour patterns */}
+      {booking.status === "completed" && booking.waited_min != null && (
+        <div
+          data-testid={`booking-waited-${booking.id}`}
+          className={`inline-flex items-center gap-1 mt-2 text-[11px] font-bold px-2 py-1 rounded-full ${
+            booking.waited_min <= 15
+              ? "bg-emerald-50 text-emerald-700"
+              : booking.waited_min <= 30
+                ? "bg-amber-50 text-amber-700"
+                : "bg-rose-50 text-rose-700"
+          }`}
+        >
+          <Timer size={11} strokeWidth={2.5} />
+          Waited {booking.waited_min} min beyond slot
         </div>
       )}
     </button>

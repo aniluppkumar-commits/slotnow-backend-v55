@@ -186,25 +186,36 @@ export default function BookSlot() {
                             setSearchParams(next, { replace: true });
                           }}
                           data-testid={`book-staff-${s.id}`}
-                          className={`text-left p-3 rounded-xl border transition-all ${
+                          className={`flex items-center gap-2 text-left p-3 rounded-xl border transition-all ${
                             on
                               ? "bg-forest text-white border-forest shadow-md"
                               : "bg-white border-cream-300 hover:border-forest"
                           }`}
                         >
-                          <p className={`font-bold text-sm truncate ${on ? "text-white" : "text-ink"}`}>
-                            {s.name}
-                          </p>
-                          {s.specialization && (
-                            <p className={`text-[11px] font-semibold truncate ${on ? "text-white/85" : "text-forest"}`}>
-                              {s.specialization}
-                            </p>
+                          {s.photo ? (
+                            <img src={s.photo} alt={s.name} className={`w-10 h-10 rounded-lg object-cover shrink-0 ${on ? "ring-2 ring-white/50" : ""}`} />
+                          ) : (
+                            <div className={`w-10 h-10 rounded-lg shrink-0 flex items-center justify-center ${on ? "bg-white/15" : "bg-cream"}`}>
+                              <span className={`text-lg font-black ${on ? "text-white" : "text-forest"}`}>
+                                {(s.name || "?").charAt(0)}
+                              </span>
+                            </div>
                           )}
-                          {s.kind === "service" && s.service_tags?.length > 0 && (
-                            <p className={`text-[10px] truncate ${on ? "text-white/70" : "text-ink-muted"}`}>
-                              {s.service_tags.slice(0, 2).join(", ")}
+                          <div className="min-w-0 flex-1">
+                            <p className={`font-bold text-sm truncate ${on ? "text-white" : "text-ink"}`}>
+                              {s.name}
                             </p>
-                          )}
+                            {s.specialization && (
+                              <p className={`text-[11px] font-semibold truncate ${on ? "text-white/85" : "text-forest"}`}>
+                                {s.specialization}
+                              </p>
+                            )}
+                            {s.kind === "service" && s.service_tags?.length > 0 && (
+                              <p className={`text-[10px] truncate ${on ? "text-white/70" : "text-ink-muted"}`}>
+                                {s.service_tags.slice(0, 2).join(", ")}
+                              </p>
+                            )}
+                          </div>
                         </button>
                       );
                     })}
@@ -231,19 +242,22 @@ export default function BookSlot() {
                 key={s.id}
                 data-testid={`booking-service-${s.id}`}
                 onClick={() => setSelectedService(s)}
-                className={`w-full flex justify-between items-center p-4 rounded-xl bg-white transition-all text-left ${
+                className={`w-full flex justify-between items-center gap-3 p-4 rounded-xl bg-white transition-all text-left ${
                   selectedService?.id === s.id
                     ? "border-2 border-forest ring-2 ring-forest/10 bg-forest-faint"
                     : "border border-cream-300 hover:border-forest/40"
                 }`}
               >
-                <div>
+                {s.photo && (
+                  <img src={s.photo} alt={s.name} className="w-12 h-12 rounded-lg object-cover border border-cream-300 shrink-0" />
+                )}
+                <div className="flex-1 min-w-0">
                   <p className="font-bold text-ink text-sm">{s.name}</p>
                   <div className="flex items-center gap-1 text-[11px] text-ink-soft mt-0.5">
                     <Clock size={11} strokeWidth={2} /> {s.duration_min} min
                   </div>
                 </div>
-                <div className="flex items-center gap-0.5 text-forest font-bold">
+                <div className="flex items-center gap-0.5 text-forest font-bold shrink-0">
                   <IndianRupee size={13} strokeWidth={2.5} />
                   <span>{s.price}</span>
                 </div>
