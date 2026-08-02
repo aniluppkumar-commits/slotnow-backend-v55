@@ -1,0 +1,43 @@
+{
+  "summary": "Iter44 Home page filter overhaul tested end-to-end. Backend: 18/19 tests pass in new test_iter44.py; 42/42 regression tests (iter40+41+42+43) still pass. Frontend: all 9 acceptance criteria verified via Playwright — search input + clear, category-aware secondary filter switching (Healthcare→specialization / Automobile→service), city typeahead with dropdown + Mumbai suggestion click, clear-all button, combined q+city surfaces TestHospital via sub-doctor union match, and empty-state text is exact. One minor spec deviation: Automobile /reference/filters returns 7 options (not 8) — the frontend dropdown renders 8 items only because it prepends the label as a placeholder option. Actual selectable services = 7.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {
+        "endpoint": "/api/reference/filters?category_id=<Automobile>",
+        "issue": "Spec says 8 vehicle-service options, backend returns only 7: ['Car Wash','Full Detailing','Oil Change','Tyre Service','Denting & Painting','General Service','AC Service']. Missing 8th option (candidate: 'Battery Service' or similar) — see server.py _CATEGORY_FILTERS['automobile']['options']."
+      }
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iter44.py",
+    "/app/test_reports/pytest/iter44_results.xml"
+  ],
+  "action_items": [
+    "Add the 8th Automobile service option in /app/backend/server.py _CATEGORY_FILTERS['automobile']['options'] to match spec (current list has 7)."
+  ],
+  "critical_code_review_comments": [
+    "/app/backend/server.py is now 3287 lines — well past the 700-line guideline. Recommend splitting reference/search/booking domains into modules (e.g. routers/reference.py, routers/search.py).",
+    "/reference/cities uses `{'$regex': f'^{q}'}` without escaping user input — a client sending `q='.*'` or regex metachars will still work but a malformed regex like `q='['` could raise. Consider re.escape(q) before injecting into the regex.",
+    "/search/providers builds a Mongo `$or` clause from user input `q` via unescaped regex — same regex-injection surface. Low risk (no DoS pathway visible) but worth escaping.",
+    "Home.jsx effect deps include `filterSpec.param` — because filterSpec is replaced on each category change, this triggers an extra debounced /search/providers call right after the category change. Harmless but wasteful; consider consolidating."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iter44.py (new)"
+  ],
+  "success_rate": {
+    "backend": "94.7% (18/19 iter44 tests, 100% regression on 42 prior tests)",
+    "frontend": "100% (all 9 acceptance items verified)"
+  },
+  "test_credentials": "Customer 9000009999 / PIN 1234 (used). Admin 9412575970 / PIN 1234 available but not needed.",
+  "seed_data_creation": "None — used existing TestHospital (43b3a047-...) and Sharma Clinic seed data.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "test_iter44.py at /app/backend/tests/test_iter44.py — the only failing assertion is len(automobile_options)==8. If the main agent adds the 8th option, that assertion will pass and full suite goes green. Frontend flow works fully; PIN login via /api/auth/pin-login with localStorage keys 'slotnow_token' + 'slotnow_user' is the correct bootstrap path (NOT 'token'/'user'). City suggestion uses onMouseDown, so Playwright needs dispatch_event('mousedown') rather than click().",
+  "rca of the issue": "Automobile 8-option mismatch: /app/backend/server.py line ~1008 defines only 7 services in _CATEGORY_FILTERS['automobile']['options']. The frontend dropdown appears to show 8 items only because the label 'Vehicle service' is rendered as an empty-value <option> placeholder. Fix: append one more service to the list (e.g. 'Battery Service') to reach parity with the spec."
+}

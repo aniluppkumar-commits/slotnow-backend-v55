@@ -6,7 +6,7 @@ import { useI18n } from "@/i18n";
 import AppShell from "@/components/AppShell";
 import CategoryIcon from "@/components/CategoryIcon";
 import { catStyle } from "@/lib/utils-app";
-import { Search, Star, MapPin, Bell, TrendingUp, Loader2, Locate, X, Timer, Sparkles } from "lucide-react";
+import { Search, Star, MapPin, Bell, TrendingUp, Loader2, Locate, X, Timer, Sparkles, ChevronDown, Filter } from "lucide-react";
 import { toast } from "sonner";
 
 export default function Home() {
@@ -18,8 +18,14 @@ export default function Home() {
   const [notifCount, setNotifCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const [query, setQuery] = useState("");
-  const [specializations, setSpecializations] = useState([]);
-  const [doctorType, setDoctorType] = useState("");
+  // Category-aware secondary filter (from /reference/filters)
+  const [filterSpec, setFilterSpec] = useState({ options: [], param: "service", label: "Filter" });
+  const [selectedCategoryId, setSelectedCategoryId] = useState("");
+  const [secondaryValue, setSecondaryValue] = useState("");
+  // City filter
+  const [cityQuery, setCityQuery] = useState("");
+  const [citySuggestions, setCitySuggestions] = useState([]);
+  const [showCityBox, setShowCityBox] = useState(false);
   const [geo, setGeo] = useState(null); // { lat, lng }
   const [locating, setLocating] = useState(false);
   const [searching, setSearching] = useState(false);
@@ -29,18 +35,16 @@ export default function Home() {
     let mounted = true;
     (async () => {
       try {
-        const [catRes, provRes, notifRes, refRes, wtRes] = await Promise.all([
+        const [catRes, provRes, notifRes, wtRes] = await Promise.all([
           api.get("/categories"),
           api.get("/providers"),
           api.get("/notifications").catch(() => ({ data: [] })),
-          api.get("/reference/healthcare").catch(() => ({ data: { specializations: [] } })),
           api.get("/customers/me/wait-history").catch(() => ({ data: null })),
         ]);
         if (!mounted) return;
         setCategories(catRes.data || []);
         setProviders(provRes.data || []);
         setNotifCount((notifRes.data || []).filter((n) => !n.read).length);
-        setSpecializations(refRes.data?.specializations || []);
         setWaitStats(wtRes.data);
       } catch (err) {
         console.error("Home data load failed:", err);
@@ -51,24 +55,55 @@ export default function Home() {
     return () => (mounted = false);
   }, []);
 
-  // Re-fetch providers whenever the smart filters change (nearby / doctor type).
+  // Whenever the customer picks (or clears) a category, refresh the secondary
+  // filter definition so the UI stays category-aware.
   useEffect(() => {
-    // Only re-run when a smart filter is active; otherwise keep the initial /providers list.
-    if (!doctorType && !geo) return;
-    const params = new URLSearchParams();
-    if (doctorType) params.set("specialization", doctorType);
-    if (geo) {
-      params.set("lat", String(geo.lat));
-      params.set("lng", String(geo.lng));
-    }
-    params.set("limit", "60");
-    setSearching(true);
+    let alive = true;
+    setSecondaryValue("");
     api
-      .get(`/search/providers?${params.toString()}`)
-      .then((r) => setProviders(r.data || []))
-      .catch(() => setProviders([]))
-      .finally(() => setSearching(false));
-  }, [doctorType, geo]);
+      .get(`/reference/filters${selectedCategoryId ? `?category_id=${selectedCategoryId}` : ""}`)
+      .then((r) => alive && setFilterSpec(r.data || { options: [], param: "service", label: "Filter" }))
+      .catch(() => alive && setFilterSpec({ options: [], param: "service", label: "Filter" }));
+    return () => (alive = false);
+  }, [selectedCategoryId]);
+
+  // City suggestions typeahead (debounced against /reference/cities)
+  useEffect(() => {
+    let alive = true;
+    const handle = setTimeout(() => {
+      api
+        .get(`/reference/cities${cityQuery ? `?q=${encodeURIComponent(cityQuery)}` : ""}`)
+        .then((r) => alive && setCitySuggestions(r.data?.cities || []))
+        .catch(() => alive && setCitySuggestions([]));
+    }, 180);
+    return () => { alive = false; clearTimeout(handle); };
+  }, [cityQuery]);
+
+  // Server-side search fired on every meaningful filter change (debounced 300ms
+  // so keystrokes don't hammer the API).
+  useEffect(() => {
+    const hasAnyFilter = query.trim() || secondaryValue || cityQuery || geo || selectedCategoryId;
+    if (!hasAnyFilter) return;
+    const handle = setTimeout(() => {
+      const params = new URLSearchParams();
+      if (query.trim()) params.set("q", query.trim());
+      if (cityQuery) params.set("city", cityQuery);
+      if (selectedCategoryId) params.set("category_id", selectedCategoryId);
+      if (secondaryValue) params.set(filterSpec.param || "service", secondaryValue);
+      if (geo) {
+        params.set("lat", String(geo.lat));
+        params.set("lng", String(geo.lng));
+      }
+      params.set("limit", "60");
+      setSearching(true);
+      api
+        .get(`/search/providers?${params.toString()}`)
+        .then((r) => setProviders(r.data || []))
+        .catch(() => setProviders([]))
+        .finally(() => setSearching(false));
+    }, 300);
+    return () => clearTimeout(handle);
+  }, [query, cityQuery, selectedCategoryId, secondaryValue, geo, filterSpec.param]);
 
   const useMyLocation = () => {
     if (!navigator.geolocation) return toast.error("Location not supported");
@@ -85,20 +120,20 @@ export default function Home() {
   };
 
   const clearFilters = () => {
-    setDoctorType("");
+    setQuery("");
+    setSelectedCategoryId("");
+    setSecondaryValue("");
+    setCityQuery("");
     setGeo(null);
+    // Reload the default provider list
+    api.get("/providers").then((r) => setProviders(r.data || [])).catch(() => {});
   };
 
-  const filtered = useMemo(() => {
-    if (!query.trim()) return providers;
-    const q = query.toLowerCase();
-    return providers.filter(
-      (p) =>
-        p.business_name?.toLowerCase().includes(q) ||
-        p.city?.toLowerCase().includes(q) ||
-        p.bio?.toLowerCase().includes(q)
-    );
-  }, [providers, query]);
+  const anyFilterActive = query.trim() || selectedCategoryId || secondaryValue || cityQuery || geo;
+
+  // Server-side search already applies query/city/category/spec filters. When no filter
+  // is active we still show the full unfiltered /providers list.
+  const filtered = providers;
 
   const top = filtered.slice(0, 3);
   const rest = filtered.slice(3);
@@ -133,62 +168,133 @@ export default function Home() {
           </h2>
         </div>
 
-        {/* Search */}
+        {/* Global search bar */}
         <div className="relative mb-3">
-          <Search
-            size={18}
-            className="absolute left-4 top-1/2 -translate-y-1/2 text-ink-soft"
-          />
+          <Search size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-ink-soft" />
           <input
             data-testid="home-search-input"
             type="text"
-            placeholder={t("search_placeholder")}
+            placeholder="Search provider, doctor, clinic or service…"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            className="w-full bg-white border border-cream-300 rounded-2xl pl-11 pr-4 py-3.5 text-sm text-ink placeholder:text-ink-muted focus:ring-2 focus:ring-forest/15 focus:border-forest outline-none transition-all"
+            className="w-full bg-white border border-cream-300 rounded-2xl pl-11 pr-10 py-3.5 text-sm text-ink placeholder:text-ink-muted focus:ring-2 focus:ring-forest/15 focus:border-forest outline-none transition-all"
           />
+          {query && (
+            <button
+              onClick={() => setQuery("")}
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-ink-muted hover:text-ink"
+              aria-label="Clear search"
+              data-testid="home-search-clear"
+            >
+              <X size={16} />
+            </button>
+          )}
         </div>
 
-        {/* Smart filters: Nearby + Doctor Type */}
-        <div className="flex flex-wrap items-center gap-2 mb-6">
+        {/* Filters row: Nearby + City + Category-aware secondary */}
+        <div className="flex flex-wrap items-center gap-2 mb-3">
           <button
             data-testid="home-nearby-btn"
             onClick={useMyLocation}
             disabled={locating}
             className={`inline-flex items-center gap-1.5 text-xs font-bold px-3 py-2 rounded-full transition-all disabled:opacity-60 ${
-              geo
-                ? "bg-forest text-cream-100"
-                : "bg-white text-ink border border-cream-300 hover:border-forest"
+              geo ? "bg-forest text-cream-100" : "bg-white text-ink border border-cream-300 hover:border-forest"
             }`}
           >
             {locating ? <Loader2 size={13} className="animate-spin" /> : <Locate size={13} />}
             {geo ? "Nearby (active)" : "Find nearby"}
           </button>
+
+          {/* City typeahead */}
+          <div className="relative">
+            <div className={`inline-flex items-center gap-1 rounded-full border ${
+              cityQuery ? "bg-forest text-cream-100 border-forest" : "bg-white border-cream-300 text-ink"
+            }`}>
+              <MapPin size={13} className="ml-3" />
+              <input
+                data-testid="home-city-input"
+                type="text"
+                value={cityQuery}
+                onFocus={() => setShowCityBox(true)}
+                onBlur={() => setTimeout(() => setShowCityBox(false), 180)}
+                onChange={(e) => { setCityQuery(e.target.value); setShowCityBox(true); }}
+                placeholder="Any city"
+                className={`w-24 sm:w-28 bg-transparent py-2 pr-2 text-xs font-bold placeholder:opacity-60 outline-none ${
+                  cityQuery ? "text-cream-100 placeholder:text-cream-100" : "text-ink"
+                }`}
+              />
+              {cityQuery && (
+                <button
+                  onClick={() => { setCityQuery(""); setShowCityBox(false); }}
+                  className="pr-2"
+                  aria-label="Clear city"
+                  data-testid="home-city-clear"
+                >
+                  <X size={12} />
+                </button>
+              )}
+            </div>
+            {showCityBox && citySuggestions.length > 0 && (
+              <div className="absolute left-0 top-full mt-1 z-10 bg-white border border-cream-300 rounded-xl shadow-lg py-1 min-w-[160px]" data-testid="home-city-suggestions">
+                {citySuggestions.map((c) => (
+                  <button
+                    key={c}
+                    data-testid={`home-city-opt-${c}`}
+                    onMouseDown={() => { setCityQuery(c); setShowCityBox(false); }}
+                    className="w-full text-left px-3 py-1.5 text-sm text-ink hover:bg-cream-100"
+                  >
+                    <MapPin size={12} className="inline mr-1.5 text-forest" /> {c}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Category dropdown */}
           <div className="relative inline-flex">
             <select
-              data-testid="home-doctor-type"
-              value={doctorType}
-              onChange={(e) => setDoctorType(e.target.value)}
+              data-testid="home-category-filter"
+              value={selectedCategoryId}
+              onChange={(e) => setSelectedCategoryId(e.target.value)}
               className={`appearance-none pl-3 pr-8 py-2 rounded-full text-xs font-bold border ${
-                doctorType
-                  ? "bg-forest text-cream-100 border-forest"
-                  : "bg-white text-ink border-cream-300 hover:border-forest"
+                selectedCategoryId ? "bg-forest text-cream-100 border-forest" : "bg-white text-ink border-cream-300 hover:border-forest"
               } focus:outline-none`}
             >
-              <option value="">Doctor type</option>
-              {specializations.map((s) => (
-                <option key={s} value={s}>{s}</option>
+              <option value="">All categories</option>
+              {categories.map((c) => (
+                <option key={c.id} value={c.id}>{c.name}</option>
               ))}
             </select>
-            <svg className={`pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 ${doctorType ? "text-cream-100" : "text-ink-muted"}`} width="10" height="6" viewBox="0 0 10 6" fill="none"><path d="M1 1L5 5L9 1" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/></svg>
+            <ChevronDown size={11} className={`pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 ${selectedCategoryId ? "text-cream-100" : "text-ink-muted"}`} />
           </div>
-          {(doctorType || geo) && (
+
+          {/* Category-aware secondary filter — only when the picked category has options */}
+          {filterSpec.options?.length > 0 && (
+            <div className="relative inline-flex">
+              <select
+                data-testid="home-secondary-filter"
+                value={secondaryValue}
+                onChange={(e) => setSecondaryValue(e.target.value)}
+                className={`appearance-none pl-3 pr-8 py-2 rounded-full text-xs font-bold border max-w-[180px] truncate ${
+                  secondaryValue ? "bg-forest text-cream-100 border-forest" : "bg-white text-ink border-cream-300 hover:border-forest"
+                } focus:outline-none`}
+              >
+                <option value="">{filterSpec.label}</option>
+                {filterSpec.options.map((o) => (
+                  <option key={o} value={o}>{o}</option>
+                ))}
+              </select>
+              <Filter size={11} className={`pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 ${secondaryValue ? "text-cream-100" : "text-ink-muted"}`} />
+            </div>
+          )}
+
+          {anyFilterActive && (
             <button
               data-testid="home-filters-clear"
               onClick={clearFilters}
               className="inline-flex items-center gap-1 text-xs font-semibold text-rose-500 hover:underline"
             >
-              <X size={12} /> Clear
+              <X size={12} /> Clear all
             </button>
           )}
           {searching && <Loader2 size={13} className="animate-spin text-forest" />}
@@ -297,9 +403,13 @@ export default function Home() {
           </section>
         )}
 
-        {!loading && filtered.length === 0 && (
-          <div className="text-center py-16 px-4">
-            <p className="text-ink-soft">{t("no_providers_matching")} "{query}"</p>
+        {!loading && !searching && filtered.length === 0 && (
+          <div className="text-center py-16 px-4" data-testid="home-empty-state">
+            <p className="text-ink-soft">
+              {anyFilterActive
+                ? "No providers match your filters. Try clearing some."
+                : t("no_providers_matching")}
+            </p>
           </div>
         )}
       </div>

@@ -984,6 +984,85 @@ async def healthcare_reference():
     }
 
 
+@api.get("/reference/cities")
+async def cities_reference(q: Optional[str] = None, limit: int = 20):
+    """Distinct city list from all APPROVED providers, for the city typeahead."""
+    match: dict = {"approved": True, "city": {"$exists": True, "$ne": ""}}
+    if q:
+        match["city"] = {"$regex": f"^{q}", "$options": "i"}
+    cities = await db.providers.distinct("city", match)
+    cities = sorted(set(c.strip() for c in cities if c and c.strip()))
+    return {"cities": cities[:limit]}
+
+
+# Category-aware secondary filter labels. Keyed by category NAME (lowercase)
+# so it works across environments even when category IDs differ.
+_CATEGORY_FILTERS: dict[str, dict] = {
+    "healthcare": {
+        "label": "Doctor type / specialization",
+        "options_ref": "specializations",
+        "param": "specialization",
+    },
+    "automobile": {
+        "label": "Vehicle service",
+        "options": ["Car Wash", "Full Detailing", "Oil Change", "Tyre Service", "Denting & Painting", "General Service", "AC Service"],
+        "param": "service",
+    },
+    "salon": {
+        "label": "Salon service",
+        "options": ["Haircut", "Beard Trim", "Facial", "Hair Colour", "Manicure", "Pedicure", "Waxing", "Bridal"],
+        "param": "service",
+    },
+    "tutor": {
+        "label": "Subject",
+        "options": ["Math", "Science", "English", "Physics", "Chemistry", "Biology", "Coding", "Music"],
+        "param": "service",
+    },
+    "consultant": {
+        "label": "Consultant type",
+        "options": ["Legal", "Financial", "Career", "Business", "Tax", "Astrology"],
+        "param": "service",
+    },
+    "coach": {
+        "label": "Coaching focus",
+        "options": ["Fitness", "Yoga", "Nutrition", "Life", "Career", "Sports"],
+        "param": "service",
+    },
+    "home service": {
+        "label": "Home service type",
+        "options": ["Plumbing", "Electrician", "Cleaning", "Carpenter", "AC Repair", "Pest Control", "Painting"],
+        "param": "service",
+    },
+}
+
+
+@api.get("/reference/filters")
+async def category_filters(category_id: Optional[str] = None):
+    """Return the secondary filter (options + label + query param name) that
+    the customer search UI should render for the currently-selected category.
+    Falls back to a healthcare-like specialization filter when no category is
+    picked so the UI always has SOMETHING useful to show.
+    """
+    cat_name = ""
+    if category_id:
+        cat = await db.categories.find_one({"id": category_id}, {"_id": 0, "name": 1})
+        cat_name = (cat or {}).get("name", "").lower()
+    spec = _CATEGORY_FILTERS.get(cat_name)
+    if spec and spec.get("options_ref") == "specializations":
+        options = DOCTOR_SPECIALIZATIONS
+    elif spec:
+        options = spec.get("options", [])
+    else:
+        options = []
+    return {
+        "category_id": category_id,
+        "category_name": cat_name,
+        "label": (spec or {}).get("label", "Filter"),
+        "param": (spec or {}).get("param", "service"),
+        "options": options,
+    }
+
+
 def _haversine_km(lat1: float, lng1: float, lat2: float, lng2: float) -> float:
     import math
     r = 6371.0
@@ -1032,6 +1111,10 @@ async def search_providers(
     Any combination of filters can be used. When lat+lng are provided, results
     are enriched with a `distance_km` field and sorted by distance ascending
     (max_km defaults to 25 km when lat/lng given).
+
+    `q` searches provider business_name/specialization/bio/service_tags AND
+    (via provider_id union) hospital sub-doctor names + service catalog names,
+    so "Dr Sharma" or "Full Detailing" both surface the right hospital / shop.
     """
     query: dict = {"approved": True}
     if city:
@@ -1043,12 +1126,25 @@ async def search_providers(
     if service:
         query["service_tags"] = {"$regex": service, "$options": "i"}
     if q:
-        query["$or"] = [
-            {"business_name": {"$regex": q, "$options": "i"}},
-            {"specialization": {"$regex": q, "$options": "i"}},
-            {"bio": {"$regex": q, "$options": "i"}},
-            {"service_tags": {"$regex": q, "$options": "i"}},
+        rx = {"$regex": q, "$options": "i"}
+        # Union provider_ids where a matching sub-doctor / service name lives.
+        staff_match = await db.hospital_staff.find(
+            {"$or": [{"name": rx}, {"specialization": rx}]},
+            {"_id": 0, "hospital_id": 1},
+        ).to_list(500)
+        svc_match = await db.services.find(
+            {"name": rx}, {"_id": 0, "provider_id": 1},
+        ).to_list(500)
+        extra_ids = {s["hospital_id"] for s in staff_match} | {s["provider_id"] for s in svc_match}
+        or_clauses = [
+            {"business_name": rx},
+            {"specialization": rx},
+            {"bio": rx},
+            {"service_tags": rx},
         ]
+        if extra_ids:
+            or_clauses.append({"id": {"$in": list(extra_ids)}})
+        query["$or"] = or_clauses
     if lat is not None and lng is not None:
         radius_m = float(max_km if max_km is not None else 25.0) * 1000
         pipeline = [
