@@ -2,21 +2,27 @@ import React, { useEffect, useState } from "react";
 import api from "@/lib/api";
 import AppShell from "@/components/AppShell";
 import { useI18n } from "@/i18n";
-import { Loader2, Plus, Trash2, ShieldOff, ShieldCheck, UserCog } from "lucide-react";
+import { Loader2, Plus, Trash2, ShieldOff, ShieldCheck, UserCog, ListChecks, X } from "lucide-react";
 import { toast } from "sonner";
 
 export default function ProviderAssistants() {
   const { t } = useI18n();
   const [items, setItems] = useState([]);
+  const [staff, setStaff] = useState([]);
   const [loading, setLoading] = useState(true);
   const [form, setForm] = useState({ name: "", phone: "", designation: "" });
   const [saving, setSaving] = useState(false);
   const [busyId, setBusyId] = useState(null);
+  const [assignFor, setAssignFor] = useState(null); // assistant object being edited
 
   const load = async () => {
     try {
-      const { data } = await api.get("/providers/me/assistants");
-      setItems(Array.isArray(data) ? data : data?.items || []);
+      const [ares, sres] = await Promise.all([
+        api.get("/providers/me/assistants"),
+        api.get("/providers/me/staff").catch(() => ({ data: [] })),
+      ]);
+      setItems(Array.isArray(ares.data) ? ares.data : ares.data?.items || []);
+      setStaff(sres.data || []);
     } finally {
       setLoading(false);
     }
@@ -155,6 +161,16 @@ export default function ProviderAssistants() {
                 >
                   {a.blocked ? <ShieldCheck size={16} /> : <ShieldOff size={16} />}
                 </button>
+                {staff.length > 0 && (
+                  <button
+                    data-testid={`assistant-assign-${a.id}`}
+                    onClick={() => setAssignFor(a)}
+                    className="p-2 rounded-lg bg-forest-faint text-forest"
+                    title="Assign doctors / services"
+                  >
+                    <ListChecks size={16} />
+                  </button>
+                )}
                 <button
                   data-testid={`assistant-remove-${a.id}`}
                   onClick={() => remove(a)}
@@ -168,6 +184,93 @@ export default function ProviderAssistants() {
           </div>
         )}
       </div>
+      {assignFor && (
+        <AssignModal
+          assistant={assignFor}
+          staff={staff}
+          onClose={() => setAssignFor(null)}
+          onSaved={() => { setAssignFor(null); load(); }}
+        />
+      )}
     </AppShell>
+  );
+}
+
+function AssignModal({ assistant, staff, onClose, onSaved }) {
+  const [ids, setIds] = useState(Array.isArray(assistant.assigned_staff_ids) ? assistant.assigned_staff_ids : []);
+  const [saving, setSaving] = useState(false);
+  const toggle = (sid) =>
+    setIds((prev) => (prev.includes(sid) ? prev.filter((x) => x !== sid) : [...prev, sid]));
+  const save = async () => {
+    setSaving(true);
+    try {
+      await api.put(`/providers/me/assistants/${assistant.id}/staff`, { staff_ids: ids });
+      toast.success("Assignments updated");
+      onSaved();
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || "Failed");
+    } finally {
+      setSaving(false);
+    }
+  };
+  const doctors = staff.filter((s) => s.kind === "doctor");
+  const centers = staff.filter((s) => s.kind === "service");
+  return (
+    <div className="fixed inset-0 z-50 bg-ink/60 backdrop-blur-sm flex items-center justify-center p-4" onClick={onClose}>
+      <div className="bg-white rounded-2xl w-full max-w-md p-5 shadow-2xl max-h-[85vh] overflow-auto" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-start justify-between mb-3">
+          <div>
+            <h3 className="font-heading text-lg font-black text-ink">Assign to {assistant.name}</h3>
+            <p className="text-xs text-ink-muted">Empty selection = full access to all staff</p>
+          </div>
+          <button onClick={onClose} className="text-ink-muted hover:text-ink" aria-label="Close"><X size={20} /></button>
+        </div>
+        {doctors.length > 0 && (
+          <div className="mb-4">
+            <p className="text-[11px] font-bold uppercase tracking-wider text-ink-muted mb-2">Doctors</p>
+            <div className="space-y-1.5">
+              {doctors.map((s) => (
+                <label key={s.id} className="flex items-center gap-2 text-sm cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={ids.includes(s.id)}
+                    onChange={() => toggle(s.id)}
+                    data-testid={`assign-${s.id}`}
+                  />
+                  <span className="text-ink">
+                    {s.name}
+                    {s.specialization && <span className="text-forest text-xs ml-1">· {s.specialization}</span>}
+                  </span>
+                </label>
+              ))}
+            </div>
+          </div>
+        )}
+        {centers.length > 0 && (
+          <div className="mb-4">
+            <p className="text-[11px] font-bold uppercase tracking-wider text-ink-muted mb-2">Service centers</p>
+            <div className="space-y-1.5">
+              {centers.map((s) => (
+                <label key={s.id} className="flex items-center gap-2 text-sm cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={ids.includes(s.id)}
+                    onChange={() => toggle(s.id)}
+                    data-testid={`assign-${s.id}`}
+                  />
+                  <span className="text-ink">{s.name}</span>
+                </label>
+              ))}
+            </div>
+          </div>
+        )}
+        <div className="flex gap-3">
+          <button onClick={onClose} className="flex-1 py-2.5 rounded-xl border-2 border-cream-300 font-bold text-ink text-sm hover:border-forest" disabled={saving}>Cancel</button>
+          <button onClick={save} data-testid="assign-save" disabled={saving} className="flex-1 py-2.5 rounded-xl bg-forest text-white font-bold text-sm hover:bg-forest-dark disabled:opacity-60">
+            {saving ? "Saving…" : "Save"}
+          </button>
+        </div>
+      </div>
+    </div>
   );
 }

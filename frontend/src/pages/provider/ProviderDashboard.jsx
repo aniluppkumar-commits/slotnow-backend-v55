@@ -20,6 +20,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import PublicPageShare from "@/components/PublicPageShare";
+import SubscriptionUpgrade from "@/components/SubscriptionUpgrade";
 
 export default function ProviderDashboard() {
   const { t } = useI18n();
@@ -188,6 +189,28 @@ export default function ProviderDashboard() {
             businessName={profile.business_name}
             approved={profile.approved}
           />
+        )}
+
+        {/* Upgrade to Pro */}
+        {profile?.id && (
+          <SubscriptionUpgrade
+            providerName={profile.business_name}
+            providerPhone={profile.contact_phone}
+          />
+        )}
+
+        {/* Hospital staff shortcut (only for hospital type) */}
+        {profile?.id && profile?.provider_type === "hospital" && (
+          <button
+            data-testid="provider-manage-staff"
+            onClick={() => navigate("/provider/staff")}
+            className="w-full text-left bg-white border border-cream-300 rounded-2xl p-4 hover:border-forest transition-colors"
+          >
+            <p className="font-heading font-bold text-ink text-sm">Manage doctors & services</p>
+            <p className="text-[11px] text-ink-muted">
+              Add doctors and diagnostic services under your hospital
+            </p>
+          </button>
         )}
 
         {/* Manage */}

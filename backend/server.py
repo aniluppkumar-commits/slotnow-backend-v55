@@ -1,4 +1,4 @@
-from fastapi import FastAPI, APIRouter, HTTPException, Depends, Header, Query
+from fastapi import FastAPI, APIRouter, HTTPException, Depends, Header, Query, Request
 from fastapi.security import HTTPBearer
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
@@ -283,6 +283,88 @@ class Notification(BaseModel):
     type: str = "info"
     read: bool = False
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+
+# --- Hospital-managed staff (doctors + service centers) ---------------
+class HospitalStaff(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    hospital_id: str  # parent ProviderProfile.id (must be provider_type=hospital)
+    kind: Literal["doctor", "service"]
+    name: str
+    specialization: Optional[str] = ""  # only for doctors
+    service_tags: List[str] = []  # only for service centers
+    photo: Optional[str] = None
+    address: Optional[str] = ""
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
+    active: bool = True
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+
+class HospitalStaffUpsert(BaseModel):
+    kind: Literal["doctor", "service"]
+    name: str
+    specialization: Optional[str] = ""
+    service_tags: Optional[List[str]] = None
+    photo: Optional[str] = None
+    address: Optional[str] = ""
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
+    active: Optional[bool] = True
+
+
+# --- Assistant staff assignment ---------------------------------------
+class AssistantAssignmentUpdate(BaseModel):
+    staff_ids: List[str] = []  # HospitalStaff ids the assistant can manage
+
+
+# --- Provider subscription plans (Razorpay) --------------------------
+SUBSCRIPTION_PLANS = [
+    {
+        "id": "basic",
+        "name": "Basic",
+        "price_paise": 49900,
+        "duration_days": 30,
+        "features": ["Public page", "Up to 50 bookings / mo", "Email support"],
+    },
+    {
+        "id": "pro",
+        "name": "Pro",
+        "price_paise": 129900,
+        "duration_days": 90,
+        "features": ["Everything in Basic", "Unlimited bookings", "Priority support", "Featured placement"],
+    },
+    {
+        "id": "yearly",
+        "name": "Business (Yearly)",
+        "price_paise": 399900,
+        "duration_days": 365,
+        "features": ["Everything in Pro", "Custom branding", "Dedicated account manager"],
+    },
+]
+
+
+class ProviderSubscription(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    provider_id: str
+    plan_id: str
+    status: Literal["created", "active", "expired", "cancelled", "failed"] = "created"
+    razorpay_order_id: Optional[str] = None
+    razorpay_payment_id: Optional[str] = None
+    activated_at: Optional[datetime] = None
+    expires_at: Optional[datetime] = None
+    amount_paise: int = 0
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+
+class CreateOrderRequest(BaseModel):
+    plan_id: str
+
+
+class VerifyPaymentRequest(BaseModel):
+    razorpay_order_id: str
+    razorpay_payment_id: str
+    razorpay_signature: str
 
 
 class SmsSettings(BaseModel):
@@ -758,22 +840,45 @@ async def search_providers(
             {"bio": {"$regex": q, "$options": "i"}},
             {"service_tags": {"$regex": q, "$options": "i"}},
         ]
-    providers = await db.providers.find(query, {"_id": 0}).to_list(500)
-
     if lat is not None and lng is not None:
-        radius = max_km if max_km is not None else 25.0
-        enriched = []
-        for p in providers:
-            plat, plng = p.get("latitude"), p.get("longitude")
-            if plat is None or plng is None:
-                continue
-            d = _haversine_km(lat, lng, float(plat), float(plng))
-            if d <= radius:
-                p["distance_km"] = round(d, 2)
-                enriched.append(p)
-        enriched.sort(key=lambda r: r["distance_km"])
-        return enriched[:limit]
+        radius_m = float(max_km if max_km is not None else 25.0) * 1000
+        pipeline = [
+            {
+                "$geoNear": {
+                    "near": {"type": "Point", "coordinates": [float(lng), float(lat)]},
+                    "distanceField": "distance_m",
+                    "maxDistance": radius_m,
+                    "spherical": True,
+                    "query": query,
+                }
+            },
+            {"$limit": max(1, limit)},
+            {"$project": {"_id": 0}},
+        ]
+        try:
+            docs = await db.providers.aggregate(pipeline).to_list(limit)
+            for d in docs:
+                if "distance_m" in d:
+                    d["distance_km"] = round(d.pop("distance_m") / 1000.0, 2)
+            return docs
+        except Exception as e:
+            # Fallback to Python Haversine loop if index missing or Mongo doesn't support $geoNear (rare)
+            logger.warning(f"$geoNear failed, falling back to Haversine: {e}")
+            providers = await db.providers.find(query, {"_id": 0}).to_list(500)
+            radius = float(max_km if max_km is not None else 25.0)
+            enriched = []
+            for p in providers:
+                plat, plng = p.get("latitude"), p.get("longitude")
+                if plat is None or plng is None:
+                    continue
+                d = _haversine_km(float(lat), float(lng), float(plat), float(plng))
+                if d <= radius:
+                    p["distance_km"] = round(d, 2)
+                    enriched.append(p)
+            enriched.sort(key=lambda r: r["distance_km"])
+            return enriched[:limit]
 
+    providers = await db.providers.find(query, {"_id": 0}).to_list(500)
     providers.sort(key=lambda r: (-(r.get("rating") or 0), r.get("business_name") or ""))
     return providers[:limit]
 
@@ -884,12 +989,19 @@ async def upsert_my_provider(data: ProviderProfileUpsert, user: User = Depends(c
     await require_role(user, "provider")
     if not (data.address or "").strip():
         raise HTTPException(400, "Address is required")
+    payload = data.model_dump()
+    # Mirror lat/lng into a GeoJSON `location` field for MongoDB 2dsphere index.
+    if payload.get("latitude") is not None and payload.get("longitude") is not None:
+        payload["location"] = {"type": "Point", "coordinates": [float(payload["longitude"]), float(payload["latitude"])]}
     existing = await db.providers.find_one({"user_id": user.id}, {"_id": 0})
     if existing:
-        await db.providers.update_one({"id": existing["id"]}, {"$set": data.model_dump()})
+        await db.providers.update_one({"id": existing["id"]}, {"$set": payload})
         return await db.providers.find_one({"id": existing["id"]}, {"_id": 0})
     profile = ProviderProfile(user_id=user.id, **data.model_dump())
-    await db.providers.insert_one(profile.model_dump())
+    doc = profile.model_dump()
+    if payload.get("location"):
+        doc["location"] = payload["location"]
+    await db.providers.insert_one(doc)
     await seed_default_availability(profile.id)
     return profile.model_dump(mode="json")
 
@@ -1047,6 +1159,242 @@ async def remove_assistant(assistant_id: str, user: User = Depends(current_user)
         raise HTTPException(404, "Assistant not found")
     # Unlink + block rather than hard-delete to preserve any history references
     await db.users.update_one({"id": assistant_id}, {"$set": {"is_blocked": True, "linked_provider_id": None}})
+    return {"ok": True}
+
+
+@api.put("/providers/me/assistants/{assistant_id}/staff")
+async def assign_assistant_staff(
+    assistant_id: str,
+    body: AssistantAssignmentUpdate,
+    user: User = Depends(current_user),
+):
+    """Provider assigns the specific hospital staff (doctors / service centers)
+    this assistant is allowed to manage. Empty list = all staff (default)."""
+    await require_role(user, "provider")
+    p = await _my_provider_or_400(user)
+    target = await db.users.find_one(
+        {"id": assistant_id, "role": "receptionist", "linked_provider_id": p["id"]},
+        {"_id": 0},
+    )
+    if not target:
+        raise HTTPException(404, "Assistant not found")
+    # Validate every id belongs to this hospital
+    if body.staff_ids:
+        valid = await db.hospital_staff.count_documents(
+            {"hospital_id": p["id"], "id": {"$in": body.staff_ids}}
+        )
+        if valid != len(body.staff_ids):
+            raise HTTPException(400, "Some staff ids are invalid")
+    await db.users.update_one(
+        {"id": assistant_id},
+        {"$set": {"assigned_staff_ids": body.staff_ids}},
+    )
+    return {"ok": True, "assigned_staff_ids": body.staff_ids}
+
+
+# ---------- Hospital-managed staff (doctors + service centers) ----------
+async def _my_hospital_or_400(user: User) -> dict:
+    p = await _my_provider_or_400(user)
+    if p.get("provider_type") != "hospital":
+        raise HTTPException(400, "Only hospital-type providers can manage staff")
+    return p
+
+
+@api.get("/providers/me/staff")
+async def list_my_staff(user: User = Depends(current_user)):
+    await require_role(user, "provider")
+    p = await _my_hospital_or_400(user)
+    rows = await db.hospital_staff.find({"hospital_id": p["id"]}, {"_id": 0}).sort("created_at", 1).to_list(500)
+    return rows
+
+
+@api.post("/providers/me/staff")
+async def add_my_staff(body: HospitalStaffUpsert, user: User = Depends(current_user)):
+    await require_role(user, "provider")
+    p = await _my_hospital_or_400(user)
+    doc = HospitalStaff(
+        hospital_id=p["id"],
+        kind=body.kind,
+        name=body.name.strip(),
+        specialization=(body.specialization or "").strip(),
+        service_tags=body.service_tags or [],
+        photo=body.photo,
+        address=(body.address or "").strip(),
+        latitude=body.latitude,
+        longitude=body.longitude,
+    )
+    await db.hospital_staff.insert_one(doc.model_dump())
+    return doc.model_dump(mode="json")
+
+
+@api.patch("/providers/me/staff/{staff_id}")
+async def update_my_staff(staff_id: str, body: HospitalStaffUpsert, user: User = Depends(current_user)):
+    await require_role(user, "provider")
+    p = await _my_hospital_or_400(user)
+    exists = await db.hospital_staff.find_one({"id": staff_id, "hospital_id": p["id"]}, {"_id": 0})
+    if not exists:
+        raise HTTPException(404, "Staff not found")
+    update = {
+        "kind": body.kind,
+        "name": body.name.strip(),
+        "specialization": (body.specialization or "").strip(),
+        "service_tags": body.service_tags or [],
+        "photo": body.photo,
+        "address": (body.address or "").strip(),
+        "latitude": body.latitude,
+        "longitude": body.longitude,
+        "active": bool(body.active),
+    }
+    await db.hospital_staff.update_one({"id": staff_id}, {"$set": update})
+    fresh = await db.hospital_staff.find_one({"id": staff_id}, {"_id": 0})
+    return fresh
+
+
+@api.delete("/providers/me/staff/{staff_id}")
+async def delete_my_staff(staff_id: str, user: User = Depends(current_user)):
+    await require_role(user, "provider")
+    p = await _my_hospital_or_400(user)
+    r = await db.hospital_staff.delete_one({"id": staff_id, "hospital_id": p["id"]})
+    return {"ok": r.deleted_count > 0}
+
+
+@api.get("/providers/{provider_id}/staff")
+async def public_hospital_staff(provider_id: str):
+    """Public list of a hospital's doctors + service centers (only active)."""
+    p = await db.providers.find_one({"id": provider_id, "approved": True}, {"_id": 0})
+    if not p or p.get("provider_type") != "hospital":
+        return []
+    rows = await db.hospital_staff.find(
+        {"hospital_id": provider_id, "active": True}, {"_id": 0}
+    ).sort("created_at", 1).to_list(500)
+    return rows
+
+
+# ---------- Razorpay subscriptions (providers only) ----------
+def _razorpay_client():
+    key = os.environ.get("RAZORPAY_KEY_ID", "").strip()
+    secret = os.environ.get("RAZORPAY_KEY_SECRET", "").strip()
+    if not key or not secret:
+        raise HTTPException(503, "Payments not configured — set RAZORPAY_KEY_ID / RAZORPAY_KEY_SECRET")
+    import razorpay
+    return razorpay.Client(auth=(key, secret))
+
+
+@api.get("/subscriptions/plans")
+async def subscription_plans():
+    return SUBSCRIPTION_PLANS
+
+
+@api.get("/subscriptions/me")
+async def my_subscription(user: User = Depends(current_user)):
+    await require_role(user, "provider")
+    p = await _my_provider_or_400(user)
+    active = await db.subscriptions.find_one(
+        {"provider_id": p["id"], "status": "active"},
+        {"_id": 0},
+        sort=[("expires_at", -1)],
+    )
+    return {"active": bool(active), "subscription": active}
+
+
+@api.post("/subscriptions/create-order")
+async def create_subscription_order(body: CreateOrderRequest, user: User = Depends(current_user)):
+    await require_role(user, "provider")
+    p = await _my_provider_or_400(user)
+    plan = next((pl for pl in SUBSCRIPTION_PLANS if pl["id"] == body.plan_id), None)
+    if not plan:
+        raise HTTPException(400, "Invalid plan")
+    client = _razorpay_client()
+    receipt = f"sub_{p['id'][:12]}_{uuid.uuid4().hex[:6]}"[:40]
+    order = client.order.create({
+        "amount": plan["price_paise"],
+        "currency": "INR",
+        "receipt": receipt,
+        "notes": {"provider_id": p["id"], "plan_id": plan["id"]},
+    })
+    sub = ProviderSubscription(
+        provider_id=p["id"], plan_id=plan["id"],
+        amount_paise=plan["price_paise"], status="created",
+        razorpay_order_id=order["id"],
+    )
+    await db.subscriptions.insert_one(sub.model_dump())
+    return {
+        "order_id": order["id"],
+        "amount": plan["price_paise"],
+        "currency": "INR",
+        "key_id": os.environ.get("RAZORPAY_KEY_ID", ""),
+        "plan": plan,
+    }
+
+
+@api.post("/subscriptions/verify")
+async def verify_subscription(body: VerifyPaymentRequest, user: User = Depends(current_user)):
+    await require_role(user, "provider")
+    client = _razorpay_client()
+    try:
+        client.utility.verify_payment_signature({
+            "razorpay_order_id": body.razorpay_order_id,
+            "razorpay_payment_id": body.razorpay_payment_id,
+            "razorpay_signature": body.razorpay_signature,
+        })
+    except razorpay_errors_module().SignatureVerificationError:
+        raise HTTPException(400, "Invalid payment signature")
+    sub = await db.subscriptions.find_one({"razorpay_order_id": body.razorpay_order_id}, {"_id": 0})
+    if not sub:
+        raise HTTPException(404, "Order not found")
+    plan = next((pl for pl in SUBSCRIPTION_PLANS if pl["id"] == sub["plan_id"]), None)
+    if not plan:
+        raise HTTPException(400, "Plan missing")
+    now = datetime.now(timezone.utc)
+    expires = now + timedelta(days=plan["duration_days"])
+    await db.subscriptions.update_one(
+        {"id": sub["id"]},
+        {"$set": {
+            "status": "active",
+            "razorpay_payment_id": body.razorpay_payment_id,
+            "activated_at": now,
+            "expires_at": expires,
+        }},
+    )
+    return {"ok": True, "expires_at": expires.isoformat()}
+
+
+def razorpay_errors_module():
+    import razorpay
+    return razorpay.errors
+
+
+@app.post("/api/subscriptions/webhook", include_in_schema=False)
+async def subscription_webhook(request: Request):
+    """Razorpay webhook. Verifies signature and updates subscription status."""
+    payload = await request.body()
+    signature = request.headers.get("X-Razorpay-Signature", "")
+    secret = os.environ.get("RAZORPAY_WEBHOOK_SECRET", "")
+    if not secret:
+        raise HTTPException(503, "Webhook secret not configured")
+    try:
+        import razorpay
+        razorpay.Client(auth=("dummy", "dummy")).utility.verify_webhook_signature(
+            payload.decode(), signature, secret
+        )
+    except Exception:
+        raise HTTPException(400, "Invalid webhook signature")
+    import json as _json
+    data = _json.loads(payload.decode())
+    event = data.get("event", "")
+    entity = (data.get("payload") or {}).get("payment", {}).get("entity") or {}
+    order_id = entity.get("order_id")
+    if order_id:
+        if event == "payment.captured":
+            await db.subscriptions.update_one(
+                {"razorpay_order_id": order_id},
+                {"$set": {"razorpay_payment_id": entity.get("id")}},
+            )
+        elif event == "payment.failed":
+            await db.subscriptions.update_one(
+                {"razorpay_order_id": order_id},
+                {"$set": {"status": "failed"}},
+            )
     return {"ok": True}
 
 
@@ -1765,6 +2113,11 @@ async def seed():
         # Never let a seeding hiccup (e.g. transient Atlas connection on cold start)
         # crash app startup and fail the deployment. The app must still boot.
         logger.error(f"Seed skipped due to error (app will still start): {e}")
+    # Ensure MongoDB geo-index for advanced nearby search (idempotent).
+    try:
+        await db.providers.create_index([("location", "2dsphere")])
+    except Exception as e:
+        logger.warning(f"providers 2dsphere index skipped: {e}")
 
 
 async def _run_seed():
