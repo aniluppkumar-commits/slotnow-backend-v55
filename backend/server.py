@@ -1597,7 +1597,7 @@ async def _run_seed():
         cats = await db.categories.find({}, {"_id": 0}).to_list(20)
         cat_by_name = {c["name"]: c for c in cats}
         samples = [
-            {"phone": "9000000001", "name": "Dr. Aarav Sharma", "biz": "Sharma Clinic", "cat": "Doctor", "city": "Mumbai", "addr": "12, Linking Road, Bandra West, Mumbai", "price": 500, "image": "https://images.unsplash.com/photo-1612349317150-e413f6a5b16d?w=800", "bio": "MBBS, MD - 12 years experience. General physician."},
+            {"phone": "9000000001", "name": "Dr. Aarav Sharma", "biz": "Sharma Clinic", "cat": "Healthcare", "city": "Mumbai", "addr": "12, Linking Road, Bandra West, Mumbai", "price": 500, "image": "https://images.unsplash.com/photo-1612349317150-e413f6a5b16d?w=800", "bio": "MBBS, MD - 12 years experience. General physician."},
             {"phone": "9000000002", "name": "Priya Beauty", "biz": "Glow Salon", "cat": "Salon", "city": "Delhi", "addr": "Shop 4, GK-2 Market, New Delhi", "price": 300, "image": "https://images.unsplash.com/photo-1595871151608-bc7abd1caca3?w=800", "bio": "Premium salon services - hair, skin, makeup."},
             {"phone": "9000000003", "name": "Rohan Tutor", "biz": "MathMinds Academy", "cat": "Tutor", "city": "Bangalore", "addr": "HSR Layout, Sector 2, Bangalore", "price": 800, "image": "https://images.unsplash.com/photo-1577896851231-70ef18881754?w=800", "bio": "IIT-Bombay alum. Class 9-12 Math & Physics."},
             {"phone": "9000000004", "name": "Anita Gupta", "biz": "Wealth Advisors", "cat": "Consultant", "city": "Pune", "addr": "ICC Tower B, SB Road, Pune", "price": 1500, "image": "https://images.unsplash.com/photo-1573497019940-1c28c88b4f3e?w=800", "bio": "Certified Financial Planner. Tax & investments."},
@@ -1669,6 +1669,17 @@ app.add_middleware(
     CORSMiddleware, allow_credentials=True, allow_origins=_cors or ["*"],
     allow_methods=["*"], allow_headers=["*"],
 )
+
+
+@app.get("/health")
+async def health_check():
+    """K8s liveness/readiness probe. Unprefixed on purpose (no /api)."""
+    return {"status": "ok"}
+
+
+@app.get("/")
+async def root():
+    return {"status": "ok", "service": "slotnow-backend"}
 
 
 @app.on_event("shutdown")
