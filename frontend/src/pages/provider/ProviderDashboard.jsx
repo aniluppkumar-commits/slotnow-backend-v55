@@ -17,6 +17,7 @@ import {
   Calendar,
   Settings2,
   ShieldAlert,
+  BarChart3,
 } from "lucide-react";
 import { toast } from "sonner";
 import PublicPageShare from "@/components/PublicPageShare";
@@ -238,6 +239,12 @@ export default function ProviderDashboard() {
             icon={<Calendar size={16} />}
             title="History"
             onClick={() => navigate("/provider/history")}
+          />
+          <Row
+            testid="provider-open-analytics"
+            icon={<BarChart3 size={16} />}
+            title="Analytics"
+            onClick={() => navigate("/provider/analytics")}
           />
           <Row
             testid="provider-manage-capacity"

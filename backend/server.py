@@ -209,6 +209,32 @@ class AvailabilityCreate(BaseModel):
     staff_id: Optional[str] = None
 
 
+# ---------- Per-date availability overrides (leave day / one-off extra shift) ----------
+class AvailabilityOverride(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    provider_id: str
+    staff_id: Optional[str] = None          # None = hospital / provider-wide
+    date: str                                # "YYYY-MM-DD"
+    kind: Literal["closed", "shift"]        # "closed" = full-day off, "shift" = replacement shift
+    start_time: Optional[str] = None         # required when kind == "shift"
+    end_time: Optional[str] = None
+    slot_duration: int = 30
+    max_bookings: Optional[int] = None
+    note: Optional[str] = None
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+
+class AvailabilityOverrideCreate(BaseModel):
+    staff_id: Optional[str] = None
+    date: str
+    kind: Literal["closed", "shift"]
+    start_time: Optional[str] = None
+    end_time: Optional[str] = None
+    slot_duration: int = 30
+    max_bookings: Optional[int] = None
+    note: Optional[str] = None
+
+
 class Booking(BaseModel):
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     customer_id: Optional[str] = None
@@ -386,6 +412,12 @@ class SmsSettings(BaseModel):
     dlt_entity_id: str = ""
     dlt_variable_name: str = "num"
     enabled: bool = False
+    # Second DLT template used for queue-position reminders (20 / 3 ahead).
+    # Kept optional so live SMS can still send OTPs while the reminder template
+    # is being DLT-approved.
+    reminder_template_id: str = ""
+    reminder_var_ahead: str = "num"
+    reminder_var_name: str = "name"
 
 
 class PaymentSettings(BaseModel):
@@ -466,6 +498,111 @@ async def _dispatch_msg91(settings: dict, phone_12: str, otp: str) -> tuple[bool
         return False, f"MSG91 responded HTTP {resp.status_code}: {raw}", raw
     except Exception as e:  # network error, DNS, timeout
         return False, f"MSG91 network error: {e}", None
+
+
+# ---------- Queue-based smart reminder SMS ----------
+# Uses a SECOND MSG91 DLT template (configured on the SMS settings row as
+# `reminder_template_id`) so we don't collide with the OTP template.
+# When not configured, reminders are still tracked in the `queue_reminders`
+# collection and a booking flag is toggled — they just aren't dispatched.
+async def _send_reminder_sms_msg91(settings: dict, phone_12: str, ahead: int, patient_name: str = "") -> tuple[bool, str]:
+    tmpl = (settings.get("reminder_template_id") or "").strip()
+    if not tmpl:
+        return False, "reminder_template_id not configured on SMS settings"
+    var_ahead = settings.get("reminder_var_ahead") or "num"
+    var_name = settings.get("reminder_var_name") or "name"
+    body = {
+        "template_id": tmpl,
+        "sender": settings.get("sender_id", ""),
+        "short_url": "0",
+        "recipients": [
+            {"mobiles": phone_12, var_ahead: str(ahead), var_name: (patient_name or "Patient")[:40]},
+        ],
+    }
+    try:
+        import httpx
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            resp = await client.post(
+                "https://control.msg91.com/api/v5/flow/",
+                headers={"authkey": settings.get("api_key", ""), "Content-Type": "application/json"},
+                json=body,
+            )
+        raw = {}
+        try:
+            raw = resp.json()
+        except Exception:
+            raw = {"text": resp.text}
+        if resp.status_code == 200 and raw.get("type") == "success":
+            return True, "sent"
+        return False, f"MSG91 HTTP {resp.status_code}: {raw}"
+    except Exception as e:
+        return False, f"network error: {e}"
+
+
+async def _notify_queue_positions(provider_id: str, date: str, staff_id: Optional[str] = None) -> int:
+    """Scan the active queue for a provider (+ optional staff) on a date and,
+    for each customer, dispatch a queue-position SMS the first time their
+    'patients ahead' count crosses either the 20 or 3 threshold. Records the
+    reminder on the booking (`reminder20_sent` / `reminder3_sent`) so we never
+    send the same alert twice. Returns the number of reminders queued.
+    """
+    q: dict = {
+        "provider_id": provider_id,
+        "date": date,
+        "status": {"$in": ["pending", "confirmed"]},
+        "is_walkin": False,
+    }
+    if staff_id:
+        q["staff_id"] = staff_id
+    active = await db.bookings.find(q, {"_id": 0}).sort("token_number", 1).to_list(1000)
+    if not active:
+        return 0
+    # 'Ahead' = index in the sorted active list (0-based → 0 people ahead = your turn)
+    settings = await db.settings.find_one({"key": "sms"}, {"_id": 0}) or {}
+    live = bool(settings.get("enabled") and settings.get("provider") == "msg91" and settings.get("api_key"))
+    sent = 0
+    for i, bk in enumerate(active):
+        ahead = i
+        thresholds: list[tuple[int, str]] = []
+        if ahead <= 20 and not bk.get("reminder20_sent"):
+            thresholds.append((20, "reminder20_sent"))
+        if ahead <= 3 and not bk.get("reminder3_sent"):
+            thresholds.append((3, "reminder3_sent"))
+        for threshold, flag_field in thresholds:
+            record = {
+                "booking_id": bk["id"],
+                "customer_id": bk.get("customer_id"),
+                "customer_phone": bk.get("customer_phone", ""),
+                "provider_id": provider_id,
+                "staff_id": bk.get("staff_id"),
+                "date": date,
+                "threshold": threshold,
+                "ahead_at_send": ahead,
+                "created_at": datetime.now(timezone.utc),
+                "sent": False,
+                "note": "",
+            }
+            if live and bk.get("customer_phone"):
+                phone_12 = normalize_indian_phone(bk["customer_phone"])
+                ok, note = await _send_reminder_sms_msg91(settings, phone_12, ahead, bk.get("customer_name", ""))
+                record["sent"] = ok
+                record["note"] = note
+            else:
+                record["note"] = "SMS not live — reminder tracked only"
+            await db.queue_reminders.insert_one(record)
+            await db.bookings.update_one({"id": bk["id"]}, {"$set": {flag_field: True}})
+            # Best-effort in-app notification for the customer
+            if bk.get("customer_id"):
+                title = f"Only {ahead} ahead" if threshold == 3 else "You're getting closer"
+                body = (
+                    f"You're up next — only {ahead} patient{'' if ahead == 1 else 's'} ahead. "
+                    f"Please head to the clinic."
+                    if threshold == 3
+                    else f"{ahead} patients are ahead of you at the clinic. Start heading there soon."
+                )
+                await push_notification(bk["customer_id"], title, body, "booking")
+            sent += 1
+    return sent
 
 
 def make_token(user_id: str, role: str) -> str:
@@ -568,6 +705,33 @@ def _min_to_time(m: int) -> str:
     return f"{m//60:02d}:{m%60:02d}"
 
 
+# ---------- Admin lockdown ----------
+# Only phones listed in ADMIN_ALLOWED_PHONES (comma-separated) may authenticate
+# with role="admin". `BOOTSTRAP_ADMIN_PHONE` is always allowed. Any other phone
+# gets a hard 403 even if they somehow have an admin user row / valid OTP / PIN.
+def _admin_allowed_phone_set() -> set[str]:
+    allowed = set()
+    boot = os.environ.get("BOOTSTRAP_ADMIN_PHONE", "").strip()
+    if boot:
+        allowed.add(normalize_indian_phone(boot))
+    raw = os.environ.get("ADMIN_ALLOWED_PHONES", "").strip()
+    if raw:
+        for p in raw.split(","):
+            p = p.strip()
+            if p:
+                allowed.add(normalize_indian_phone(p))
+    return allowed
+
+
+def _assert_admin_phone_allowed(phone: str) -> None:
+    """Raise 403 if `phone` is not on the admin allow-list."""
+    allowed = _admin_allowed_phone_set()
+    if not allowed:
+        return  # No lockdown configured → allow all (dev only)
+    if normalize_indian_phone(phone) not in allowed:
+        raise HTTPException(403, "Admin access is restricted to authorized personnel only.")
+
+
 # ---------- Auth ----------
 @api.post("/auth/send-otp")
 async def send_otp(req: OTPRequest):
@@ -605,6 +769,10 @@ async def send_otp(req: OTPRequest):
 
 @api.post("/auth/verify-otp")
 async def verify_otp(req: OTPVerify):
+    # Admin role is locked down to the allow-listed phones only. Do this
+    # BEFORE any OTP check so we never leak existence of the OTP itself.
+    if req.role == "admin":
+        _assert_admin_phone_allowed(req.phone)
     phone_12 = normalize_indian_phone(req.phone)
     settings = await db.settings.find_one({"key": "sms"}, {"_id": 0}) or {}
     live_mode = bool(
@@ -676,6 +844,9 @@ async def pin_login(req: PinLoginRequest):
     invalid = HTTPException(401, "Invalid phone or PIN")
     if not (len(req.pin) >= 4 and req.pin.isdigit()):
         raise invalid
+    # Admin role is restricted to allow-listed phones only.
+    if req.role == "admin":
+        _assert_admin_phone_allowed(req.phone)
     phone_12 = normalize_indian_phone(req.phone)
 
     # Bootstrap PIN check (admin role only, env-gated)
@@ -1376,6 +1547,70 @@ async def public_staff_availability(provider_id: str, staff_id: str):
     ).to_list(200)
 
 
+# ---------- Availability overrides (leave / one-off shift) ----------
+@api.get("/providers/me/overrides")
+async def my_overrides(
+    user: User = Depends(current_user),
+    staff_id: Optional[str] = None,
+    from_date: Optional[str] = Query(None, alias="from"),
+    to_date: Optional[str] = Query(None, alias="to"),
+):
+    await require_role(user, "provider")
+    p = await db.providers.find_one({"user_id": user.id}, {"_id": 0})
+    if not p:
+        return []
+    q: dict = {"provider_id": p["id"]}
+    if staff_id is not None:
+        q["staff_id"] = staff_id  # exact match (including None if caller passes empty string)
+    if from_date or to_date:
+        rng: dict = {}
+        if from_date:
+            rng["$gte"] = from_date
+        if to_date:
+            rng["$lte"] = to_date
+        q["date"] = rng
+    return await db.availability_overrides.find(q, {"_id": 0}).sort("date", 1).to_list(500)
+
+
+@api.post("/providers/me/overrides")
+async def add_override(o: AvailabilityOverrideCreate, user: User = Depends(current_user)):
+    await require_role(user, "provider")
+    p = await db.providers.find_one({"user_id": user.id}, {"_id": 0})
+    if not p:
+        raise HTTPException(400, "Set up provider profile first")
+    # Validate date
+    try:
+        datetime.strptime(o.date, "%Y-%m-%d")
+    except ValueError:
+        raise HTTPException(400, "Invalid date, expected YYYY-MM-DD")
+    # Validate staff belongs to this provider
+    if o.staff_id:
+        s = await db.hospital_staff.find_one({"id": o.staff_id, "hospital_id": p["id"]}, {"_id": 0})
+        if not s:
+            raise HTTPException(404, "Staff not found")
+    # Validate shift override fields
+    if o.kind == "shift":
+        if not (o.start_time and o.end_time):
+            raise HTTPException(400, "start_time and end_time are required for a shift override")
+        if o.start_time >= o.end_time:
+            raise HTTPException(400, "end_time must be after start_time")
+    ov = AvailabilityOverride(provider_id=p["id"], **o.model_dump())
+    await db.availability_overrides.insert_one(ov.model_dump())
+    return ov.model_dump(mode="json")
+
+
+@api.delete("/providers/me/overrides/{override_id}")
+async def del_override(override_id: str, user: User = Depends(current_user)):
+    await require_role(user, "provider")
+    p = await db.providers.find_one({"user_id": user.id}, {"_id": 0})
+    if not p:
+        raise HTTPException(400, "Set up provider profile first")
+    r = await db.availability_overrides.delete_one(
+        {"id": override_id, "provider_id": p["id"]}
+    )
+    return {"ok": r.deleted_count > 0}
+
+
 # ---------- Razorpay subscriptions (providers only) ----------
 def _razorpay_client():
     key = os.environ.get("RAZORPAY_KEY_ID", "").strip()
@@ -1521,13 +1756,40 @@ async def get_slots(provider_id: str, date: str = Query(...), service_id: Option
         raise HTTPException(400, "Bad date")
     weekday = d.weekday()
 
-    # 1) Pick the applicable schedule (staff-specific, else hospital default)
-    schedule_scope = "staff"
+    # 0) Check for per-date overrides FIRST — they beat the weekly template.
+    override_q: dict = {"provider_id": provider_id, "date": date}
     if staff_id:
+        # staff-specific override, else hospital-level override applies too
+        override_q["staff_id"] = {"$in": [staff_id, None]}
+    else:
+        override_q["staff_id"] = None
+    overrides = await db.availability_overrides.find(override_q, {"_id": 0}).to_list(50)
+    # Prefer staff-specific override when present
+    if staff_id and any(o.get("staff_id") == staff_id for o in overrides):
+        overrides = [o for o in overrides if o.get("staff_id") == staff_id]
+    closed = any(o["kind"] == "closed" for o in overrides)
+    if closed:
+        return {"has_schedule": False, "shifts": [], "schedule_scope": "override_closed",
+                "note": next((o.get("note") for o in overrides if o["kind"] == "closed"), None)}
+    shift_overrides = [o for o in overrides if o["kind"] == "shift" and o.get("start_time") and o.get("end_time")]
+
+    schedule_scope = "provider"
+    if shift_overrides:
+        # Use overrides as the rule set for this specific date
+        rules = [{
+            "start_time": o["start_time"],
+            "end_time": o["end_time"],
+            "slot_duration": o.get("slot_duration", 30),
+            "max_bookings": o.get("max_bookings"),
+        } for o in shift_overrides]
+        schedule_scope = "override_shift"
+    elif staff_id:
+        # 1) Pick the applicable weekly schedule (staff-specific, else hospital default)
         rules = await db.availability.find(
             {"provider_id": provider_id, "staff_id": staff_id, "weekday": weekday},
             {"_id": 0},
         ).to_list(20)
+        schedule_scope = "staff"
         if not rules:
             # Fallback to hospital-level schedule
             rules = await db.availability.find(
@@ -1663,20 +1925,35 @@ async def create_booking(b: BookingCreate, user: User = Depends(current_user)):
         bd = datetime.strptime(b.date, "%Y-%m-%d").date()
     except ValueError:
         raise HTTPException(400, "Invalid date")
-    shift = None
+    # 0) Reject if there's a "closed" override for this date+scope
+    ov_q: dict = {"provider_id": b.provider_id, "date": b.date}
     if b.staff_id:
+        ov_q["staff_id"] = {"$in": [b.staff_id, None]}
+    else:
+        ov_q["staff_id"] = None
+    ov_rows = await db.availability_overrides.find(ov_q, {"_id": 0}).to_list(50)
+    if b.staff_id and any(o.get("staff_id") == b.staff_id for o in ov_rows):
+        ov_rows = [o for o in ov_rows if o.get("staff_id") == b.staff_id]
+    if any(o["kind"] == "closed" for o in ov_rows):
+        raise HTTPException(400, "This day is marked unavailable by the provider")
+    override_shifts = [o for o in ov_rows if o["kind"] == "shift" and o.get("start_time") and o.get("end_time")]
+
+    shift = None
+    if override_shifts:
+        shift = next((o for o in override_shifts if o["start_time"] == b.start_time), None)
+    if not shift and b.staff_id:
         shift = await db.availability.find_one(
             {"provider_id": b.provider_id, "staff_id": b.staff_id,
              "weekday": bd.weekday(), "start_time": b.start_time},
             {"_id": 0},
         )
-    if not shift:
+    if not shift and not override_shifts:
         shift = await db.availability.find_one(
             {"provider_id": b.provider_id, "staff_id": None,
              "weekday": bd.weekday(), "start_time": b.start_time},
             {"_id": 0},
         )
-    if not shift:
+    if not shift and not override_shifts:
         # Legacy rows without staff_id key
         shift = await db.availability.find_one(
             {"provider_id": b.provider_id, "staff_id": {"$exists": False},
@@ -1777,6 +2054,12 @@ async def create_booking(b: BookingCreate, user: User = Depends(current_user)):
     await db.bookings.insert_one(booking.model_dump())
     await push_notification(prov["user_id"], "New confirmed booking", f"{svc['name']} on {b.date} at {b.start_time} • Token #{token}", "booking")
     await push_notification(user.id, "Booking confirmed", f"Token #{token} • {svc['name']} on {b.date} at {b.start_time}", "booking")
+    # Queue-based smart reminder: if this booking already lands at ≤20 or ≤3
+    # patients ahead (small queues), fire the alert immediately.
+    try:
+        await _notify_queue_positions(b.provider_id, b.date, b.staff_id)
+    except Exception:
+        pass  # never block a booking on notification failure
     return booking.model_dump(mode="json")
 
 
@@ -1901,6 +2184,12 @@ async def update_booking(booking_id: str, u: BookingUpdate, user: User = Depends
         prov = await db.providers.find_one({"id": b["provider_id"]}, {"_id": 0})
         if prov:
             await push_notification(prov["user_id"], "Booking cancelled", f"{b['service_name']} on {b['date']} cancelled", "booking")
+    # Queue changed → re-run smart reminders for everyone else in this queue
+    if u.status in ("completed", "cancelled", "rejected", "no_show"):
+        try:
+            await _notify_queue_positions(b["provider_id"], b["date"], b.get("staff_id"))
+        except Exception:
+            pass
     return fresh
 
 
@@ -2050,8 +2339,15 @@ async def queue_next(user: User = Depends(current_user), date: Optional[str] = N
     d = date or await get_today_str()
     state = await db.queue_state.find_one({"provider_id": pid, "date": d}, {"_id": 0}) or {"current_token": 0, "last_assigned": 0}
     prev = state.get("current_token", 0)
+    completed_staff_ids: set[Optional[str]] = set()
     if prev > 0:
         # mark previous active as completed
+        completed_rows = await db.bookings.find(
+            {"provider_id": pid, "date": d, "token_number": prev, "status": {"$in": ["pending", "confirmed"]}},
+            {"_id": 0, "staff_id": 1},
+        ).to_list(50)
+        for row in completed_rows:
+            completed_staff_ids.add(row.get("staff_id"))
         await db.bookings.update_many(
             {"provider_id": pid, "date": d, "token_number": prev, "status": {"$in": ["pending", "confirmed"]}},
             {"$set": {"status": "completed"}},
@@ -2065,6 +2361,15 @@ async def queue_next(user: User = Depends(current_user), date: Optional[str] = N
         {"$set": {"current_token": new_token, "last_assigned": state.get("last_assigned", 0)}},
         upsert=True,
     )
+    # Queue advanced → fire smart reminders for anyone crossing 20/3 threshold
+    try:
+        if completed_staff_ids:
+            for sid in completed_staff_ids:
+                await _notify_queue_positions(pid, d, sid)
+        else:
+            await _notify_queue_positions(pid, d, None)
+    except Exception:
+        pass
     return {"current_token": new_token, "last_assigned": state.get("last_assigned", 0)}
 
 
@@ -2115,6 +2420,135 @@ async def my_queue_position(user: User = Depends(current_user)):
         "last_assigned": state.get("last_assigned", 0),
         "your_token": booking.get("token_number", 0),
         "wait": max(0, booking.get("token_number", 0) - max(state.get("current_token", 0), 1)),
+    }
+
+
+# ---------- Provider analytics (per-doctor booking heatmap + utilisation) ----------
+@api.get("/providers/me/analytics")
+async def provider_analytics(
+    user: User = Depends(current_user),
+    days: int = Query(30, ge=1, le=365),
+    staff_id: Optional[str] = None,
+):
+    """Aggregate booking metrics for the current provider over the last `days`.
+
+    - Total / completed / cancelled / no-show / walk-in counts.
+    - Weekday × hour heatmap (7 × 24 cells) based on booking `start_time`.
+    - Utilisation % per doctor (bookings vs. total capacity from schedules).
+    - Per-doctor breakdown when the provider is a hospital.
+    """
+    await require_role(user, "provider")
+    prov = await db.providers.find_one({"user_id": user.id}, {"_id": 0})
+    if not prov:
+        raise HTTPException(400, "Set up provider profile first")
+    from_date = (date_cls.today() - timedelta(days=days)).isoformat()
+    q: dict = {"provider_id": prov["id"], "date": {"$gte": from_date}}
+    if staff_id:
+        q["staff_id"] = staff_id
+    rows = await db.bookings.find(q, {"_id": 0}).to_list(20000)
+
+    totals = {"total": 0, "completed": 0, "cancelled": 0, "no_show": 0, "walkin": 0, "rejected": 0, "confirmed": 0, "pending": 0}
+    heatmap = [[0] * 24 for _ in range(7)]  # weekday 0=Mon..6=Sun × hour 0..23
+    by_status_by_day: dict[str, int] = {}
+    per_staff: dict[str, dict] = {}
+    for r in rows:
+        totals["total"] += 1
+        st = r.get("status") or "confirmed"
+        if st in totals:
+            totals[st] += 1
+        if r.get("is_walkin"):
+            totals["walkin"] += 1
+        try:
+            d = datetime.strptime(r["date"], "%Y-%m-%d").date()
+            weekday = d.weekday()
+        except Exception:
+            continue
+        # hour of start_time (walk-ins have real HH:MM too)
+        try:
+            hour = int((r.get("start_time") or "00:00").split(":")[0])
+        except Exception:
+            hour = 0
+        heatmap[weekday][min(23, max(0, hour))] += 1
+        by_status_by_day[r["date"]] = by_status_by_day.get(r["date"], 0) + 1
+        sid = r.get("staff_id") or "__provider__"
+        ps = per_staff.setdefault(sid, {
+            "staff_id": r.get("staff_id"),
+            "staff_name": r.get("staff_name") or ("Provider default" if sid == "__provider__" else ""),
+            "staff_kind": r.get("staff_kind"),
+            "total": 0, "completed": 0, "cancelled": 0, "no_show": 0, "walkin": 0, "heatmap": [[0] * 24 for _ in range(7)],
+        })
+        ps["total"] += 1
+        if st == "completed": ps["completed"] += 1
+        if st == "cancelled": ps["cancelled"] += 1
+        if st == "no_show":   ps["no_show"] += 1
+        if r.get("is_walkin"): ps["walkin"] += 1
+        ps["heatmap"][weekday][min(23, max(0, hour))] += 1
+
+    # Fetch staff names + capacity for utilisation
+    hospital_staff = []
+    if prov.get("provider_type") == "hospital":
+        hospital_staff = await db.hospital_staff.find(
+            {"hospital_id": prov["id"]}, {"_id": 0}
+        ).to_list(500)
+        # Fill in names for staff that appear in bookings
+        for hs in hospital_staff:
+            key = hs["id"]
+            if key in per_staff:
+                per_staff[key]["staff_name"] = hs.get("name") or per_staff[key]["staff_name"]
+                per_staff[key]["staff_kind"] = hs.get("kind") or per_staff[key]["staff_kind"]
+
+    # Compute utilisation per staff: bookings / total_capacity_over_period.
+    # Capacity for a weekday = sum of (max_bookings or slot_capacity) across shifts on that weekday.
+    async def _weekly_capacity(pid: str, sid: Optional[str]) -> list[int]:
+        cap = [0] * 7
+        rules = await db.availability.find(
+            {"provider_id": pid, "staff_id": sid}, {"_id": 0}
+        ).to_list(200)
+        # Fallback to provider-wide when staff has no rules
+        if sid is not None and not rules:
+            rules = await db.availability.find(
+                {"provider_id": pid, "staff_id": None}, {"_id": 0}
+            ).to_list(200)
+        for r in rules:
+            wd = int(r["weekday"])
+            if r.get("max_bookings") is not None:
+                cap[wd] += int(r["max_bookings"])
+            else:
+                # Approximate capacity by total minutes / slot_duration
+                mins = _time_to_min(r["end_time"]) - _time_to_min(r["start_time"])
+                slot = max(5, int(r.get("slot_duration", 30)))
+                cap[wd] += max(1, mins // slot)
+        return cap
+
+    # Count weekday occurrences in the range
+    weekday_counts = [0] * 7
+    today_dt = date_cls.today()
+    for offset in range(days + 1):
+        d = today_dt - timedelta(days=offset)
+        weekday_counts[d.weekday()] += 1
+
+    utilisation: dict[str, float] = {}
+    total_capacity = 0
+    total_bookings = totals["total"]
+    for key, ps in per_staff.items():
+        sid = ps.get("staff_id")
+        cap = await _weekly_capacity(prov["id"], sid)
+        capacity_over_period = sum(cap[wd] * weekday_counts[wd] for wd in range(7))
+        ps["capacity"] = capacity_over_period
+        ps["utilisation_pct"] = round((ps["total"] / capacity_over_period) * 100, 1) if capacity_over_period else 0.0
+        utilisation[key] = ps["utilisation_pct"]
+        total_capacity += capacity_over_period
+
+    return {
+        "provider_id": prov["id"],
+        "days": days,
+        "from_date": from_date,
+        "totals": totals,
+        "capacity": total_capacity,
+        "utilisation_pct": round((total_bookings / total_capacity) * 100, 1) if total_capacity else 0.0,
+        "heatmap": heatmap,  # [7][24]
+        "per_staff": list(per_staff.values()),
+        "hospital_staff": [{"id": s["id"], "name": s.get("name"), "kind": s.get("kind")} for s in hospital_staff],
     }
 
 

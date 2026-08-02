@@ -2,19 +2,21 @@ import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import api from "@/lib/api";
 import AppShell from "@/components/AppShell";
-import { Loader2, Plus, Trash2, Clock, Stethoscope, Building2 } from "lucide-react";
+import { Loader2, Plus, Trash2, Clock, Stethoscope, Building2, CalendarX, CalendarPlus2 } from "lucide-react";
 import { toast } from "sonner";
 
 const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 // Backend uses Python's weekday() (0=Mon..6=Sun). UI uses JS getDay() (0=Sun..6=Sat).
 const jsToPyWeekday = (js) => (js === 0 ? 6 : js - 1);
 const pyToJsWeekday = (py) => (py + 1) % 7;
+const todayISO = () => new Date().toISOString().slice(0, 10);
 
 export default function HospitalStaffSchedule() {
   const { staffId } = useParams();
   const navigate = useNavigate();
   const [staff, setStaff] = useState(null);
   const [rules, setRules] = useState([]);
+  const [overrides, setOverrides] = useState([]);
   const [loading, setLoading] = useState(true);
   const [form, setForm] = useState({
     weekday: 1,
@@ -23,14 +25,24 @@ export default function HospitalStaffSchedule() {
     slot_duration: 30,
     max_bookings: "",
   });
+  const [ovForm, setOvForm] = useState({
+    date: todayISO(),
+    kind: "closed",
+    start_time: "10:00",
+    end_time: "13:00",
+    max_bookings: "",
+    note: "",
+  });
   const [saving, setSaving] = useState(false);
+  const [savingOv, setSavingOv] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const [staffRes, avRes] = await Promise.all([
+      const [staffRes, avRes, ovRes] = await Promise.all([
         api.get("/providers/me/staff"),
         api.get(`/providers/me/staff/${staffId}/availability`).catch(() => ({ data: [] })),
+        api.get(`/providers/me/overrides`, { params: { staff_id: staffId } }).catch(() => ({ data: [] })),
       ]);
       const list = Array.isArray(staffRes.data) ? staffRes.data : [];
       const me = list.find((s) => s.id === staffId);
@@ -41,6 +53,7 @@ export default function HospitalStaffSchedule() {
       }
       setStaff(me);
       setRules(Array.isArray(avRes.data) ? avRes.data : []);
+      setOverrides(Array.isArray(ovRes.data) ? ovRes.data : []);
     } catch (e) {
       toast.error(e?.response?.data?.detail || "Failed to load schedule");
     } finally {
@@ -96,6 +109,46 @@ export default function HospitalStaffSchedule() {
     });
     return map;
   }, [rules]);
+
+  const addOverride = async () => {
+    if (!ovForm.date) return toast.error("Pick a date");
+    if (ovForm.kind === "shift" && ovForm.start_time >= ovForm.end_time) {
+      return toast.error("End time must be after start time");
+    }
+    setSavingOv(true);
+    try {
+      const body = {
+        staff_id: staffId,
+        date: ovForm.date,
+        kind: ovForm.kind,
+        note: ovForm.note?.trim() || null,
+      };
+      if (ovForm.kind === "shift") {
+        body.start_time = ovForm.start_time;
+        body.end_time = ovForm.end_time;
+        body.slot_duration = 30;
+        body.max_bookings = ovForm.max_bookings === "" ? null : Number(ovForm.max_bookings);
+      }
+      await api.post("/providers/me/overrides", body);
+      toast.success(ovForm.kind === "closed" ? "Day marked unavailable" : "Extra shift added");
+      setOvForm({ ...ovForm, note: "", max_bookings: "" });
+      await load();
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || "Failed");
+    } finally {
+      setSavingOv(false);
+    }
+  };
+
+  const removeOverride = async (id) => {
+    if (!window.confirm("Remove this override?")) return;
+    try {
+      await api.delete(`/providers/me/overrides/${id}`);
+      await load();
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || "Failed");
+    }
+  };
 
   const kindLabel = staff?.kind === "doctor" ? "Doctor" : "Service";
   const KindIcon = staff?.kind === "doctor" ? Stethoscope : Building2;
@@ -188,6 +241,101 @@ export default function HospitalStaffSchedule() {
               >
                 {saving ? <Loader2 size={16} className="animate-spin" /> : <><Plus size={16} /> Add shift</>}
               </button>
+            </div>
+
+            {/* Per-date overrides (leave / one-off extra shift) */}
+            <div className="bg-white border border-cream-300 rounded-2xl p-4 space-y-3">
+              <div>
+                <p className="text-xs font-bold uppercase tracking-widest text-ink-soft">Per-date override</p>
+                <p className="text-[11px] text-ink-muted mt-0.5">Mark a specific date as on-leave or add a one-off extra shift without touching the weekly template.</p>
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  data-testid="ov-kind-closed"
+                  onClick={() => setOvForm({ ...ovForm, kind: "closed" })}
+                  className={`flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-bold border ${
+                    ovForm.kind === "closed" ? "bg-rose-500 text-white border-rose-500" : "bg-cream border-cream-300 text-ink"
+                  }`}
+                ><CalendarX size={14} /> On leave</button>
+                <button
+                  data-testid="ov-kind-shift"
+                  onClick={() => setOvForm({ ...ovForm, kind: "shift" })}
+                  className={`flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-bold border ${
+                    ovForm.kind === "shift" ? "bg-forest text-cream-100 border-forest" : "bg-cream border-cream-300 text-ink"
+                  }`}
+                ><CalendarPlus2 size={14} /> Extra shift</button>
+              </div>
+              <div>
+                <label className="text-[10px] uppercase tracking-wider font-bold text-ink-muted">Date</label>
+                <input
+                  data-testid="ov-date"
+                  type="date"
+                  value={ovForm.date}
+                  min={todayISO()}
+                  onChange={(e) => setOvForm({ ...ovForm, date: e.target.value })}
+                  className="w-full mt-1 bg-cream border border-cream-300 rounded-xl px-3 py-2.5 text-ink outline-none focus:ring-2 focus:ring-forest/20"
+                />
+              </div>
+              {ovForm.kind === "shift" && (
+                <>
+                  <div className="grid grid-cols-2 gap-2">
+                    <TimeInput testid="ov-start" label="Start" value={ovForm.start_time} onChange={(v) => setOvForm({ ...ovForm, start_time: v })} />
+                    <TimeInput testid="ov-end" label="End" value={ovForm.end_time} onChange={(v) => setOvForm({ ...ovForm, end_time: v })} />
+                  </div>
+                  <div>
+                    <label className="text-[10px] uppercase tracking-wider font-bold text-ink-muted">Max bookings</label>
+                    <input
+                      data-testid="ov-max"
+                      type="number" min="0"
+                      value={ovForm.max_bookings}
+                      onChange={(e) => setOvForm({ ...ovForm, max_bookings: e.target.value })}
+                      placeholder="Blank = unlimited"
+                      className="w-full mt-1 bg-cream border border-cream-300 rounded-xl px-3 py-2.5 text-ink outline-none focus:ring-2 focus:ring-forest/20"
+                    />
+                  </div>
+                </>
+              )}
+              <div>
+                <label className="text-[10px] uppercase tracking-wider font-bold text-ink-muted">Note (optional)</label>
+                <input
+                  data-testid="ov-note"
+                  type="text"
+                  value={ovForm.note}
+                  onChange={(e) => setOvForm({ ...ovForm, note: e.target.value })}
+                  placeholder="e.g. On vacation / Emergency shift"
+                  className="w-full mt-1 bg-cream border border-cream-300 rounded-xl px-3 py-2.5 text-ink outline-none focus:ring-2 focus:ring-forest/20"
+                />
+              </div>
+              <button
+                data-testid="ov-add-btn"
+                onClick={addOverride}
+                disabled={savingOv}
+                className={`w-full flex items-center justify-center gap-2 py-2.5 rounded-xl font-bold disabled:opacity-60 ${
+                  ovForm.kind === "closed" ? "bg-rose-500 text-white hover:bg-rose-600" : "bg-forest text-cream-100 hover:bg-forest-dark"
+                }`}
+              >
+                {savingOv ? <Loader2 size={16} className="animate-spin" /> : <><Plus size={16} /> {ovForm.kind === "closed" ? "Mark unavailable" : "Add extra shift"}</>}
+              </button>
+              {overrides.length > 0 && (
+                <div className="pt-2 border-t border-cream-300">
+                  <p className="text-[10px] uppercase tracking-wider font-bold text-ink-muted mb-2">Upcoming overrides</p>
+                  <div className="space-y-2">
+                    {overrides.map((o) => (
+                      <div key={o.id} data-testid={`ov-row-${o.id}`} className={`flex items-center justify-between px-3 py-2 rounded-lg text-sm ${o.kind === "closed" ? "bg-rose-50 text-rose-900" : "bg-forest/5 text-ink"}`}>
+                        <div>
+                          <span className="font-bold">{o.date}</span>
+                          <span className="mx-1.5 opacity-50">·</span>
+                          <span>{o.kind === "closed" ? "On leave" : `${o.start_time}–${o.end_time}`}</span>
+                          {o.note && <div className="text-[11px] opacity-80">{o.note}</div>}
+                        </div>
+                        <button data-testid={`ov-remove-${o.id}`} onClick={() => removeOverride(o.id)} className="p-2 rounded-lg text-rose-500 hover:bg-white">
+                          <Trash2 size={14} />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* Current schedule */}

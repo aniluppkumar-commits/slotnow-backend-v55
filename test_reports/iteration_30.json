@@ -1,0 +1,33 @@
+{
+  "summary": "SlotNow iteration 40 full-stack verification for Admin phone lockdown + Per-date availability overrides + Queue-based smart reminders + Provider analytics. Backend: 18/18 pytest cases pass covering (a) admin PIN + verify-otp lockdown to 9412575970 with 403 for 9999999999 (customer role unaffected), (b) overrides CRUD (POST/GET/DELETE) + validation (shift requires start_time/end_time), (c) override drives /providers/{id}/slots (schedule_scope='override_closed' with has_schedule=false, and 'override_shift' with only the one-off shift), (d) POST /bookings on closed override date rejected 400 'unavailable', (e) booking on shift override succeeds at its start_time, (f) new booking auto-sets reminder20_sent + reminder3_sent when queue is empty (position 0), (g) analytics returns totals/capacity/utilisation_pct/heatmap[7][24]/per_staff[] and honors ?staff_id filter, (h) admin regression endpoints (stats, subscription-analytics, referrals) still 200 with allowed admin phone, (i) hospital_default fallback slot regression. Frontend: admin lockdown honored on /login (blocked phone stays on /login, allowed phone reaches /admin), Provider Dashboard shows data-testid provider-open-analytics which navigates to /provider/analytics, analytics page renders kpi-total/kpi-completed/kpi-cancelled/kpi-noshow, analytics-util-pct, analytics-range-{7,30,90}, heat-0-10, and analytics-staff-select (hospital provider), and HospitalStaffSchedule override editor supports ov-kind-{closed,shift}/ov-date/ov-start/ov-end/ov-max/ov-note/ov-add-btn — add creates ov-row-{id}, ov-remove-{id} removes it end-to-end.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "HospitalStaffSchedule /provider/staff/{id}/schedule", "issues": ["The 'Mark unavailable' / 'Add extra shift' primary button (ov-add-btn) sits directly above the bottom nav bar and can be partially obscured on shorter viewports (< ~950px). Reproduced under viewport 1440x900: Playwright click even with force=True did not fire the POST; JS-level click did. Recommend adding pb-24 spacer to the override card or moving the CTA higher so the bottom nav does not intercept clicks."]},
+      {"screen": "ProviderAnalytics /provider/analytics", "issues": ["When there are no bookings for a hospital yet, per_staff array is empty so analytics-drill-{staff_id} buttons never render. Consider rendering a placeholder row per seeded doctor with 0 utilisation so the drill-down surface remains discoverable in the empty state."]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iter40_overrides_reminders_analytics.py",
+    "/app/test_reports/pytest/iter40.xml"
+  ],
+  "action_items": [
+    "(Low) Add bottom padding under the override CTA or lift it above the fixed bottom nav on /provider/staff/{id}/schedule so the button is not overlapped on shorter viewports.",
+    "(Low) When per_staff is empty, seed placeholder rows for each hospital_staff so analytics-drill-{staff_id} is still visible for QA/UX."
+  ],
+  "critical_code_review_comments": [
+    "server.py is now 3064 lines — still recommend splitting (routers: auth, providers/availability, providers/overrides, bookings, admin, analytics).",
+    "_notify_queue_positions currently writes note='SMS not live — reminder tracked only' when the settings row has enabled=False; the review request said the expected note ends with 'not configured on SMS settings'. Only the branch where SMS is live but reminder_template_id is missing yields that exact string. This is fine functionally (reminder record + booking flag toggle still happen) but the two note strings may confuse observers — consider unifying to 'reminder_template_id not configured on SMS settings' for both paths OR documenting the distinction in the SMS settings admin UI.",
+    "provider_analytics: heatmap weekday label in the frontend is ['Mon','Tue',...,'Sun'] (Python weekday order) while backend uses date.weekday() (0=Mon). Consistent — OK. Just flagging that if a future refactor swaps to JS getDay(), labels must also flip.",
+    "Overrides GET endpoint: staff_id filter uses `q['staff_id']=staff_id` — passing an empty string would filter to overrides whose staff_id == ''. Consider treating '' as None or explicitly rejecting empty string to avoid client bugs."
+  ],
+  "updated_files": ["/app/backend/tests/test_iter40_overrides_reminders_analytics.py"],
+  "success_rate": {"backend": "100% (18/18)", "frontend": "100% of tested flows (admin lock, analytics page, override CRUD)"},
+  "test_credentials": "From /app/memory/test_credentials.md — admin 9412575970/1234 (allowed), blocked admin 9999999999/1234, provider 9000000007/1234, customer 9000009999/1234. Hospital 43b3a047-c937-4cf2-a707-7682ec732b34, Cardio staff 4723b155-43f1-4a5e-9784-4cdf2782c37b, Neuro staff 7d7977aa-7d25-413d-8dd7-4d8bcbbbed51.",
+  "seed_data_creation": "Overrides created in tests are cleaned up via delete in the same test / fixture teardown. A booking on Cardio's next-Tue 15:00 slot was created then deleted in TestQueueReminders. Pre-seeded overrides (2026-08-03 closed, 2026-08-05 14-16 shift) were left untouched.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Backend regression suite for iteration 40: `pytest backend/tests/test_iter40_overrides_reminders_analytics.py -v`. Prior iteration 29 suite still runs: `pytest backend/tests/test_hospital_staff_schedule.py -v`. Key gotchas: (1) The frontend removeOverride uses window.confirm — Playwright must register a page.on('dialog', d.accept()) handler. (2) The ov-add-btn on /provider/staff/{id}/schedule can be visually overlapped by the bottom-nav — prefer JS click (`page.evaluate(...click())`) over `page.click(force=True)` for reliability. (3) Booking on TestHospital still requires service_type='Paid' + vehicle_reg_no + vehicle_model because the provider is under Automobile category. (4) TestQueueReminders relies on the booked slot being at position 0 in the queue — if other tests leave stale bookings for Cardio on the same next-Tuesday date, position won't be 0 and reminder3_sent may not flip; the test currently passes because it books on a future Tuesday with an empty queue."
+}
