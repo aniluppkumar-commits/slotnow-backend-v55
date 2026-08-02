@@ -54,6 +54,63 @@ const STEPS = [
   { n: 3, title: "Skip the queue", text: "Get live updates on your position and walk in exactly on time." },
 ];
 
+const TESTIMONIALS = [
+  {
+    name: "Priya Sharma",
+    role: "Mumbai · Customer",
+    quote:
+      "Finally an app that shows real queue position. Booked my doctor visit and walked in exactly on time — zero waiting.",
+    rating: 5,
+    initial: "P",
+    color: "#F97316",
+  },
+  {
+    name: "Rohan Verma",
+    role: "Delhi · Customer",
+    quote:
+      "Booking my daughter's tutor slots used to be a whole phone-call ordeal. On SlotNow it's one tap. Genuinely convenient.",
+    rating: 5,
+    initial: "R",
+    color: "#1E3A8A",
+  },
+  {
+    name: "Dr. Anjali Menon",
+    role: "Bengaluru · Service Provider",
+    quote:
+      "My clinic's no-shows dropped by half. The queue and reminders work brilliantly and my receptionist loves the drag-drop.",
+    rating: 5,
+    initial: "A",
+    color: "#0F766E",
+  },
+  {
+    name: "Kabir Singh",
+    role: "Pune · Customer",
+    quote:
+      "Booked a garage slot for my bike service and got live position updates. Way better than shouting on the phone.",
+    rating: 5,
+    initial: "K",
+    color: "#7C3AED",
+  },
+  {
+    name: "Meera Nair",
+    role: "Kochi · Customer",
+    quote:
+      "The salon I use switched to SlotNow — now I book, pay online and just walk in. Feels 10 years ahead of everyone else.",
+    rating: 5,
+    initial: "M",
+    color: "#DC2626",
+  },
+  {
+    name: "Rajesh Kumar",
+    role: "Jaipur · Service Provider",
+    quote:
+      "The bulk-approval and DLT-configured SMS mean I actually reach customers. Onboarding new staff took me 10 minutes.",
+    rating: 5,
+    initial: "R",
+    color: "#0891B2",
+  },
+];
+
 const LOGIN_OPTIONS = [
   { role: "customer", label: "Customer", desc: "Book appointments" },
   { role: "provider", label: "Service Provider", desc: "Manage bookings & queue" },
@@ -304,7 +361,7 @@ export default function LandingPage() {
             {providers.map((p) => (
               <Link
                 key={p.id}
-                to="/login?role=customer"
+                to={`/p/${p.id}`}
                 data-testid={`landing-provider-${p.id}`}
                 className="bg-white rounded-2xl overflow-hidden border border-cream-300 hover:shadow-xl hover:-translate-y-1 transition-all"
               >
@@ -370,6 +427,58 @@ export default function LandingPage() {
                 <ArrowRight size={18} />
               </Link>
             </div>
+          </div>
+        </div>
+      </section>
+
+      {/* Testimonials */}
+      <section id="testimonials" className="bg-white border-y border-cream-300">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 py-16">
+          <div className="text-center max-w-2xl mx-auto mb-12">
+            <p className="text-xs font-bold uppercase tracking-widest text-accent mb-2">Loved by</p>
+            <h2 className="font-heading text-3xl sm:text-4xl font-black text-ink">
+              Real users, real time saved
+            </h2>
+            <p className="mt-3 text-ink-soft">
+              Customers and businesses across India booking smarter with SlotNow.
+            </p>
+          </div>
+          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-5">
+            {TESTIMONIALS.map((t) => (
+              <div
+                key={t.name}
+                className="bg-cream rounded-2xl p-6 border border-cream-300 hover:border-forest/30 hover:shadow-lg transition-all flex flex-col"
+              >
+                <div className="flex items-center gap-1 mb-3">
+                  {[1, 2, 3, 4, 5].map((n) => (
+                    <Star
+                      key={n}
+                      size={14}
+                      className={
+                        n <= t.rating
+                          ? "text-accent fill-accent"
+                          : "text-cream-300 fill-cream-300"
+                      }
+                    />
+                  ))}
+                </div>
+                <blockquote className="text-ink-soft leading-relaxed text-[15px] mb-5">
+                  “{t.quote}”
+                </blockquote>
+                <div className="mt-auto flex items-center gap-3">
+                  <div
+                    className="w-10 h-10 rounded-full flex items-center justify-center text-white font-heading font-black"
+                    style={{ background: t.color }}
+                  >
+                    {t.initial}
+                  </div>
+                  <div>
+                    <p className="font-bold text-ink text-sm">{t.name}</p>
+                    <p className="text-xs text-ink-muted">{t.role}</p>
+                  </div>
+                </div>
+              </div>
+            ))}
           </div>
         </div>
       </section>

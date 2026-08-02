@@ -7,6 +7,7 @@ import { I18nProvider } from "@/i18n";
 import RequireAuth from "@/components/RequireAuth";
 import Login from "@/pages/Login";
 import LandingPage from "@/pages/LandingPage";
+import PublicProviderPage from "@/pages/PublicProviderPage";
 import Home from "@/pages/Home";
 import CategoryPage from "@/pages/CategoryPage";
 import ProviderDetail from "@/pages/ProviderDetail";
@@ -75,6 +76,7 @@ function App() {
             <Routes>
             {/* Public */}
             <Route path="/" element={<LandingPage />} />
+            <Route path="/p/:id" element={<PublicProviderPage />} />
             <Route path="/login" element={<Login />} />
 
             {/* Customer */}
