@@ -11,8 +11,10 @@ const AUTOMOBILE_CAT_ID = "333a2602-2d4a-4e16-a9da-3e004b0e14fd";
 
 export default function BookSlot() {
   const { providerId } = useParams();
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const staffParam = searchParams.get("staff");
+  const [staffList, setStaffList] = useState([]);
+  const [selectedStaff, setSelectedStaff] = useState(null);
   const navigate = useNavigate();
   const { t } = useI18n();
   const [provider, setProvider] = useState(null);
@@ -40,6 +42,20 @@ export default function BookSlot() {
         setProvider(data.provider);
         setServices(data.services || []);
         if (data.services?.length) setSelectedService(data.services[0]);
+        // Load hospital sub-staff so customer can pick a specific doctor / service
+        if (data.provider?.provider_type === "hospital") {
+          try {
+            const s = await api.get(`/providers/${providerId}/staff`);
+            const list = Array.isArray(s.data) ? s.data : [];
+            setStaffList(list);
+            if (staffParam) {
+              const pre = list.find((x) => x.id === staffParam);
+              if (pre) setSelectedStaff(pre);
+            }
+          } catch {
+            setStaffList([]);
+          }
+        }
       } catch {
         toast.error("Failed to load provider");
         navigate(-1);
@@ -85,6 +101,9 @@ export default function BookSlot() {
 
   const handleBook = async () => {
     if (!selectedService) return toast.error(t("select_service"));
+    if (staffList.length > 0 && !selectedStaff) {
+      return toast.error("Please pick a doctor or service");
+    }
     if (!selectedTime) return toast.error(t("select_time"));
     if (isAutomobile && !vehicleReg.trim()) return toast.error(t("vehicle_reg_no"));
     setSubmitting(true);
@@ -95,7 +114,7 @@ export default function BookSlot() {
         date: selectedDate,
         start_time: selectedTime,
         notes: notes || null,
-        staff_id: staffParam || undefined,
+        staff_id: (selectedStaff?.id) || staffParam || undefined,
       };
       if (isAutomobile) {
         payload.vehicle_reg_no = vehicleReg || null;
@@ -138,6 +157,57 @@ export default function BookSlot() {
             <p className="text-xs text-ink-soft truncate">{provider.city}</p>
           </div>
         </div>
+
+        {/* Hospital sub-doctor / service picker (only for hospitals) */}
+        {staffList.length > 0 && (
+          <section data-testid="booking-staff-picker">
+            <h3 className="text-xs font-bold uppercase tracking-[0.15em] text-ink-soft mb-3">
+              Choose doctor / service
+            </h3>
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+              {staffList.map((s) => {
+                const on = selectedStaff?.id === s.id;
+                return (
+                  <button
+                    key={s.id}
+                    type="button"
+                    onClick={() => {
+                      setSelectedStaff(s);
+                      const next = new URLSearchParams(searchParams);
+                      next.set("staff", s.id);
+                      setSearchParams(next, { replace: true });
+                    }}
+                    data-testid={`book-staff-${s.id}`}
+                    className={`text-left p-3 rounded-xl border transition-all ${
+                      on
+                        ? "bg-forest text-white border-forest shadow-md"
+                        : "bg-white border-cream-300 hover:border-forest"
+                    }`}
+                  >
+                    <p className={`font-bold text-sm truncate ${on ? "text-white" : "text-ink"}`}>
+                      {s.name}
+                    </p>
+                    {s.specialization && (
+                      <p className={`text-[11px] font-semibold truncate ${on ? "text-white/85" : "text-forest"}`}>
+                        {s.specialization}
+                      </p>
+                    )}
+                    {s.kind === "service" && s.service_tags?.length > 0 && (
+                      <p className={`text-[10px] truncate ${on ? "text-white/70" : "text-ink-muted"}`}>
+                        {s.service_tags.slice(0, 2).join(", ")}
+                      </p>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+            {!selectedStaff && (
+              <p className="text-[11px] text-amber-700 mt-2">
+                Please select a doctor or service to continue.
+              </p>
+            )}
+          </section>
+        )}
 
         {/* Service */}
         <section>

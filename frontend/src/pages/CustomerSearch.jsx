@@ -264,6 +264,11 @@ export default function CustomerSearch() {
                         </div>
                       )}
                     </div>
+                    {p.is_featured && (
+                      <span className="inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-widest text-accent-dark bg-accent/10 border border-accent/20 px-1.5 py-0.5 rounded-full mb-1">
+                        ★ Featured
+                      </span>
+                    )}
                     {p.specialization && (
                       <p className="text-xs text-forest font-semibold mb-1">
                         {p.specialization}

@@ -320,6 +320,26 @@ export default function HospitalStaff() {
                   </button>
                 </>
               )}
+              <div>
+                <label className="block text-[11px] font-bold uppercase tracking-wider text-ink-muted mb-1">
+                  Daily slot limit (optional)
+                </label>
+                <input
+                  type="number"
+                  min={1}
+                  value={form.daily_slot_limit ?? ""}
+                  onChange={(e) => {
+                    const v = e.target.value;
+                    setForm({ ...form, daily_slot_limit: v ? parseInt(v, 10) : null });
+                  }}
+                  placeholder="Leave empty for unlimited"
+                  data-testid="staff-slot-limit"
+                  className="w-full px-3 py-2 rounded-xl bg-cream border border-cream-300 focus:border-forest focus:outline-none text-sm"
+                />
+                <p className="text-[10px] text-ink-muted mt-1">
+                  How many customers can book this {modalKind === "doctor" ? "doctor" : "service"} per day.
+                </p>
+              </div>
             </div>
             <div className="flex gap-3 mt-5">
               <button

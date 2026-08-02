@@ -302,6 +302,7 @@ class HospitalStaff(BaseModel):
     address: Optional[str] = ""
     latitude: Optional[float] = None
     longitude: Optional[float] = None
+    daily_slot_limit: Optional[int] = None  # None = unlimited (falls back to hospital-level limit)
     active: bool = True
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
@@ -315,6 +316,7 @@ class HospitalStaffUpsert(BaseModel):
     address: Optional[str] = ""
     latitude: Optional[float] = None
     longitude: Optional[float] = None
+    daily_slot_limit: Optional[int] = None
     active: Optional[bool] = True
 
 
@@ -811,6 +813,27 @@ def _haversine_km(lat1: float, lng1: float, lat2: float, lng2: float) -> float:
     return 2 * r * math.asin(math.sqrt(a))
 
 
+async def _pro_provider_ids() -> set:
+    """Return set of provider_ids with a currently-active subscription."""
+    now = datetime.now(timezone.utc)
+    docs = await db.subscriptions.find(
+        {"status": "active", "expires_at": {"$gt": now}},
+        {"_id": 0, "provider_id": 1},
+    ).to_list(2000)
+    return {d["provider_id"] for d in docs if d.get("provider_id")}
+
+
+def _sort_with_featured(providers: List[dict], pro_ids: set) -> List[dict]:
+    """Stable sort by is_pro DESC (featured providers first), then rating DESC."""
+    for p in providers:
+        p["is_featured"] = p.get("id") in pro_ids
+    providers.sort(
+        key=lambda r: (0 if r.get("is_featured") else 1, -(r.get("rating") or 0), r.get("business_name") or "")
+    )
+    return providers
+
+
+
 @api.get("/search/providers")
 async def search_providers(
     q: Optional[str] = None,
@@ -865,6 +888,11 @@ async def search_providers(
             for d in docs:
                 if "distance_m" in d:
                     d["distance_km"] = round(d.pop("distance_m") / 1000.0, 2)
+            pro_ids = await _pro_provider_ids()
+            for d in docs:
+                d["is_featured"] = d.get("id") in pro_ids
+            # For nearby, distance wins primary sort but pro breaks ties within 1km buckets.
+            docs.sort(key=lambda r: (round((r.get("distance_km") or 0) * 2) / 2, 0 if r.get("is_featured") else 1))
             return docs
         except Exception as e:
             # Fallback to Python Haversine loop if index missing or Mongo doesn't support $geoNear (rare)
@@ -884,7 +912,8 @@ async def search_providers(
             return enriched[:limit]
 
     providers = await db.providers.find(query, {"_id": 0}).to_list(500)
-    providers.sort(key=lambda r: (-(r.get("rating") or 0), r.get("business_name") or ""))
+    pro_ids = await _pro_provider_ids()
+    providers = _sort_with_featured(providers, pro_ids)
     return providers[:limit]
 
 
@@ -894,6 +923,7 @@ async def city_public_page(city_slug: str):
     providers in the given city by category so the page can render a directory."""
     city_slug = city_slug.lower()
     all_providers = await db.providers.find({"approved": True}, {"_id": 0}).to_list(2000)
+    pro_ids = await _pro_provider_ids()
     matches = [p for p in all_providers if _slugify(p.get("city", "")) == city_slug]
     if not matches:
         raise HTTPException(404, "City not found")
@@ -909,7 +939,7 @@ async def city_public_page(city_slug: str):
     grouped = [
         {
             "category": cat_by_id[cid],
-            "providers": sorted(ps, key=lambda r: -(r.get("rating") or 0))[:12],
+            "providers": _sort_with_featured(list(ps), pro_ids)[:12],
             "total": len(ps),
         }
         for cid, ps in groups.items()
@@ -931,6 +961,8 @@ async def category_by_slug(slug: str, city: Optional[str] = None):
     if city:
         query["city"] = {"$regex": f"^{city}$", "$options": "i"}
     providers = await db.providers.find(query, {"_id": 0}).sort("rating", -1).to_list(200)
+    pro_ids = await _pro_provider_ids()
+    providers = _sort_with_featured(providers, pro_ids)
     cities_agg = await db.providers.aggregate([
         {"$match": {"category_id": match["id"], "approved": True, "city": {"$exists": True, "$nin": [None, ""]}}},
         {"$group": {"_id": "$city", "count": {"$sum": 1}}},
@@ -1227,6 +1259,7 @@ async def add_my_staff(body: HospitalStaffUpsert, user: User = Depends(current_u
         address=(body.address or "").strip(),
         latitude=body.latitude,
         longitude=body.longitude,
+        daily_slot_limit=body.daily_slot_limit,
     )
     await db.hospital_staff.insert_one(doc.model_dump())
     return doc.model_dump(mode="json")
@@ -1248,6 +1281,7 @@ async def update_my_staff(staff_id: str, body: HospitalStaffUpsert, user: User =
         "address": (body.address or "").strip(),
         "latitude": body.latitude,
         "longitude": body.longitude,
+        "daily_slot_limit": body.daily_slot_limit,
         "active": bool(body.active),
     }
     await db.hospital_staff.update_one({"id": staff_id}, {"$set": update})
@@ -1570,9 +1604,28 @@ async def create_booking(b: BookingCreate, user: User = Depends(current_user)):
         st = await db.hospital_staff.find_one(
             {"id": b.staff_id, "hospital_id": b.provider_id, "active": True}, {"_id": 0}
         )
-        if st:
-            staff_name = st.get("name", "")
-            staff_kind = st.get("kind")
+        if not st:
+            raise HTTPException(400, "Selected doctor/service not found")
+        staff_name = st.get("name", "")
+        staff_kind = st.get("kind")
+        # Enforce per-staff daily slot limit (independent queue per doctor/service)
+        limit = st.get("daily_slot_limit")
+        if isinstance(limit, int) and limit > 0:
+            same_day = await db.bookings.count_documents({
+                "provider_id": b.provider_id,
+                "staff_id": b.staff_id,
+                "date": b.date,
+                "status": {"$in": ["confirmed", "completed"]},
+            })
+            if same_day >= limit:
+                raise HTTPException(400, f"{staff_name} is fully booked for {b.date}")
+        # Independent token number per staff (customer-visible position in *this* doctor's queue)
+        staff_token_pipeline = [
+            {"$match": {"provider_id": b.provider_id, "staff_id": b.staff_id, "date": b.date}},
+            {"$group": {"_id": None, "n": {"$max": "$token_number"}}},
+        ]
+        agg = await db.bookings.aggregate(staff_token_pipeline).to_list(1)
+        token = (agg[0]["n"] if agg and agg[0].get("n") else 0) + 1
     booking = Booking(
         customer_id=user.id,
         customer_name=user.name or "",
