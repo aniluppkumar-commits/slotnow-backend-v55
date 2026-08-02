@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
-import { Stethoscope, Building2, Plus, X, Trash2, Loader2, MapPin } from "lucide-react";
+import { Stethoscope, Building2, Plus, X, Trash2, Loader2, MapPin, CalendarClock } from "lucide-react";
 import AppShell from "@/components/AppShell";
 import { api } from "@/lib/api";
 import { compressImageToDataURL } from "@/lib/image";
@@ -10,6 +11,7 @@ import { compressImageToDataURL } from "@/lib/image";
  * under this hospital's umbrella.
  */
 export default function HospitalStaff() {
+  const navigate = useNavigate();
   const [reference, setReference] = useState(null);
   const [staff, setStaff] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -146,6 +148,13 @@ export default function HospitalStaff() {
                     {d.specialization && (
                       <p className="text-xs text-forest font-semibold">{d.specialization}</p>
                     )}
+                    <button
+                      data-testid={`staff-schedule-${d.id}`}
+                      onClick={() => navigate(`/provider/staff/${d.id}/schedule`)}
+                      className="inline-flex items-center gap-1 mt-1.5 text-[11px] font-bold text-forest hover:text-forest-dark"
+                    >
+                      <CalendarClock size={12} /> Schedule
+                    </button>
                   </div>
                   <button
                     onClick={() => remove(d.id)}
@@ -200,6 +209,13 @@ export default function HospitalStaff() {
                     </div>
                   )}
                   {s.address && <p className="text-xs text-ink-soft">{s.address}</p>}
+                  <button
+                    data-testid={`staff-schedule-${s.id}`}
+                    onClick={() => navigate(`/provider/staff/${s.id}/schedule`)}
+                    className="inline-flex items-center gap-1 mt-2 text-[11px] font-bold text-accent hover:text-accent-dark"
+                  >
+                    <CalendarClock size={12} /> Schedule
+                  </button>
                 </div>
               ))}
             </div>

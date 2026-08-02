@@ -195,6 +195,9 @@ class AvailabilityRule(BaseModel):
     end_time: str
     slot_duration: int = 30
     max_bookings: Optional[int] = None  # max bookings allowed for this shift (None = unlimited)
+    # When set, this shift belongs to a specific hospital sub-doctor/service.
+    # None = provider-wide (or hospital-default) schedule.
+    staff_id: Optional[str] = None
 
 
 class AvailabilityCreate(BaseModel):
@@ -203,6 +206,7 @@ class AvailabilityCreate(BaseModel):
     end_time: str
     slot_duration: int = 30
     max_bookings: Optional[int] = None
+    staff_id: Optional[str] = None
 
 
 class Booking(BaseModel):
@@ -1103,7 +1107,12 @@ async def my_availability(user: User = Depends(current_user)):
     p = await db.providers.find_one({"user_id": user.id}, {"_id": 0})
     if not p:
         return []
-    return await db.availability.find({"provider_id": p["id"]}, {"_id": 0}).to_list(100)
+    # Return only the provider-wide (hospital default / non-hospital) schedule.
+    # Per-staff schedules are fetched via /providers/me/staff/{id}/availability.
+    return await db.availability.find(
+        {"provider_id": p["id"], "$or": [{"staff_id": None}, {"staff_id": {"$exists": False}}]},
+        {"_id": 0},
+    ).to_list(200)
 
 
 @api.post("/providers/me/availability")
@@ -1112,7 +1121,9 @@ async def add_availability(a: AvailabilityCreate, user: User = Depends(current_u
     p = await db.providers.find_one({"user_id": user.id}, {"_id": 0})
     if not p:
         raise HTTPException(400, "Set up provider profile first")
-    rule = AvailabilityRule(provider_id=p["id"], **a.model_dump())
+    payload = a.model_dump()
+    payload["staff_id"] = None  # This endpoint is for the provider-wide default only
+    rule = AvailabilityRule(provider_id=p["id"], **payload)
     await db.availability.insert_one(rule.model_dump())
     return rule.model_dump(mode="json")
 
@@ -1120,7 +1131,14 @@ async def add_availability(a: AvailabilityCreate, user: User = Depends(current_u
 @api.delete("/providers/me/availability/{rule_id}")
 async def del_availability(rule_id: str, user: User = Depends(current_user)):
     await require_role(user, "provider")
-    await db.availability.delete_one({"id": rule_id})
+    p = await db.providers.find_one({"user_id": user.id}, {"_id": 0})
+    if not p:
+        raise HTTPException(400, "Set up provider profile first")
+    # Only allow deletion of provider-wide rules from this endpoint.
+    await db.availability.delete_one(
+        {"id": rule_id, "provider_id": p["id"],
+         "$or": [{"staff_id": None}, {"staff_id": {"$exists": False}}]},
+    )
     return {"ok": True}
 
 
@@ -1309,6 +1327,55 @@ async def public_hospital_staff(provider_id: str):
     return rows
 
 
+# ---------- Per-staff availability (Hospital sub-doctor / service schedule) ----------
+@api.get("/providers/me/staff/{staff_id}/availability")
+async def get_my_staff_availability(staff_id: str, user: User = Depends(current_user)):
+    await require_role(user, "provider")
+    p = await _my_hospital_or_400(user)
+    exists = await db.hospital_staff.find_one({"id": staff_id, "hospital_id": p["id"]}, {"_id": 0})
+    if not exists:
+        raise HTTPException(404, "Staff not found")
+    rows = await db.availability.find(
+        {"provider_id": p["id"], "staff_id": staff_id}, {"_id": 0}
+    ).to_list(200)
+    return rows
+
+
+@api.post("/providers/me/staff/{staff_id}/availability")
+async def add_my_staff_availability(staff_id: str, a: AvailabilityCreate, user: User = Depends(current_user)):
+    await require_role(user, "provider")
+    p = await _my_hospital_or_400(user)
+    exists = await db.hospital_staff.find_one({"id": staff_id, "hospital_id": p["id"]}, {"_id": 0})
+    if not exists:
+        raise HTTPException(404, "Staff not found")
+    payload = a.model_dump()
+    payload["staff_id"] = staff_id  # force the path staff_id (ignore body override)
+    rule = AvailabilityRule(provider_id=p["id"], **payload)
+    await db.availability.insert_one(rule.model_dump())
+    return rule.model_dump(mode="json")
+
+
+@api.delete("/providers/me/staff/{staff_id}/availability/{rule_id}")
+async def del_my_staff_availability(staff_id: str, rule_id: str, user: User = Depends(current_user)):
+    await require_role(user, "provider")
+    p = await _my_hospital_or_400(user)
+    r = await db.availability.delete_one(
+        {"id": rule_id, "provider_id": p["id"], "staff_id": staff_id}
+    )
+    return {"ok": r.deleted_count > 0}
+
+
+@api.get("/providers/{provider_id}/staff/{staff_id}/availability")
+async def public_staff_availability(provider_id: str, staff_id: str):
+    """Public read-only weekly schedule for a hospital sub-doctor/service."""
+    p = await db.providers.find_one({"id": provider_id, "approved": True}, {"_id": 0})
+    if not p or p.get("provider_type") != "hospital":
+        return []
+    return await db.availability.find(
+        {"provider_id": provider_id, "staff_id": staff_id}, {"_id": 0}
+    ).to_list(200)
+
+
 # ---------- Razorpay subscriptions (providers only) ----------
 def _razorpay_client():
     key = os.environ.get("RAZORPAY_KEY_ID", "").strip()
@@ -1439,22 +1506,59 @@ async def subscription_webhook(request: Request):
 
 # ---------- Slots ----------
 @api.get("/providers/{provider_id}/slots")
-async def get_slots(provider_id: str, date: str = Query(...), service_id: Optional[str] = None):
+async def get_slots(provider_id: str, date: str = Query(...), service_id: Optional[str] = None, staff_id: Optional[str] = None):
     """Shift-based availability. Returns the full shifts defined by the provider for that
     weekday (no 30-min sub-slots). `has_schedule` distinguishes 'No Schedule' from a day
-    where all shifts are past/full."""
+    where all shifts are past/full.
+
+    When `staff_id` is provided (hospital sub-doctor/service), returns that staff's own
+    weekly schedule. Falls back to the hospital's default schedule (staff_id=None) only
+    when the staff has no schedule set — but bookings/capacity are still counted per staff.
+    """
     try:
         d = datetime.strptime(date, "%Y-%m-%d").date()
     except ValueError:
         raise HTTPException(400, "Bad date")
     weekday = d.weekday()
-    rules = await db.availability.find({"provider_id": provider_id, "weekday": weekday}, {"_id": 0}).to_list(20)
+
+    # 1) Pick the applicable schedule (staff-specific, else hospital default)
+    schedule_scope = "staff"
+    if staff_id:
+        rules = await db.availability.find(
+            {"provider_id": provider_id, "staff_id": staff_id, "weekday": weekday},
+            {"_id": 0},
+        ).to_list(20)
+        if not rules:
+            # Fallback to hospital-level schedule
+            rules = await db.availability.find(
+                {"provider_id": provider_id, "staff_id": None, "weekday": weekday},
+                {"_id": 0},
+            ).to_list(20)
+            schedule_scope = "hospital_default"
+    else:
+        rules = await db.availability.find(
+            {"provider_id": provider_id, "staff_id": None, "weekday": weekday},
+            {"_id": 0},
+        ).to_list(20)
+        # Legacy: some old shifts may have staff_id missing altogether.
+        if not rules:
+            rules = await db.availability.find(
+                {"provider_id": provider_id, "staff_id": {"$exists": False}, "weekday": weekday},
+                {"_id": 0},
+            ).to_list(20)
+        schedule_scope = "provider"
     rules.sort(key=lambda r: _time_to_min(r["start_time"]))
 
-    # Count non-walk-in bookings per shift start_time for this date
-    bookings = await db.bookings.find(
-        {"provider_id": provider_id, "date": date, "status": {"$in": ["pending", "confirmed"]}, "is_walkin": False}, {"_id": 0}
-    ).to_list(500)
+    # 2) Count bookings scoped to the same staff_id (or provider-wide when none)
+    booking_q: dict = {
+        "provider_id": provider_id,
+        "date": date,
+        "status": {"$in": ["pending", "confirmed"]},
+        "is_walkin": False,
+    }
+    if staff_id:
+        booking_q["staff_id"] = staff_id
+    bookings = await db.bookings.find(booking_q, {"_id": 0}).to_list(500)
     booked_by_start: dict = {}
     for b in bookings:
         booked_by_start[b["start_time"]] = booked_by_start.get(b["start_time"], 0) + 1
@@ -1481,7 +1585,7 @@ async def get_slots(provider_id: str, date: str = Query(...), service_id: Option
             "is_past": in_past,
             "is_full": is_full,
         })
-    return {"has_schedule": len(rules) > 0, "shifts": shifts}
+    return {"has_schedule": len(rules) > 0, "shifts": shifts, "schedule_scope": schedule_scope}
 
 
 
@@ -1552,14 +1656,33 @@ async def create_booking(b: BookingCreate, user: User = Depends(current_user)):
         vehicle_reg_no = b.vehicle_reg_no.strip()
         vehicle_model = b.vehicle_model.strip()
 
-    # Validate the chosen shift exists for this weekday (shift-based booking)
+    # Validate the chosen shift exists for this weekday (shift-based booking).
+    # When booking under a hospital sub-doctor/service, prefer that staff's own
+    # schedule; fall back to the hospital-wide schedule if none is set.
     try:
         bd = datetime.strptime(b.date, "%Y-%m-%d").date()
     except ValueError:
         raise HTTPException(400, "Invalid date")
-    shift = await db.availability.find_one(
-        {"provider_id": b.provider_id, "weekday": bd.weekday(), "start_time": b.start_time}, {"_id": 0}
-    )
+    shift = None
+    if b.staff_id:
+        shift = await db.availability.find_one(
+            {"provider_id": b.provider_id, "staff_id": b.staff_id,
+             "weekday": bd.weekday(), "start_time": b.start_time},
+            {"_id": 0},
+        )
+    if not shift:
+        shift = await db.availability.find_one(
+            {"provider_id": b.provider_id, "staff_id": None,
+             "weekday": bd.weekday(), "start_time": b.start_time},
+            {"_id": 0},
+        )
+    if not shift:
+        # Legacy rows without staff_id key
+        shift = await db.availability.find_one(
+            {"provider_id": b.provider_id, "staff_id": {"$exists": False},
+             "weekday": bd.weekday(), "start_time": b.start_time},
+            {"_id": 0},
+        )
     if not shift:
         raise HTTPException(400, "Selected shift is not available")
     shift_end = shift["end_time"]
@@ -1568,13 +1691,17 @@ async def create_booking(b: BookingCreate, user: User = Depends(current_user)):
     if bd == now_ist.date() and _time_to_min(shift_end) <= (now_ist.hour * 60 + now_ist.minute):
         raise HTTPException(400, "This shift has already ended")
 
-    # Per-shift capacity (None = unlimited)
+    # Per-shift capacity (None = unlimited). When staff_id is set, count only that
+    # doctor's/service's bookings so each has an independent shift queue.
     max_b = shift.get("max_bookings")
     if max_b is not None:
-        shift_count = await db.bookings.count_documents({
+        shift_q = {
             "provider_id": b.provider_id, "date": b.date, "start_time": b.start_time,
             "is_walkin": False, "status": {"$in": ["pending", "confirmed"]},
-        })
+        }
+        if b.staff_id:
+            shift_q["staff_id"] = b.staff_id
+        shift_count = await db.bookings.count_documents(shift_q)
         if shift_count >= max_b:
             raise HTTPException(409, "This shift is fully booked")
 

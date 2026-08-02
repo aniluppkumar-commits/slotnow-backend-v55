@@ -1,0 +1,30 @@
+{
+  "summary": "SlotNow Priority 2 (Hospital per-doctor availability) full-stack verification. Backend: 14/14 pytest cases pass including per-staff CRUD, provider-wide leak prevention, staff-specific slots, hospital-default fallback, provider-scope fallback without staff_id, cross-doctor independence (Cardio Mon 10-13 vs Neuro Mon 17-20), and per-staff booking validation. Regression: admin/stats, admin/subscription-analytics, admin/referrals all 200. Frontend: /provider/staff exposes staff-schedule-{id} links; HospitalStaffSchedule page has all required testids (sched-day-*, sched-start, sched-end, sched-slot-duration, sched-max, sched-add-btn, sched-rule-*, sched-remove-*); add+remove shift flow works. BookSlot picker (data-testid book-staff-{id}) triggers /api/providers/{id}/slots refetch with staff_id and switching between Cardio and Neuro yields distinct queries and different shift results.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "BookSlot (hospital)", "issues": ["When a hospital has sub-doctors and none is picked yet, page still shows service list + calendar underneath the picker with a small warning; consider disabling downstream UI until a doctor is chosen for clarity (nice-to-have)."]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_hospital_staff_schedule.py",
+    "/app/test_reports/pytest/hospital_staff.xml"
+  ],
+  "action_items": [
+    "Data hygiene: TestHospital (43b3a047-...) is seeded under Automobile category. Booking flow therefore forces service_type/vehicle_reg_no/vehicle_model even though the provider_type is 'hospital'. Consider re-seeding TestHospital under a Healthcare/Hospital category so hospital booking UX doesn't require vehicle fields."
+  ],
+  "critical_code_review_comments": [
+    "server.py is 2630 lines — recommend splitting into routers (availability, bookings, admin, providers) for maintainability.",
+    "get_slots + create_booking duplicate the staff/hospital-default/legacy fallback lookup 3x each — extract a helper _resolve_shift(provider_id, staff_id, weekday, start_time) to DRY the logic and avoid future drift.",
+    "Booking validation flow currently returns 'Selected shift is not available' regardless of whether the shift doesn't exist for that staff or is a hospital-default with wrong time — consider more descriptive error for debuggability."
+  ],
+  "updated_files": ["/app/backend/tests/test_hospital_staff_schedule.py"],
+  "success_rate": {"backend": "100% (14/14)", "frontend": "100% of tested flows"},
+  "test_credentials": "Used /app/memory/test_credentials.md: provider 9000000007/1234, customer 9000009999/1234, admin 9412575970/1234. Hospital id 43b3a047-..., Cardio 4723b155-..., Neuro 7d7977aa-...",
+  "seed_data_creation": "None persistent. All availability rules created during tests were deleted in same test (try/finally + cleanup remove clicks). Seeded staff/schedules preserved.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Backend tests live at /app/backend/tests/test_hospital_staff_schedule.py — run with `pytest backend/tests/test_hospital_staff_schedule.py -v`. Note: TestHospital is under Automobile category so booking payloads must include service_type='Paid' + vehicle_reg_no + vehicle_model. Frontend AuthContext uses localStorage keys 'slotnow_token' and 'slotnow_user' (NOT 'token'/'user'). BookSlot picker testids are `book-staff-{id}` not `staff-option-{id}`. HospitalStaffSchedule uses JS getDay weekday index (0=Sun..6=Sat) for `sched-day-{n}` testids."
+}

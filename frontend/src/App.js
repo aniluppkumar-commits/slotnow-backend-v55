@@ -26,6 +26,7 @@ import ProviderAvailability from "@/pages/provider/ProviderAvailability";
 import ProviderQueue from "@/pages/provider/ProviderQueue";
 import ProviderAssistants from "@/pages/provider/ProviderAssistants";
 import HospitalStaff from "@/pages/provider/HospitalStaff";
+import HospitalStaffSchedule from "@/pages/provider/HospitalStaffSchedule";
 import ReceptionistDashboard from "@/pages/receptionist/ReceptionistDashboard";
 import HistoryPage from "@/pages/shared/HistoryPage";
 import AdminDashboard from "@/pages/admin/AdminDashboard";
@@ -103,6 +104,7 @@ function App() {
             <Route path="/provider/queue" element={<RequireAuth><RequireRole roles="provider"><ProviderQueue /></RequireRole></RequireAuth>} />
             <Route path="/provider/assistants" element={<RequireAuth><RequireRole roles="provider"><ProviderAssistants /></RequireRole></RequireAuth>} />
             <Route path="/provider/staff" element={<RequireAuth><RequireRole roles="provider"><HospitalStaff /></RequireRole></RequireAuth>} />
+            <Route path="/provider/staff/:staffId/schedule" element={<RequireAuth><RequireRole roles="provider"><HospitalStaffSchedule /></RequireRole></RequireAuth>} />
             <Route path="/provider/history" element={<RequireAuth><RequireRole roles="provider"><HistoryPage /></RequireRole></RequireAuth>} />
 
             {/* Receptionist */}

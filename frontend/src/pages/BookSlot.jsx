@@ -72,9 +72,10 @@ export default function BookSlot() {
       setLoadingSlots(true);
       setSelectedTime(null);
       try {
-        const { data } = await api.get(`/providers/${providerId}/slots`, {
-          params: { date: selectedDate },
-        });
+        const params = { date: selectedDate };
+        const effectiveStaff = selectedStaff?.id || staffParam;
+        if (effectiveStaff) params.staff_id = effectiveStaff;
+        const { data } = await api.get(`/providers/${providerId}/slots`, { params });
         if (mounted) setSlots(data);
       } catch {
         if (mounted) setSlots({ shifts: [], has_schedule: false });
@@ -83,7 +84,7 @@ export default function BookSlot() {
       }
     })();
     return () => (mounted = false);
-  }, [providerId, selectedDate]);
+  }, [providerId, selectedDate, selectedStaff, staffParam]);
 
   // The backend queue is shift-based — customer picks a shift (session)
   // and gets a queue token, not a specific time slot within the shift.
