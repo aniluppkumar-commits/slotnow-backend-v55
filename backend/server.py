@@ -1298,7 +1298,13 @@ async def get_provider(provider_id: str):
 @api.get("/providers/me/profile")
 async def my_provider_profile(user: User = Depends(current_user)):
     await require_role(user, "provider")
-    return await db.providers.find_one({"user_id": user.id}, {"_id": 0})
+    prov = await db.providers.find_one({"user_id": user.id}, {"_id": 0})
+    if prov and prov.get("category_id"):
+        cat = await db.categories.find_one({"id": prov["category_id"]}, {"_id": 0, "name": 1, "slug": 1})
+        if cat:
+            prov["category_name"] = cat.get("name")
+            prov["category"] = cat
+    return prov
 
 
 @api.post("/providers/me/profile")

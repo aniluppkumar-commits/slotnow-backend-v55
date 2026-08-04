@@ -1,0 +1,75 @@
+{
+  "base_url": "https://slotnow-web.preview.emergentagent.com",
+  "checks": [
+    {
+      "name": "hospital provider PIN login succeeds",
+      "ok": true,
+      "detail": "status=200"
+    },
+    {
+      "name": "GET /providers/me/profile returns 200",
+      "ok": true,
+      "detail": "status=200"
+    },
+    {
+      "name": "profile.provider_type is hospital",
+      "ok": true,
+      "detail": "hospital"
+    },
+    {
+      "name": "profile.category_name is Automobile",
+      "ok": true,
+      "detail": "Automobile"
+    },
+    {
+      "name": "profile.category object is enriched",
+      "ok": true,
+      "detail": {
+        "name": "Automobile"
+      }
+    },
+    {
+      "name": "hospital staff list loads",
+      "ok": true,
+      "detail": "status=200, count=4"
+    },
+    {
+      "name": "assistant list loads",
+      "ok": true,
+      "detail": "status=200, count=2"
+    },
+    {
+      "name": "Nurse Nia assistant available for assignment regression",
+      "ok": true,
+      "detail": {
+        "id": "baf49211-962b-4868-9ed7-7017328b0f5b",
+        "assigned_count": 2
+      }
+    },
+    {
+      "name": "backend rejects >3 assigned doctors/services",
+      "ok": true,
+      "detail": "status=400, detail={'detail': 'You can assign at most 3 doctors/services to a single assistant'}"
+    },
+    {
+      "name": "non-Automobile seeded provider PIN login succeeds",
+      "ok": true,
+      "detail": "status=200"
+    },
+    {
+      "name": "non-Automobile provider profile has non-Automobile category_name",
+      "ok": true,
+      "detail": "Healthcare"
+    }
+  ],
+  "created_seed_data": [
+    "provider_user:9000000101/1234",
+    "provider:bug38-nonauto-provider category=Healthcare"
+  ],
+  "non_auto_seed": {
+    "phone": "9000000101",
+    "pin": "1234",
+    "category": "Healthcare",
+    "provider_id": "bug38-nonauto-provider"
+  }
+}

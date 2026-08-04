@@ -24,17 +24,16 @@ export default function ProviderQueue() {
       const [qRes, sRes, pRes] = await Promise.all([
         api.get("/queue/today").catch(() => ({ data: [] })),
         api.get("/providers/me/services").catch(() => ({ data: [] })),
-        api.get("/providers/me").catch(() => ({ data: null })),
+        api.get("/providers/me/profile").catch(() => ({ data: null })),
       ]);
       const arr = Array.isArray(qRes.data)
         ? qRes.data
         : (qRes.data?.queue || qRes.data?.items || qRes.data?.bookings || []);
       setQueue(arr);
       setServices(Array.isArray(sRes.data) ? sRes.data : []);
-      // /providers/me returns { provider, services, reviews, category, has_availability }
-      const prov = pRes.data?.provider || pRes.data;
-      const catName = pRes.data?.category?.name || prov?.category_name;
-      setProfile(prov ? { ...prov, category_name: catName } : null);
+      // /providers/me/profile returns the provider doc directly (no wrapper)
+      const prov = pRes.data;
+      setProfile(prov || null);
     } finally {
       setLoading(false);
     }

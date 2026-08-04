@@ -21,12 +21,10 @@ export default function ProviderServices() {
     try {
       const [svcRes, profRes] = await Promise.all([
         api.get("/providers/me/services"),
-        api.get("/providers/me").catch(() => ({ data: null })),
+        api.get("/providers/me/profile").catch(() => ({ data: null })),
       ]);
       setServices(svcRes.data || []);
-      const prov = profRes.data?.provider || profRes.data;
-      const catName = profRes.data?.category?.name || prov?.category_name;
-      setProfile(prov ? { ...prov, category_name: catName } : null);
+      setProfile(profRes.data || null);
     } finally {
       setLoading(false);
     }

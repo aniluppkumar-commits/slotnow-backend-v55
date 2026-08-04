@@ -34,10 +34,10 @@ export default function ProviderAvailability() {
     try {
       const [avail, profRes] = await Promise.all([
         api.get("/providers/me/availability"),
-        api.get("/providers/me").catch(() => ({ data: null })),
+        api.get("/providers/me/profile").catch(() => ({ data: null })),
       ]);
       setRules(avail.data || []);
-      setProfile(profRes.data?.provider || profRes.data || null);
+      setProfile(profRes.data || null);
     } finally {
       setLoading(false);
     }
