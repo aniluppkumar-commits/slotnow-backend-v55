@@ -1,0 +1,34 @@
+{
+  "summary": "Iter 45 bio-persistence retest — FIX VERIFIED. Both bio tests (POST /providers/me/staff and PATCH /providers/me/staff/{id}) now pass. All 9 iter45 tests pass (1 skipped test unrelated — completes-lowest-token has no active booking to complete in the current seed). Regression: 74/75 legacy tests pass; the only failure is the pre-existing iter44 automobile-vehicle-service list expecting 8 options but backend returns 7 — this is orthogonal to iter45 and was already flagged in iteration_35.json.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "GET /api/reference/automobile (vehicle-service)", "issue": "Pre-existing (not iter45): spec expects 8 vehicle-service options, backend returns 7 (missing one). Already documented in iteration_35 as an iter44 issue."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iter45.py",
+    "/app/test_reports/pytest/iter45_retest.xml",
+    "/app/test_reports/pytest/iter45_regression.xml"
+  ],
+  "action_items": [
+    "(Optional / pre-existing) Add the missing 8th vehicle-service option OR update the iter44 test — unrelated to iter45."
+  ],
+  "critical_code_review_comments": [
+    "Bio fix confirmed in server.py lines 1557 (add_my_staff) and 1580 (update_my_staff) — both now pass `bio=(body.bio or '').strip()`.",
+    "Suggestion still stands: refactor update_my_staff to use `body.model_dump(exclude_none=True)` so future fields can't silently be dropped."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "100% for iter45 (9/9 + 1 environmental skip); 98.7% overall regression (74/75, 1 pre-existing iter44 unrelated)", "frontend": "N/A — API-level verification only; endpoint used by the modal is confirmed working"},
+  "test_credentials": "Provider 9000000007 / pin 1234 role=provider; Assistant 9000009911 / pin 1234 role=receptionist; Customer 9000009999 / pin 1234 role=customer — via POST /api/auth/pin-login {phone,pin,role}",
+  "seed_data_creation": "test_iter45.py fixtures seed TEST_ rows and self-clean.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Bio fix verified end-to-end. Only outstanding item is the pre-existing iter44 automobile-8-options mismatch that is orthogonal to iter45.",
+  "rca of the issue": "Previously reported bug fixed by adding `bio=(body.bio or '').strip()` to HospitalStaff constructor in add_my_staff and adding `\"bio\": (body.bio or '').strip()` to the update dict in update_my_staff. Both test_add_doctor_with_bio_persists and test_add_service_with_bio_persists now green."
+}
