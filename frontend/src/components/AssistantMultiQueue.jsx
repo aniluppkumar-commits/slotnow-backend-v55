@@ -1,0 +1,121 @@
+import React, { useCallback, useEffect, useState } from "react";
+import api from "@/lib/api";
+import useLivePolling from "@/hooks/useLivePolling";
+import { Loader2, ChevronRight, Stethoscope, Building2, User } from "lucide-react";
+import { toast } from "sonner";
+
+// Live multi-staff queue tiles for hospital assistants. Shows up to 3
+// assigned doctors/services on a single screen with per-staff "Next" buttons
+// that call POST /assistant/queue/next?staff_id=…. Auto-refreshes every 4s.
+export default function AssistantMultiQueue() {
+  const [snap, setSnap] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [busyStaff, setBusyStaff] = useState(null);
+
+  const fetchSnap = useCallback(async () => {
+    try {
+      const { data } = await api.get("/assistant/queue/multi");
+      setSnap(data);
+    } catch {
+      // silent — the wider dashboard already surfaces errors
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => { fetchSnap(); }, [fetchSnap]);
+  useLivePolling(fetchSnap, 4000);
+
+  const callNext = async (staffId) => {
+    setBusyStaff(staffId);
+    try {
+      const { data } = await api.post(`/assistant/queue/next?staff_id=${encodeURIComponent(staffId)}`);
+      if (data.ok) {
+        toast.success(`Completed token #${data.completed_token}`);
+      } else {
+        toast.message("Queue is empty for this doctor / service.");
+      }
+      await fetchSnap();
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || "Could not advance");
+    } finally {
+      setBusyStaff(null);
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="bg-white border border-cream-300 rounded-2xl p-6 flex justify-center">
+        <Loader2 className="animate-spin text-forest" />
+      </div>
+    );
+  }
+  const staff = snap?.staff || [];
+  if (staff.length === 0) return null;
+
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center justify-between">
+        <p className="text-xs font-bold uppercase tracking-widest text-ink-soft">
+          Assigned live queues ({staff.length})
+        </p>
+        <span className="text-[10px] text-ink-muted">Auto-refreshing every 4s</span>
+      </div>
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3" data-testid="assistant-multi-queue">
+        {staff.map((s) => {
+          const Icon = s.staff_kind === "doctor" ? Stethoscope : Building2;
+          return (
+            <div
+              key={s.staff_id}
+              data-testid={`aq-tile-${s.staff_id}`}
+              className="bg-gradient-to-br from-forest to-forest-dark text-white rounded-2xl p-4 shadow-lg flex flex-col"
+            >
+              <div className="flex items-center gap-2">
+                {s.staff_photo ? (
+                  <img src={s.staff_photo} alt="" className="w-9 h-9 rounded-lg object-cover ring-2 ring-white/40" />
+                ) : (
+                  <div className="w-9 h-9 rounded-lg bg-white/15 flex items-center justify-center">
+                    <Icon size={16} />
+                  </div>
+                )}
+                <div className="min-w-0 flex-1">
+                  <p className="font-heading font-bold text-cream-100 truncate text-sm">{s.staff_name}</p>
+                  <p className="text-[10px] text-cream-200/70 capitalize">{s.staff_kind || "staff"}</p>
+                </div>
+              </div>
+              <div className="mt-3 flex items-baseline gap-2">
+                <span className="text-[10px] uppercase tracking-widest text-cream-200/70">Now serving</span>
+                <span data-testid={`aq-current-${s.staff_id}`} className="text-3xl font-heading font-black text-cream-100">
+                  #{s.current_token || "—"}
+                </span>
+              </div>
+              <div className="mt-2 flex items-center justify-between text-[11px] text-cream-100/80">
+                <span>
+                  Next: <b className="text-cream-100">{s.next_token ? `#${s.next_token}` : "—"}</b>
+                </span>
+                <span className="bg-white/15 px-2 py-0.5 rounded-full font-bold">
+                  {s.active_count} in queue
+                </span>
+              </div>
+              {s.next_name && s.next_token && (
+                <div className="mt-2 flex items-center gap-1 text-[11px] text-cream-100/80">
+                  <User size={11} /> {s.next_name}
+                </div>
+              )}
+              <button
+                data-testid={`aq-next-${s.staff_id}`}
+                onClick={() => callNext(s.staff_id)}
+                disabled={busyStaff === s.staff_id || s.active_count === 0}
+                className="mt-3 flex items-center justify-center gap-2 bg-accent text-white py-2 rounded-xl font-bold text-sm disabled:opacity-40 hover:bg-accent-dark"
+              >
+                {busyStaff === s.staff_id
+                  ? <Loader2 size={14} className="animate-spin" />
+                  : <><ChevronRight size={14} /> Call next</>}
+              </button>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}

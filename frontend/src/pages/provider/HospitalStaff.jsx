@@ -40,6 +40,7 @@ export default function HospitalStaff() {
       name: "",
       specialization: "",
       service_tags: [],
+      bio: "",
       photo: "",
       address: "",
       latitude: null,
@@ -337,26 +338,44 @@ export default function HospitalStaff() {
                 )}
                 <input type="file" accept="image/*" onChange={onPhoto} className="text-xs" data-testid="staff-photo" />
               </div>
+              {/* Bio (shared by both doctor + service) */}
+              <div>
+                <label className="block text-[11px] font-bold uppercase tracking-wider text-ink-muted mb-1">
+                  Bio / Description (optional)
+                </label>
+                <textarea
+                  data-testid="staff-bio"
+                  value={form.bio || ""}
+                  onChange={(e) => setForm({ ...form, bio: e.target.value })}
+                  rows={2}
+                  placeholder={modalKind === "doctor" ? "e.g. 15+ years experience, MBBS from KGMU" : "e.g. Fully accredited pathology lab open 24×7"}
+                  className="w-full px-3 py-2 rounded-xl bg-cream border border-cream-300 focus:border-forest focus:outline-none text-sm resize-none"
+                />
+              </div>
+              {/* Address + map pin (both doctor + service) */}
+              <div>
+                <label className="block text-[11px] font-bold uppercase tracking-wider text-ink-muted mb-1">
+                  Address (optional)
+                </label>
+                <input
+                  data-testid="staff-address"
+                  value={form.address || ""}
+                  onChange={(e) => setForm({ ...form, address: e.target.value })}
+                  placeholder="e.g. Building A, Ground floor"
+                  className="w-full px-3 py-2 rounded-xl bg-cream border border-cream-300 focus:border-forest focus:outline-none text-sm"
+                />
+              </div>
+              <button
+                onClick={useLocation}
+                className="inline-flex items-center gap-1 text-xs font-semibold text-forest hover:underline"
+                data-testid="staff-fetch-location"
+                type="button"
+              >
+                <MapPin size={12} />
+                {form.latitude ? `Location saved (${form.latitude.toFixed(3)}, ${form.longitude.toFixed(3)})` : "Fetch Google Maps location"}
+              </button>
               {modalKind === "service" && (
                 <>
-                  <div>
-                    <label className="block text-[11px] font-bold uppercase tracking-wider text-ink-muted mb-1">
-                      Address
-                    </label>
-                    <input
-                      value={form.address || ""}
-                      onChange={(e) => setForm({ ...form, address: e.target.value })}
-                      className="w-full px-3 py-2 rounded-xl bg-cream border border-cream-300 focus:border-forest focus:outline-none text-sm"
-                    />
-                  </div>
-                  <button
-                    onClick={useLocation}
-                    className="inline-flex items-center gap-1 text-xs font-semibold text-forest hover:underline"
-                    data-testid="staff-fetch-location"
-                  >
-                    <MapPin size={12} />
-                    {form.latitude ? `Location saved (${form.latitude.toFixed(3)}, ${form.longitude.toFixed(3)})` : "Fetch Google Maps location"}
-                  </button>
                 </>
               )}
               <div>

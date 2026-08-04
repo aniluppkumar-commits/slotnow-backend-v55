@@ -1,0 +1,38 @@
+{
+  "summary": "Iter 45 backend + UI tested. 7/9 new backend tests pass. Critical bug found: HospitalStaff.bio is NOT persisted by POST /providers/me/staff nor PATCH /providers/me/staff/{id} — the `bio` field from HospitalStaffUpsert is silently dropped when constructing the DB doc / update dict. All other iter45 features work correctly: 'Any Service' label, max-3 assistant enforcement, /assistant/queue/multi shape + fallback, /assistant/queue/next 403-when-unassigned, ReceptionistDashboard renders 2 tiles with correct testids. Regression suites iter40/41/42/43/44 all pass except the ONE pre-existing iter44 automobile-8-options mismatch (unrelated to iter45).",
+  "backend_issues": {
+    "critical": [
+      {"endpoint": "POST /api/providers/me/staff  and  PATCH /api/providers/me/staff/{id}", "issue": "`bio` field from HospitalStaffUpsert body is dropped. In server.py: add_my_staff (line ~1551) constructs HospitalStaff(...) without bio=body.bio, and update_my_staff (line ~1574) builds an `update` dict that omits the 'bio' key. Result: POST/GET both return bio=''. Fix = add `bio=(body.bio or '').strip(),` to the constructor and `\"bio\": (body.bio or '').strip()` to the update dict. Verified with test_iter45.py::TestHospitalStaffBio.", "priority": "CRITICAL"}
+    ],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [
+      {"flow": "HospitalStaff Add doctor / Add service", "issue": "Because the backend drops bio (see backend critical), the UI textarea for bio submits successfully but the value never comes back on GET — user perceives the field as broken/reset after reload.", "affected_selectors": ["[data-testid=staff-bio]"]}
+    ],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iter45.py",
+    "/app/test_reports/pytest/iter45_results.xml"
+  ],
+  "action_items": [
+    "PATCH server.py add_my_staff to pass `bio=(body.bio or '').strip()` when constructing HospitalStaff.",
+    "PATCH server.py update_my_staff to include `\"bio\": (body.bio or '').strip()` in the update dict.",
+    "(Pre-existing, unrelated to iter45) iter44 vehicle-service list is 7 options but the iter44 test spec expects 8 — either add an 8th option or update that older test."
+  ],
+  "critical_code_review_comments": [
+    "server.py is 3397 lines — well beyond the 700-line guideline. Consider splitting into modules (auth, providers, hospital_staff, bookings, assistant, queue, reference).",
+    "HospitalStaffUpsert defines `bio` but both write endpoints ignore it — the exact class of bug that a Pydantic-based `model_dump(exclude_unset=True)` update pattern would prevent. Consider re-writing update_my_staff to do `body.model_dump(exclude_none=True)` instead of hand-listing keys.",
+    "In /assistant/queue/multi, `staff_by_id` is built but iteration is over `assigned` — if a stale assigned id no longer exists in hospital_staff, meta falls back silently. Consider filtering `assigned` down to `staff_by_id.keys()` OR flagging the staleness back to the assistant UI."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "78% (7/9 iter45 new tests + 60/61 regression, one iter44 pre-existing failure unrelated)", "frontend": "100% of iter45 UI surfaces verified"},
+  "test_credentials": "Provider 9000000007 / pin 1234, Assistant 9000009911 / pin 1234, Customer 9000009999 / pin 1234 — all via /api/auth/pin-login",
+  "seed_data_creation": "Tests seed TEST_iter45 doctor/service rows and clean them up in-fixture. Manual cleanup already re-run — no orphans left. Assistant assignment restored to {Cardio, Neuro}.",
+  "retest_needed": true,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "After the bio fix is applied, re-run `pytest backend/tests/test_iter45.py::TestHospitalStaffBio -v` — both assertions should turn green. Everything else in iter45 is already green. The pre-existing iter44 automobile-count failure is orthogonal and can be handled separately.",
+  "rca of the issue": "HospitalStaff model gained an optional `bio` field and HospitalStaffUpsert added the same field, but the two write endpoints (add_my_staff / update_my_staff) were not updated to copy that field into the DB document. The POST endpoint instantiates HospitalStaff() with an explicit kwargs list that omits bio, so bio defaults to ''. The PATCH endpoint constructs a hand-rolled update dict that also omits the bio key. Because GET simply returns the persisted row, the front-end textarea appears to be swallowed. Repro: POST /api/providers/me/staff with {kind:doctor,name:X,bio:'hello'} — response `bio` is ''. Fix: include `bio` in both the constructor and update dict (~2 line change). No UI change needed — the modal already sends bio in the body."
+}

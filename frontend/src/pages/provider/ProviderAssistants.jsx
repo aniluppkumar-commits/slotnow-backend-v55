@@ -199,8 +199,16 @@ export default function ProviderAssistants() {
 function AssignModal({ assistant, staff, onClose, onSaved }) {
   const [ids, setIds] = useState(Array.isArray(assistant.assigned_staff_ids) ? assistant.assigned_staff_ids : []);
   const [saving, setSaving] = useState(false);
+  const MAX_ASSIGN = 3;
   const toggle = (sid) =>
-    setIds((prev) => (prev.includes(sid) ? prev.filter((x) => x !== sid) : [...prev, sid]));
+    setIds((prev) => {
+      if (prev.includes(sid)) return prev.filter((x) => x !== sid);
+      if (prev.length >= MAX_ASSIGN) {
+        toast.error(`You can assign at most ${MAX_ASSIGN} doctors/services per assistant`);
+        return prev;
+      }
+      return [...prev, sid];
+    });
   const save = async () => {
     setSaving(true);
     try {
@@ -221,7 +229,12 @@ function AssignModal({ assistant, staff, onClose, onSaved }) {
         <div className="flex items-start justify-between mb-3">
           <div>
             <h3 className="font-heading text-lg font-black text-ink">Assign to {assistant.name}</h3>
-            <p className="text-xs text-ink-muted">Empty selection = full access to all staff</p>
+            <p className="text-xs text-ink-muted">
+              Pick up to <b>{MAX_ASSIGN}</b> doctors/services. Empty = full access to every staff.
+            </p>
+            <p data-testid="assign-count" className={`text-[11px] font-bold mt-1 ${ids.length >= MAX_ASSIGN ? "text-rose-500" : "text-forest"}`}>
+              {ids.length} / {MAX_ASSIGN} selected
+            </p>
           </div>
           <button onClick={onClose} className="text-ink-muted hover:text-ink" aria-label="Close"><X size={20} /></button>
         </div>
@@ -248,7 +261,7 @@ function AssignModal({ assistant, staff, onClose, onSaved }) {
         )}
         {centers.length > 0 && (
           <div className="mb-4">
-            <p className="text-[11px] font-bold uppercase tracking-wider text-ink-muted mb-2">Service centers</p>
+            <p className="text-[11px] font-bold uppercase tracking-wider text-ink-muted mb-2">Other Services</p>
             <div className="space-y-1.5">
               {centers.map((s) => (
                 <label key={s.id} className="flex items-center gap-2 text-sm cursor-pointer">

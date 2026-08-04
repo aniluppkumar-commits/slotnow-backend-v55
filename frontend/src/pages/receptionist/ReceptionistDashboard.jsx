@@ -28,6 +28,7 @@ import {
   UserCog,
   GripVertical,
 } from "lucide-react";
+import AssistantMultiQueue from "@/components/AssistantMultiQueue";
 import { toast } from "sonner";
 import { todayISO } from "@/lib/utils-app";
 
@@ -207,6 +208,9 @@ export default function ReceptionistDashboard() {
             </div>
           )}
         </div>
+
+        {/* Multi-staff live queue (hospitals) — up to 3 assigned doctors/services */}
+        <AssistantMultiQueue />
 
         {/* Actions */}
         <div className="grid grid-cols-3 gap-2">

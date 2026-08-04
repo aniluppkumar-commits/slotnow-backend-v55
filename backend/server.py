@@ -334,6 +334,7 @@ class HospitalStaff(BaseModel):
     name: str
     specialization: Optional[str] = ""  # only for doctors
     service_tags: List[str] = []  # only for service centers
+    bio: Optional[str] = ""  # short public description shown on the customer booking page
     photo: Optional[str] = None
     address: Optional[str] = ""
     latitude: Optional[float] = None
@@ -348,6 +349,7 @@ class HospitalStaffUpsert(BaseModel):
     name: str
     specialization: Optional[str] = ""
     service_tags: Optional[List[str]] = None
+    bio: Optional[str] = ""
     photo: Optional[str] = None
     address: Optional[str] = ""
     latitude: Optional[float] = None
@@ -977,7 +979,7 @@ async def healthcare_reference():
         "provider_types": [
             {"key": "hospital", "label": "Hospital"},
             {"key": "doctor_clinic", "label": "Doctor / Clinic"},
-            {"key": "diagnostic_center", "label": "Diagnostic Center"},
+            {"key": "diagnostic_center", "label": "Any Service"},
         ],
         "specializations": DOCTOR_SPECIALIZATIONS,
         "services": DIAGNOSTIC_SERVICES,
@@ -1497,9 +1499,15 @@ async def assign_assistant_staff(
     user: User = Depends(current_user),
 ):
     """Provider assigns the specific hospital staff (doctors / service centers)
-    this assistant is allowed to manage. Empty list = all staff (default)."""
+    this assistant is allowed to manage. Hospital assistants can manage up to
+    3 staff items at once — enforced here so a single assistant screen never
+    grows beyond the 3-column live-token layout on the frontend."""
     await require_role(user, "provider")
     p = await _my_provider_or_400(user)
+    # Enforce the max-3 rule (only applicable when assigning to a hospital-type
+    # provider). Empty list = clear all assignments (default: manage every staff).
+    if body.staff_ids and len(body.staff_ids) > 3:
+        raise HTTPException(400, "You can assign at most 3 doctors/services to a single assistant")
     target = await db.users.find_one(
         {"id": assistant_id, "role": "receptionist", "linked_provider_id": p["id"]},
         {"_id": 0},
@@ -2494,13 +2502,115 @@ async def queue_next(user: User = Depends(current_user), date: Optional[str] = N
     return {"current_token": new_token, "last_assigned": state.get("last_assigned", 0)}
 
 
+# ---------- Assistant multi-staff live queue view ----------
+async def _assistant_scope(user: User) -> tuple[str, List[str]]:
+    """Resolve the (provider_id, assigned_staff_ids) tuple for a receptionist.
+
+    When `assigned_staff_ids` is empty on the user record, the assistant can see
+    every hospital staff (falls back to all doctors/services under the hospital).
+    """
+    await require_role(user, "receptionist")
+    row = await db.users.find_one({"id": user.id}, {"_id": 0}) or {}
+    pid = row.get("linked_provider_id")
+    if not pid:
+        raise HTTPException(400, "Assistant is not linked to any provider")
+    assigned = list(row.get("assigned_staff_ids") or [])
+    if not assigned:
+        # Fall back to every active staff under the hospital (max 3 shown by UI).
+        all_staff = await db.hospital_staff.find(
+            {"hospital_id": pid, "active": True}, {"_id": 0, "id": 1},
+        ).sort("created_at", 1).to_list(50)
+        assigned = [s["id"] for s in all_staff][:3]
+    return pid, assigned
+
+
+@api.get("/assistant/queue/multi")
+async def assistant_multi_queue(user: User = Depends(current_user), date: Optional[str] = None):
+    """Return the today's live queue snapshot for up to 3 assigned staff at once.
+
+    For each staff we compute:
+      - current_token: the highest token_number that has already been served
+        (i.e., max of completed / no_show / rejected bookings) — 0 when none.
+      - next_token: the token_number of the next active booking (lowest
+        pending/confirmed) — null when queue is empty.
+      - next_name: customer name (or walk-in name) attached to that next booking.
+      - active_count: how many pending/confirmed bookings remain today.
+      - last_assigned: last token_number handed out (max of all bookings today).
+    """
+    pid, assigned = await _assistant_scope(user)
+    d = date or await get_today_str()
+    # Fetch staff metadata in a single query.
+    staff_rows = await db.hospital_staff.find(
+        {"hospital_id": pid, "id": {"$in": assigned}}, {"_id": 0}
+    ).to_list(50)
+    staff_by_id = {s["id"]: s for s in staff_rows}
+    result = []
+    for sid in assigned:
+        bks = await db.bookings.find(
+            {"provider_id": pid, "staff_id": sid, "date": d, "is_walkin": False},
+            {"_id": 0},
+        ).sort("token_number", 1).to_list(500)
+        active = [b for b in bks if b.get("status") in ("pending", "confirmed")]
+        served = [b for b in bks if b.get("status") in ("completed", "no_show", "rejected")]
+        current_token = max((b["token_number"] for b in served), default=0)
+        next_b = active[0] if active else None
+        last_assigned = max((b["token_number"] for b in bks), default=0)
+        meta = staff_by_id.get(sid) or {"id": sid, "name": "Unknown"}
+        result.append({
+            "staff_id": sid,
+            "staff_name": meta.get("name") or "Unknown",
+            "staff_kind": meta.get("kind"),
+            "staff_photo": meta.get("photo"),
+            "current_token": current_token,
+            "next_token": next_b.get("token_number") if next_b else None,
+            "next_booking_id": next_b.get("id") if next_b else None,
+            "next_name": (next_b or {}).get("customer_name") or "Guest",
+            "next_phone": (next_b or {}).get("customer_phone", ""),
+            "active_count": len(active),
+            "last_assigned": last_assigned,
+        })
+    return {"date": d, "provider_id": pid, "staff": result}
+
+
+@api.post("/assistant/queue/next")
+async def assistant_queue_next(
+    staff_id: str = Query(...),
+    user: User = Depends(current_user),
+    date: Optional[str] = None,
+):
+    """Advance the queue for ONE specific staff (called from the multi-tile UI).
+    Marks the lowest-token active booking under that staff as completed and
+    triggers the smart-reminder recomputation for the rest.
+    """
+    pid, assigned = await _assistant_scope(user)
+    if staff_id not in assigned:
+        raise HTTPException(403, "This staff is not assigned to you")
+    d = date or await get_today_str()
+    next_active = await db.bookings.find_one(
+        {"provider_id": pid, "staff_id": staff_id, "date": d,
+         "status": {"$in": ["pending", "confirmed"]}, "is_walkin": False},
+        {"_id": 0},
+        sort=[("token_number", 1)],
+    )
+    if next_active:
+        await db.bookings.update_one(
+            {"id": next_active["id"]},
+            {"$set": {"status": "completed", "completed_at": datetime.now(timezone.utc)}},
+        )
+        try:
+            await _notify_queue_positions(pid, d, staff_id)
+        except Exception:
+            pass
+        return {"ok": True, "completed_token": next_active["token_number"], "completed_id": next_active["id"]}
+    return {"ok": False, "reason": "queue empty"}
+
+
 @api.post("/queue/reset")
 async def queue_reset(user: User = Depends(current_user), date: Optional[str] = None):
     pid = await _provider_id_for_user(user)
     d = date or await get_today_str()
     await db.queue_state.update_one(
-        {"provider_id": pid, "date": d},
-        {"$set": {"current_token": 0}},
+        {"provider_id": pid, "date": d},        {"$set": {"current_token": 0}},
         upsert=True,
     )
     return {"ok": True}
