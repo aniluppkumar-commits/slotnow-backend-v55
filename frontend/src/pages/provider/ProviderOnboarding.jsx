@@ -201,9 +201,11 @@ export default function ProviderOnboarding() {
             const isHealthcare = selCat?.name?.toLowerCase() === "healthcare";
             if (!isHealthcare) return null;
             const isClinic = form.provider_type === "doctor_clinic";
-            const showServices =
-              form.provider_type === "hospital" ||
-              form.provider_type === "diagnostic_center";
+            const isHospital = form.provider_type === "hospital";
+            // Only diagnostic centers get the flat "Services offered" checklist.
+            // Hospitals add their own doctors + services on the next screen,
+            // so this checklist would just confuse them.
+            const showServices = form.provider_type === "diagnostic_center";
             return (
               <>
                 <Field label="Provider type" required>
@@ -289,6 +291,25 @@ export default function ProviderOnboarding() {
                       })}
                     </div>
                   </Field>
+                )}
+                {isHospital && (
+                  <div
+                    data-testid="hospital-next-steps-callout"
+                    className="rounded-2xl border-2 border-dashed border-forest/40 bg-forest/5 p-4 flex items-start gap-3"
+                  >
+                    <div className="w-9 h-9 rounded-full bg-forest text-cream-100 flex items-center justify-center shrink-0 font-heading font-black">
+                      2
+                    </div>
+                    <div className="text-sm text-ink">
+                      <p className="font-heading font-bold">Next step: add your doctors & services</p>
+                      <p className="text-xs text-ink-soft mt-1">
+                        Save this hospital first. On the very next screen you'll get an "Add doctor"
+                        and "Add service" button where you can register unlimited doctors (Name,
+                        Specialization, Bio, Photo, Address, Map Pin) and departments (X-Ray,
+                        Pathology, Ultrasound, etc.) one by one.
+                      </p>
+                    </div>
+                  </div>
                 )}
               </>
             );

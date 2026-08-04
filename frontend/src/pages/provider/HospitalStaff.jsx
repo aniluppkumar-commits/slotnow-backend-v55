@@ -113,6 +113,39 @@ export default function HospitalStaff() {
   return (
     <AppShell title="Hospital Staff">
       <div className="px-4 sm:px-6 py-4 space-y-6">
+        {/* Hero explainer — makes the intent explicit so hospital admins
+            never wonder "where do I add doctors?" (per user feedback). */}
+        <div
+          data-testid="hospital-staff-hero"
+          className="bg-gradient-to-br from-forest to-forest-dark text-white rounded-2xl p-5 shadow-lg"
+        >
+          <p className="text-[10px] uppercase tracking-widest text-cream-200 font-bold">Your hospital roster</p>
+          <p className="font-heading font-black text-lg mt-1">
+            Add unlimited doctors and services
+          </p>
+          <p className="text-xs text-cream-100/85 mt-1 max-w-2xl">
+            Every doctor you add here gets their own full profile (name, specialization, bio, photo,
+            address, map pin), independent weekly schedule, and per-doctor daily slot limit.
+            Same goes for departments like X-Ray, Ultrasound, Pathology — each is a bookable unit.
+          </p>
+          <div className="flex flex-wrap gap-2 mt-3">
+            <button
+              onClick={() => openAdd("doctor")}
+              data-testid="hero-add-doctor-btn"
+              className="inline-flex items-center gap-1.5 bg-accent hover:bg-accent-dark text-white text-sm font-bold px-4 py-2 rounded-xl"
+            >
+              <Plus size={14} /> Add doctor
+            </button>
+            <button
+              onClick={() => openAdd("service")}
+              data-testid="hero-add-service-btn"
+              className="inline-flex items-center gap-1.5 bg-white text-forest text-sm font-bold px-4 py-2 rounded-xl hover:bg-cream-100"
+            >
+              <Plus size={14} /> Add service (X-Ray / Lab / etc.)
+            </button>
+          </div>
+        </div>
+
         {/* Doctors */}
         <section>
           <div className="flex items-center justify-between mb-3">
@@ -132,9 +165,19 @@ export default function HospitalStaff() {
           {loading ? (
             <div className="text-center py-8 text-ink-muted"><Loader2 className="animate-spin mx-auto" /></div>
           ) : doctors.length === 0 ? (
-            <div className="text-center py-8 text-ink-muted text-sm bg-white rounded-2xl border border-cream-300">
-              No doctors yet. Add your first doctor.
-            </div>
+            <button
+              type="button"
+              data-testid="doctors-empty-cta"
+              onClick={() => openAdd("doctor")}
+              className="w-full text-left py-6 px-4 text-sm bg-white rounded-2xl border-2 border-dashed border-cream-300 hover:border-forest hover:bg-forest/5 transition-colors"
+            >
+              <p className="font-bold text-ink flex items-center gap-2">
+                <Plus size={14} className="text-forest" /> Add your first doctor
+              </p>
+              <p className="text-xs text-ink-muted mt-1">
+                Fill in Name, Specialization (with an "Other" option), Bio, Photo, Address and Map Pin, then set their weekly schedule.
+              </p>
+            </button>
           ) : (
             <div className="grid sm:grid-cols-2 gap-3">
               {doctors.map((d) => (
@@ -189,9 +232,19 @@ export default function HospitalStaff() {
             </button>
           </div>
           {services.length === 0 ? (
-            <div className="text-center py-8 text-ink-muted text-sm bg-white rounded-2xl border border-cream-300">
-              No service centers yet. Add X-ray, Pathology, USG etc.
-            </div>
+            <button
+              type="button"
+              data-testid="services-empty-cta"
+              onClick={() => openAdd("service")}
+              className="w-full text-left py-6 px-4 text-sm bg-white rounded-2xl border-2 border-dashed border-cream-300 hover:border-accent hover:bg-accent/5 transition-colors"
+            >
+              <p className="font-bold text-ink flex items-center gap-2">
+                <Plus size={14} className="text-accent" /> Add your first service
+              </p>
+              <p className="text-xs text-ink-muted mt-1">
+                X-Ray, Ultrasound, Pathology, Blood Bank — each becomes an independent bookable unit with its own schedule.
+              </p>
+            </button>
           ) : (
             <div className="grid sm:grid-cols-2 gap-3">
               {services.map((s) => (

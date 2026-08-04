@@ -202,27 +202,48 @@ export default function ProviderDashboard() {
 
         {/* Hospital staff shortcut (only for hospital type) */}
         {profile?.id && profile?.provider_type === "hospital" && (
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <button
-              data-testid="provider-manage-staff"
-              onClick={() => navigate("/provider/staff")}
-              className="text-left bg-white border border-cream-300 rounded-2xl p-4 hover:border-forest transition-colors"
-            >
-              <p className="font-heading font-bold text-ink text-sm">Manage doctors & services</p>
-              <p className="text-[11px] text-ink-muted">
-                Add doctors and diagnostic services under your hospital
+          <div data-testid="hospital-controls" className="space-y-3">
+            <div className="bg-gradient-to-br from-forest to-forest-dark text-white rounded-2xl p-5 shadow-lg">
+              <p className="text-[10px] uppercase tracking-widest text-cream-200 font-bold">
+                Hospital control room
               </p>
-            </button>
-            <button
-              data-testid="provider-schedule-grid"
-              onClick={() => navigate("/provider/schedule-grid")}
-              className="text-left bg-white border border-cream-300 rounded-2xl p-4 hover:border-forest transition-colors"
-            >
-              <p className="font-heading font-bold text-ink text-sm">Bulk schedule grid</p>
-              <p className="text-[11px] text-ink-muted">
-                Fill 5-6 doctors' weekly shifts in one view & copy days across
+              <p className="font-heading font-black text-lg mt-1">
+                Add doctors & services to your hospital
               </p>
-            </button>
+              <p className="text-xs text-cream-100/80 mt-1">
+                Every doctor gets their own profile (name, specialization, bio, photo, address, map pin, schedule)
+                and every department (X-Ray, Ultrasound, Pathology…) is an independent bookable unit.
+              </p>
+              <button
+                data-testid="provider-manage-staff"
+                onClick={() => navigate("/provider/staff")}
+                className="mt-3 inline-flex items-center gap-2 bg-accent text-white px-4 py-2 rounded-xl font-bold text-sm hover:bg-accent-dark"
+              >
+                + Add doctor / service
+              </button>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <button
+                data-testid="provider-schedule-grid"
+                onClick={() => navigate("/provider/schedule-grid")}
+                className="text-left bg-white border border-cream-300 rounded-2xl p-4 hover:border-forest transition-colors"
+              >
+                <p className="font-heading font-bold text-ink text-sm">Bulk schedule grid</p>
+                <p className="text-[11px] text-ink-muted">
+                  Fill 5-6 doctors' weekly shifts in one view & copy days across
+                </p>
+              </button>
+              <button
+                data-testid="provider-assistants"
+                onClick={() => navigate("/provider/assistants")}
+                className="text-left bg-white border border-cream-300 rounded-2xl p-4 hover:border-forest transition-colors"
+              >
+                <p className="font-heading font-bold text-ink text-sm">Service assistants</p>
+                <p className="text-[11px] text-ink-muted">
+                  Add front-desk staff, assign up to 3 doctors/services each
+                </p>
+              </button>
+            </div>
           </div>
         )}
 
