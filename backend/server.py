@@ -50,6 +50,7 @@ class User(BaseModel):
     via_referral: bool = False  # signed up through a referral/share link
     referred_by: Optional[str] = None  # provider id or "app" the referral came from
     designation: Optional[str] = None  # for assistants: free-text role e.g. "Front Desk"
+    assigned_staff_ids: List[str] = []  # hospital sub-staff this assistant can manage (max 3)
     is_blocked: bool = False  # provider can block an assistant's system access
     has_pin: bool = False  # whether a 4-digit PIN has been set (pin_hash kept out of model)
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))

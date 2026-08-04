@@ -147,6 +147,12 @@ export default function ProviderAssistants() {
                   <p className="text-[11px] text-ink-soft truncate">
                     +91 {a.phone} {a.designation && `· ${a.designation}`}
                   </p>
+                  {/* Show current assignment count so admin sees the mapping status at a glance */}
+                  <p data-testid={`assistant-mapping-${a.id}`} className="text-[11px] font-bold text-forest mt-0.5">
+                    <ListChecks size={11} className="inline -mt-0.5 mr-0.5" />
+                    Mapped to {(a.assigned_staff_ids || []).length} / 3 doctors/services
+                    {(a.assigned_staff_ids || []).length === 0 && <span className="text-rose-500 ml-1">— tap Assign to map</span>}
+                  </p>
                   {a.blocked && (
                     <span className="text-[9px] font-bold uppercase tracking-wider text-rose-700 bg-rose-50 px-1.5 py-0.5 rounded inline-block mt-0.5">
                       Blocked
@@ -161,16 +167,20 @@ export default function ProviderAssistants() {
                 >
                   {a.blocked ? <ShieldCheck size={16} /> : <ShieldOff size={16} />}
                 </button>
-                {staff.length > 0 && (
-                  <button
-                    data-testid={`assistant-assign-${a.id}`}
-                    onClick={() => setAssignFor(a)}
-                    className="p-2 rounded-lg bg-forest-faint text-forest"
-                    title="Assign doctors / services"
-                  >
-                    <ListChecks size={16} />
-                  </button>
-                )}
+                <button
+                  data-testid={`assistant-assign-${a.id}`}
+                  onClick={() => {
+                    if (staff.length === 0) {
+                      toast.error("Add at least one doctor or service first (Manage doctors & services)");
+                      return;
+                    }
+                    setAssignFor(a);
+                  }}
+                  className="inline-flex items-center gap-1 px-3 py-2 rounded-lg bg-forest text-cream-100 font-bold text-xs hover:bg-forest-dark"
+                  title="Assign doctors / services (max 3)"
+                >
+                  <ListChecks size={14} /> Assign
+                </button>
                 <button
                   data-testid={`assistant-remove-${a.id}`}
                   onClick={() => remove(a)}

@@ -1,8 +1,9 @@
 import React, { useCallback, useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import api from "@/lib/api";
 import AppShell from "@/components/AppShell";
 import { useI18n } from "@/i18n";
-import { Loader2, Plus, Trash2, Clock } from "lucide-react";
+import { Loader2, Plus, Trash2, Clock, Users, LayoutGrid } from "lucide-react";
 import { toast } from "sonner";
 
 const WEEKDAYS_EN = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
@@ -16,8 +17,10 @@ const pyToJsWeekday = (py) => (py + 1) % 7;
 
 export default function ProviderAvailability() {
   const { t } = useI18n();
+  const navigate = useNavigate();
   const [rules, setRules] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [profile, setProfile] = useState(null);
   const [form, setForm] = useState({
     weekday: 1,
     start_time: "09:00",
@@ -29,8 +32,12 @@ export default function ProviderAvailability() {
 
   const load = useCallback(async () => {
     try {
-      const { data } = await api.get("/providers/me/availability");
-      setRules(data || []);
+      const [avail, profRes] = await Promise.all([
+        api.get("/providers/me/availability"),
+        api.get("/providers/me").catch(() => ({ data: null })),
+      ]);
+      setRules(avail.data || []);
+      setProfile(profRes.data?.provider || profRes.data || null);
     } finally {
       setLoading(false);
     }
@@ -75,6 +82,41 @@ export default function ProviderAvailability() {
   return (
     <AppShell title={t("availability")} showBack>
       <div className="px-4 sm:px-6 pt-4 space-y-5">
+        {/* Hospital-only callout: this page is the hospital-wide DEFAULT.
+            Per-doctor timings live under Manage doctors → Schedule, and a bulk
+            grid view is available at /provider/schedule-grid. */}
+        {profile?.provider_type === "hospital" && (
+          <div
+            data-testid="availability-hospital-callout"
+            className="bg-forest/5 border-2 border-dashed border-forest/40 rounded-2xl p-4"
+          >
+            <p className="text-sm font-heading font-bold text-ink">
+              This is your hospital's <span className="text-forest">default</span> schedule
+            </p>
+            <p className="text-[12px] text-ink-soft mt-1">
+              Any doctor or department without their own custom schedule falls back to what you
+              set here. To give each doctor their own weekly timings — open Manage doctors, tap a
+              doctor and use their per-doctor <b>Schedule</b> button. Or edit everyone at once from
+              the Bulk schedule grid.
+            </p>
+            <div className="flex flex-wrap gap-2 mt-3">
+              <button
+                data-testid="availability-goto-staff"
+                onClick={() => navigate("/provider/staff")}
+                className="inline-flex items-center gap-1.5 bg-forest text-cream-100 text-xs font-bold px-3 py-2 rounded-xl hover:bg-forest-dark"
+              >
+                <Users size={13} /> Per-doctor schedules
+              </button>
+              <button
+                data-testid="availability-goto-grid"
+                onClick={() => navigate("/provider/schedule-grid")}
+                className="inline-flex items-center gap-1.5 bg-white text-forest text-xs font-bold px-3 py-2 rounded-xl border border-cream-300 hover:border-forest"
+              >
+                <LayoutGrid size={13} /> Bulk schedule grid
+              </button>
+            </div>
+          </div>
+        )}
         <div className="bg-white border border-cream-300 rounded-2xl p-4 space-y-3">
           <p className="text-xs font-bold uppercase tracking-widest text-ink-soft">{t("add_availability")}</p>
           <div>

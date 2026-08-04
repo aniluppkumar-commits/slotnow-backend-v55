@@ -1,0 +1,113 @@
+{
+  "base": "https://slotnow-web.preview.emergentagent.com/api",
+  "checks": [
+    {
+      "name": "hospital provider PIN login",
+      "ok": true,
+      "status": 200,
+      "body": "{\"token\":\"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1aWQiOiJlYzdkMjJmNS03MTQ4LTRlMGYtODMwOC0wODFiNGMxMDRiYzgiLCJyb2xlIjoicHJvdmlkZXIiLCJleHAiOjE3ODg0NTMzNjh9.wiSuH2DuXWPJn9yCEGyTfTfxIRapOvkRPssjJ2j0Sv4\",\"user\":{\"id\":\"ec7d22f5-7148-4e0f-8308-081b4c104bc8\",\"phone\":\"9000000007\",\"role\":\"provider\",\"name\":\""
+    },
+    {
+      "name": "GET /providers/me/profile returns hospital profile",
+      "ok": true,
+      "status": 200,
+      "body": "{\"id\":\"43b3a047-c937-4cf2-a707-7682ec732b34\",\"user_id\":\"ec7d22f5-7148-4e0f-8308-081b4c104bc8\",\"business_name\":\"TestHospital\",\"category_id\":\"cf41bf59-9cde-4b66-8641-74a59a4f4ce7\",\"bio\":\"Car & bike service, repairs, and detailing.\",\"city\":\"Mumbai\",\"address\":\"Plot 9, MIDC, Andheri East, Mumbai\",\"contact_phone\":\"\",\"latitude\":null,\"longitude\":null,\"image\":\"https://images.unsplash.com/photo-1486006920555-c77dcf18193c?w=800\",\"rating\":4.6,\"reviews_count\":34,\"starting_price\":99,\"approved\":true,\"on_duty\":"
+    },
+    {
+      "name": "GET /providers/me endpoint used by ProviderAvailability",
+      "ok": false,
+      "status": 404,
+      "body": "{\"detail\":\"Not found\"}"
+    },
+    {
+      "name": "GET /providers/me/staff returns hospital staff",
+      "ok": true,
+      "detail": "count=3"
+    },
+    {
+      "name": "seed additional hospital staff for max-3 coverage",
+      "ok": true,
+      "status": 200,
+      "body": "{\"id\":\"d5ae6806-8e3f-4fb4-9fc9-bbd708761aab\",\"hospital_id\":\"43b3a047-c937-4cf2-a707-7682ec732b34\",\"kind\":\"doctor\",\"name\":\"QA Extra Doctor 1785861369-4\",\"specialization\":\"General Medicine\",\"service_tags\":[],\"bio\":\"Seeded for assistant assignment max-3 verification\",\"photo\":null,\"address\":\"QA Seed Add"
+    },
+    {
+      "name": "GET /providers/me/assistants succeeds",
+      "ok": true,
+      "status": 200
+    },
+    {
+      "name": "Nurse Nia is present in assistants list",
+      "ok": true,
+      "body": "[{\"id\": \"baf49211-962b-4868-9ed7-7017328b0f5b\", \"phone\": \"9000009911\", \"role\": \"receptionist\", \"name\": \"Nurse Nia\", \"email\": null, \"avatar\": null, \"city\": null, \"address\": null, \"language\": \"en\", \"linked_provider_id\": \"43b3a047-c937-4cf2-a707-7682ec732b34\", \"via_referral\": false, \"referred_by\": null, \"designation\": \"Front Desk\", \"assigned_staff_ids\": [\"4723b155-43f1-4a5e-9784-4cdf2782c37b\", \"7d7977aa-7d25-413d-8dd7-4d8bcbbbed51\"], \"is_blocked\": false, \"has_pin\": true, \"created_at\": \"2026-08-04T15:22:01.558000\"}]"
+    },
+    {
+      "name": "Nurse Nia response includes assigned_staff_ids",
+      "ok": true,
+      "detail": "assigned_staff_ids=['4723b155-43f1-4a5e-9784-4cdf2782c37b', '7d7977aa-7d25-413d-8dd7-4d8bcbbbed51']"
+    },
+    {
+      "name": "Nurse Nia currently has Cardio+Neuro two assignments",
+      "ok": true,
+      "detail": "count=2, ids=['4723b155-43f1-4a5e-9784-4cdf2782c37b', '7d7977aa-7d25-413d-8dd7-4d8bcbbbed51']"
+    },
+    {
+      "name": "seed QA assistant",
+      "ok": true,
+      "status": 200,
+      "body": "{\"id\":\"0aec7a37-5f8e-4e35-8c8e-779dffec24f7\",\"phone\":\"9000007737\",\"role\":\"receptionist\",\"name\":\"QA Assign Tester\",\"email\":null,\"avatar\":null,\"city\":null,\"address\":null,\"language\":\"en\",\"linked_provider_id\":\"43b3a047-c937-4cf2-a707-7682ec732b34\",\"via_referral\":false,\"referred_by\":null,\"designation\":\"Q"
+    },
+    {
+      "name": "reset QA assistant to zero assignments",
+      "ok": true,
+      "status": 200,
+      "body": "{\"ok\":true,\"assigned_staff_ids\":[]}"
+    },
+    {
+      "name": "PUT assistant staff with 4 ids returns 400 max-3",
+      "ok": true,
+      "status": 400,
+      "body": "{\"detail\":\"You can assign at most 3 doctors/services to a single assistant\"}"
+    },
+    {
+      "name": "PUT assistant staff with 3 valid ids returns 200",
+      "ok": true,
+      "status": 200,
+      "body": "{\"ok\":true,\"assigned_staff_ids\":[\"4723b155-43f1-4a5e-9784-4cdf2782c37b\",\"7d7977aa-7d25-413d-8dd7-4d8bcbbbed51\",\"6537e142-babe-4639-b564-4046b1c34ae2\"]}"
+    },
+    {
+      "name": "assigned_staff_ids persist on next assistants GET",
+      "ok": true,
+      "detail": "persisted=['4723b155-43f1-4a5e-9784-4cdf2782c37b', '7d7977aa-7d25-413d-8dd7-4d8bcbbbed51', '6537e142-babe-4639-b564-4046b1c34ae2']"
+    },
+    {
+      "name": "POST per-staff availability creates a private shift",
+      "ok": true,
+      "status": 200,
+      "body": "{\"id\":\"93bfe0a8-b0e7-4f65-b32f-d56f78f326b3\",\"provider_id\":\"43b3a047-c937-4cf2-a707-7682ec732b34\",\"weekday\":3,\"start_time\":\"06:15\",\"end_time\":\"06:45\",\"slot_duration\":15,\"max_bookings\":1,\"staff_id\":\"4723b155-43f1-4a5e-9784-4cdf2782c37b\"}"
+    },
+    {
+      "name": "GET per-staff availability includes created private shift",
+      "ok": true,
+      "status": 200
+    },
+    {
+      "name": "DELETE per-staff availability removes private shift",
+      "ok": true,
+      "status": 200,
+      "body": "{\"ok\":true}"
+    }
+  ],
+  "created_seed_data": [
+    {
+      "type": "hospital_staff",
+      "id": "d5ae6806-8e3f-4fb4-9fc9-bbd708761aab",
+      "name": "QA Extra Doctor 1785861369-4"
+    },
+    {
+      "type": "assistant",
+      "id": "0aec7a37-5f8e-4e35-8c8e-779dffec24f7",
+      "phone": "9000007737"
+    }
+  ],
+  "overall_ok": true
+}
