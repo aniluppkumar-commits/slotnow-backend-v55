@@ -1,19 +1,23 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import api from "@/lib/api";
 import AppShell from "@/components/AppShell";
 import { useI18n } from "@/i18n";
-import { Loader2, Plus, Trash2, ShieldOff, ShieldCheck, UserCog, ListChecks, X } from "lucide-react";
+import { Loader2, Plus, Trash2, ShieldOff, ShieldCheck, UserCog, ListChecks, X, Camera } from "lucide-react";
 import { toast } from "sonner";
+import { compressImageToDataURL } from "@/lib/image";
 
 export default function ProviderAssistants() {
   const { t } = useI18n();
   const [items, setItems] = useState([]);
   const [staff, setStaff] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [form, setForm] = useState({ name: "", phone: "", designation: "" });
+  const [form, setForm] = useState({ name: "", phone: "", designation: "", photo: "" });
+  const [photoBusy, setPhotoBusy] = useState(false);
   const [saving, setSaving] = useState(false);
   const [busyId, setBusyId] = useState(null);
   const [assignFor, setAssignFor] = useState(null); // assistant object being edited
+  const [editPhotoFor, setEditPhotoFor] = useState(null); // assistant object whose photo we're replacing
+  const photoInputRef = useRef(null);
 
   const load = async () => {
     try {
@@ -41,14 +45,52 @@ export default function ProviderAssistants() {
         name: form.name,
         phone: form.phone,
         designation: form.designation || "",
+        photo: form.photo || null,
       });
       toast.success("Assistant added");
-      setForm({ name: "", phone: "", designation: "" });
+      setForm({ name: "", phone: "", designation: "", photo: "" });
       await load();
     } catch (e) {
       toast.error(e.response?.data?.detail || "Failed");
     } finally {
       setSaving(false);
+    }
+  };
+
+  const pickPhoto = async (e) => {
+    const file = e.target.files?.[0];
+    e.target.value = ""; // allow re-selecting same file
+    if (!file) return;
+    setPhotoBusy(true);
+    try {
+      const dataUrl = await compressImageToDataURL(file, { maxDim: 512, quality: 0.72 });
+      setForm((f) => ({ ...f, photo: dataUrl }));
+    } catch (err) {
+      toast.error("Could not read image");
+    } finally {
+      setPhotoBusy(false);
+    }
+  };
+
+  const updateAssistantPhoto = async (assistant, file) => {
+    if (!file) return;
+    setBusyId(assistant.id);
+    try {
+      const dataUrl = await compressImageToDataURL(file, { maxDim: 512, quality: 0.72 });
+      // Reuse the upsert endpoint — same phone/name/designation, new photo.
+      await api.post("/providers/me/assistants", {
+        name: assistant.name,
+        phone: assistant.phone,
+        designation: assistant.designation || "",
+        photo: dataUrl,
+      });
+      toast.success("Photo updated");
+      await load();
+    } catch (err) {
+      toast.error(err?.response?.data?.detail || "Could not update photo");
+    } finally {
+      setBusyId(null);
+      setEditPhotoFor(null);
     }
   };
 
@@ -110,6 +152,52 @@ export default function ProviderAssistants() {
             placeholder="Designation (optional)"
             className="w-full bg-cream border border-cream-300 rounded-xl px-3 py-2.5 text-ink outline-none focus:ring-2 focus:ring-forest/20"
           />
+          {/* Photo upload — shown in provider assistant list, receptionist dashboard,
+              and next to their name so patients can visually identify them at the counter. */}
+          <div className="flex items-center gap-3">
+            {form.photo ? (
+              <img
+                data-testid="assistant-photo-preview"
+                src={form.photo}
+                alt="Assistant"
+                className="w-14 h-14 rounded-xl object-cover border border-cream-300"
+              />
+            ) : (
+              <div className="w-14 h-14 rounded-xl bg-cream border border-dashed border-cream-300 flex items-center justify-center text-ink-soft">
+                <Camera size={18} />
+              </div>
+            )}
+            <div className="flex-1 flex flex-wrap items-center gap-2">
+              <input
+                ref={photoInputRef}
+                data-testid="assistant-photo-input"
+                type="file"
+                accept="image/*"
+                onChange={pickPhoto}
+                className="hidden"
+              />
+              <button
+                type="button"
+                data-testid="assistant-photo-pick-btn"
+                onClick={() => photoInputRef.current?.click()}
+                disabled={photoBusy}
+                className="text-xs font-bold px-3 py-1.5 rounded-lg bg-cream border border-cream-300 hover:border-forest/40 disabled:opacity-60"
+              >
+                {photoBusy ? "Reading…" : form.photo ? "Change photo" : "Upload photo"}
+              </button>
+              {form.photo && (
+                <button
+                  type="button"
+                  data-testid="assistant-photo-remove-btn"
+                  onClick={() => setForm((f) => ({ ...f, photo: "" }))}
+                  className="text-xs font-bold text-rose-600 px-2 py-1.5"
+                >
+                  Remove
+                </button>
+              )}
+              <span className="text-[10px] text-ink-soft w-full sm:w-auto">Optional · shown on the assistant desk header.</span>
+            </div>
+          </div>
           <button
             data-testid="assistant-add-btn"
             onClick={add}
@@ -139,8 +227,36 @@ export default function ProviderAssistants() {
                   a.blocked ? "opacity-60" : ""
                 }`}
               >
-                <div className="w-10 h-10 rounded-xl bg-forest-faint text-forest flex items-center justify-center font-bold">
-                  {a.name?.[0]?.toUpperCase()}
+                <div className="relative">
+                  {a.photo ? (
+                    <img
+                      data-testid={`assistant-photo-${a.id}`}
+                      src={a.photo}
+                      alt={a.name || "Assistant"}
+                      className="w-12 h-12 rounded-xl object-cover border border-cream-300"
+                    />
+                  ) : (
+                    <div className="w-12 h-12 rounded-xl bg-forest-faint text-forest flex items-center justify-center font-bold">
+                      {a.name?.[0]?.toUpperCase()}
+                    </div>
+                  )}
+                  <label
+                    data-testid={`assistant-photo-edit-${a.id}`}
+                    className="absolute -bottom-1 -right-1 w-6 h-6 rounded-full bg-forest text-white flex items-center justify-center border-2 border-white cursor-pointer hover:bg-forest-dark"
+                    title="Update photo"
+                  >
+                    <Camera size={11} />
+                    <input
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      onChange={(e) => {
+                        const f = e.target.files?.[0];
+                        e.target.value = "";
+                        if (f) updateAssistantPhoto(a, f);
+                      }}
+                    />
+                  </label>
                 </div>
                 <div className="min-w-0 flex-1">
                   <p className="text-sm font-bold text-ink truncate">{a.name}</p>

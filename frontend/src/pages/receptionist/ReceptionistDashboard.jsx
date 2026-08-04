@@ -193,12 +193,26 @@ export default function ReceptionistDashboard() {
       <div className="px-4 sm:px-6 pt-4 space-y-4">
         {/* Linked provider */}
         <div className="bg-gradient-to-br from-forest to-forest-dark rounded-2xl p-4 text-white flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-white/15 flex items-center justify-center">
-            <UserCog size={20} />
-          </div>
+          {user?.photo ? (
+            <img
+              data-testid="receptionist-self-photo"
+              src={user.photo}
+              alt={user.name || "Assistant"}
+              className="w-12 h-12 rounded-xl object-cover ring-2 ring-white/40"
+            />
+          ) : (
+            <div className="w-10 h-10 rounded-xl bg-white/15 flex items-center justify-center">
+              <UserCog size={20} />
+            </div>
+          )}
           <div className="min-w-0">
             <p className="text-[11px] uppercase tracking-widest opacity-70">Assisting</p>
             <p data-testid="receptionist-provider-name" className="font-heading font-bold truncate">{businessName}</p>
+            {user?.name && (
+              <p data-testid="receptionist-self-name" className="text-[11px] opacity-80 truncate">
+                {user.name}{user.designation ? ` · ${user.designation}` : ""}
+              </p>
+            )}
             {city && <p className="text-[11px] opacity-70 truncate">{city}</p>}
           </div>
           {currentToken != null && (

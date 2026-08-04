@@ -50,6 +50,7 @@ class User(BaseModel):
     via_referral: bool = False  # signed up through a referral/share link
     referred_by: Optional[str] = None  # provider id or "app" the referral came from
     designation: Optional[str] = None  # for assistants: free-text role e.g. "Front Desk"
+    photo: Optional[str] = None  # for assistants: profile photo (data URL / URL)
     assigned_staff_ids: List[str] = []  # hospital sub-staff this assistant can manage (max 3)
     is_blocked: bool = False  # provider can block an assistant's system access
     has_pin: bool = False  # whether a 4-digit PIN has been set (pin_hash kept out of model)
@@ -83,6 +84,7 @@ class CreateAssistantRequest(BaseModel):
     name: str
     phone: str
     designation: Optional[str] = ""
+    photo: Optional[str] = None
 
 
 class BlockToggleRequest(BaseModel):
@@ -805,7 +807,14 @@ async def verify_otp(req: OTPVerify):
             raise HTTPException(400, "Invalid OTP")
     if live_match:
         await db.otps.delete_one({"phone": phone_12})
-    user_doc = await db.users.find_one({"phone": {"$in": [req.phone, phone_12]}, "role": req.role}, {"_id": 0})
+    # Look up across raw / 12-digit / 10-digit variants so historical rows
+    # created before phone normalisation still match on login. Assistants are
+    # especially prone to this since they're created by their provider.
+    phone_10 = phone_12[2:] if phone_12.startswith("91") and len(phone_12) == 12 else phone_12
+    user_doc = await db.users.find_one(
+        {"phone": {"$in": list({req.phone, phone_12, phone_10})}, "role": req.role},
+        {"_id": 0},
+    )
     if not user_doc:
         # Service Assistants cannot self-register. They must be created by a Provider.
         if req.role == "receptionist":
@@ -1446,29 +1455,39 @@ async def list_my_assistants(user: User = Depends(current_user)):
 async def create_assistant(req: CreateAssistantRequest, user: User = Depends(current_user)):
     await require_role(user, "provider")
     p = await _my_provider_or_400(user)
-    phone = (req.phone or "").strip()
-    if not (req.name or "").strip() or not phone:
+    raw_phone = (req.phone or "").strip()
+    if not (req.name or "").strip() or not raw_phone:
         raise HTTPException(400, "Name and mobile are required")
-    existing = await db.users.find_one({"phone": phone, "role": "receptionist"}, {"_id": 0})
+    # Normalize phone to 12-digit (91XXXXXXXXXX) so create + login always agree.
+    # Look up any existing receptionist record across all common formats so we
+    # don't create a duplicate row that would leave `linked_provider_id` unset.
+    phone_12 = normalize_indian_phone(raw_phone)
+    phone_10 = phone_12[2:] if phone_12.startswith("91") and len(phone_12) == 12 else phone_12
+    lookup_phones = list({raw_phone, phone_12, phone_10})
+    existing = await db.users.find_one(
+        {"phone": {"$in": lookup_phones}, "role": "receptionist"}, {"_id": 0}
+    )
     if existing:
         if existing.get("linked_provider_id") and existing["linked_provider_id"] != p["id"]:
             raise HTTPException(409, "This mobile is already an assistant for another provider")
-        await db.users.update_one(
-            {"id": existing["id"]},
-            {"$set": {
-                "name": req.name.strip(),
-                "designation": (req.designation or "").strip(),
-                "linked_provider_id": p["id"],
-                "is_blocked": False,
-            }},
-        )
+        update_set = {
+            "phone": phone_12,  # normalise stored phone so future logins match
+            "name": req.name.strip(),
+            "designation": (req.designation or "").strip(),
+            "linked_provider_id": p["id"],
+            "is_blocked": False,
+        }
+        if req.photo is not None:
+            update_set["photo"] = req.photo or None
+        await db.users.update_one({"id": existing["id"]}, {"$set": update_set})
         fresh = await db.users.find_one({"id": existing["id"]}, {"_id": 0, "pin_hash": 0})
         return User(**fresh).model_dump(mode="json")
     assistant = User(
-        phone=phone,
+        phone=phone_12,
         role="receptionist",
         name=req.name.strip(),
         designation=(req.designation or "").strip(),
+        photo=req.photo or None,
         linked_provider_id=p["id"],
     )
     await db.users.insert_one(assistant.model_dump())

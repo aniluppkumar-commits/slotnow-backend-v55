@@ -1,0 +1,17 @@
+{
+  "base_url": "https://slotnow-web.preview.emergentagent.com",
+  "assistant_10": "9000888638",
+  "assistant_12": "919000888638",
+  "checks": [
+    "provider PIN login succeeded",
+    "provider profile loaded",
+    "assistant created with normalized 12-digit phone, link, and photo",
+    "assistant verify-otp login succeeded with 10_digit",
+    "assistant verify-otp login succeeded with 12_digit_frontend_variant",
+    "assistant list returns photo and linked_provider_id",
+    "upsert with 12-digit phone reused same id, updated photo, and did not duplicate",
+    "orphan receptionist without linked_provider_id still gets 403"
+  ],
+  "provider_id": "43b3a047-c937-4cf2-a707-7682ec732b34",
+  "assistant_id": "f8be66f6-17dc-4ba2-8f2a-9c91fb8b944f"
+}
