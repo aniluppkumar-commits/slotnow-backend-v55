@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { useAuth } from "@/context/AuthContext";
 import { useI18n } from "@/i18n";
@@ -57,6 +57,16 @@ export default function Login() {
   const [email, setEmail] = useState("");
   const [emailPassword, setEmailPassword] = useState("");
   const [loading, setLoading] = useState(false);
+  // OTP resend cooldown — user cannot re-request an OTP for 60 seconds after
+  // an OTP is sent. Prevents accidental SMS spend + clarifies to the user
+  // that the OTP is on its way.
+  const [resendSecondsLeft, setResendSecondsLeft] = useState(0);
+
+  useEffect(() => {
+    if (resendSecondsLeft <= 0) return;
+    const id = setInterval(() => setResendSecondsLeft((n) => (n > 0 ? n - 1 : 0)), 1000);
+    return () => clearInterval(id);
+  }, [resendSecondsLeft]);
 
   const validPhone = /^\d{10}$/.test(phone);
   const validEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
@@ -104,8 +114,28 @@ export default function Login() {
       if (res.demo_otp) setDemoOtp(res.demo_otp);
       toast.success("OTP sent");
       setStep(2);
+      setResendSecondsLeft(60);
     } catch (err) {
       toast.error(err.response?.data?.detail || "Failed to send OTP");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Resend fires the same endpoint but keeps the user on the OTP step. Guarded
+  // by the 60-second countdown so back-to-back taps don't burn SMS credits.
+  const handleResendOtp = async () => {
+    if (resendSecondsLeft > 0 || loading) return;
+    if (!validPhone) return toast.error("Phone missing — go back and re-enter");
+    setLoading(true);
+    try {
+      const res = await sendOtp(phone, role);
+      if (res.demo_otp) setDemoOtp(res.demo_otp);
+      toast.success("OTP resent");
+      setOtp("");
+      setResendSecondsLeft(60);
+    } catch (err) {
+      toast.error(err.response?.data?.detail || "Failed to resend OTP");
     } finally {
       setLoading(false);
     }
@@ -478,6 +508,24 @@ export default function Login() {
               >
                 {loading ? <Loader2 size={18} className="animate-spin" /> : t("verify_login")}
               </button>
+              {/* 60-second resend timer */}
+              <div className="text-center pt-1">
+                {resendSecondsLeft > 0 ? (
+                  <p data-testid="login-resend-countdown" className="text-xs text-ink-soft">
+                    Resend OTP in <span className="font-bold text-forest">{resendSecondsLeft}s</span>
+                  </p>
+                ) : (
+                  <button
+                    data-testid="login-resend-otp-btn"
+                    type="button"
+                    onClick={handleResendOtp}
+                    disabled={loading}
+                    className="text-xs font-bold text-forest hover:underline disabled:opacity-60"
+                  >
+                    Resend OTP
+                  </button>
+                )}
+              </div>
             </form>
           )}
 

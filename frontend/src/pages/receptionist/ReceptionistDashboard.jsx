@@ -27,10 +27,31 @@ import {
   X,
   UserCog,
   GripVertical,
+  Calendar as CalendarIcon,
 } from "lucide-react";
 import AssistantMultiQueue from "@/components/AssistantMultiQueue";
+import StaffQueueModal from "@/components/StaffQueueModal";
 import { toast } from "sonner";
 import { todayISO } from "@/lib/utils-app";
+
+// Build a 7-day date strip: -3, -2, -1, TODAY, +1, +2, +3 (all local ISO YYYY-MM-DD).
+function buildDateStrip(centerIsoLocal) {
+  const [y, m, d] = centerIsoLocal.split("-").map(Number);
+  const base = new Date(y, m - 1, d);
+  const dates = [];
+  for (let i = -3; i <= 3; i++) {
+    const dt = new Date(base);
+    dt.setDate(base.getDate() + i);
+    const iso = `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, "0")}-${String(dt.getDate()).padStart(2, "0")}`;
+    dates.push({
+      iso,
+      label: dt.toLocaleDateString("en-IN", { day: "numeric", month: "short" }),
+      weekday: dt.toLocaleDateString("en-IN", { weekday: "short" }),
+      offset: i,
+    });
+  }
+  return dates;
+}
 
 function SortableItem({ booking, providerName, onMoveUp, onMoveDown, canMoveUp, canMoveDown }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: booking.id });
@@ -63,7 +84,17 @@ export default function ReceptionistDashboard() {
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState(false);
   const [walkOpen, setWalkOpen] = useState(false);
-  const [walk, setWalk] = useState({ name: "", phone: "", address: "", vehicle_reg_no: "", vehicle_model: "", service_ref: "", service_type: "Paid" });
+  const [walk, setWalk] = useState({ name: "", phone: "", address: "", vehicle_reg_no: "", vehicle_model: "", service_ref: "", service_type: "Paid", staff_id: "" });
+  const [hospitalStaff, setHospitalStaff] = useState([]);
+  // Date navigation: default to today (local IST) — assistant can view ±3 days.
+  const today = todayISO();
+  const [selectedDate, setSelectedDate] = useState(today);
+  const dateStrip = buildDateStrip(today);
+  const isToday = selectedDate === today;
+  // Per-staff drill-in modal — when set, renders StaffQueueModal.
+  const [openStaff, setOpenStaff] = useState(null);
+  // Bump on walk-in success so AssistantMultiQueue also refreshes immediately.
+  const [multiRefreshKey, setMultiRefreshKey] = useState(0);
 
   const isAutomobile =
     // The /queue/today response returns provider.category as a STRING (e.g. "Automobile"),
@@ -71,10 +102,27 @@ export default function ReceptionistDashboard() {
     // category_id if the backend response is ever extended to include it.
     (providerInfo?.category || "").toLowerCase() === "automobile" ||
     providerInfo?.category_id === "333a2602-2d4a-4e16-a9da-3e004b0e14fd";
+  const isHospital = (providerInfo?.provider_type || "").toLowerCase() === "hospital";
+
+  // For hospital walk-ins we need to know which sub-doctor/service to attach the token to.
+  useEffect(() => {
+    if (!isHospital || !providerInfo?.id) {
+      setHospitalStaff([]);
+      return;
+    }
+    let alive = true;
+    api
+      .get(`/providers/${providerInfo.id}/staff`)
+      .then((r) => alive && setHospitalStaff(Array.isArray(r.data) ? r.data.filter((s) => s.active !== false) : []))
+      .catch(() => alive && setHospitalStaff([]));
+    return () => { alive = false; };
+  }, [isHospital, providerInfo?.id]);
 
   const load = useCallback(async () => {
     try {
-      const { data } = await api.get("/queue/today");
+      const params = new URLSearchParams();
+      if (selectedDate) params.set("date", selectedDate);
+      const { data } = await api.get(`/queue/today${params.toString() ? "?" + params.toString() : ""}`);
       // Backend returns { date, provider, current_token, last_assigned, items }
       const arr = Array.isArray(data)
         ? data
@@ -85,13 +133,14 @@ export default function ReceptionistDashboard() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [selectedDate]);
 
   useEffect(() => {
     load();
   }, [load]);
 
-  useLivePolling(load, 4000, true);
+  // Only live-poll for today's date; historical/future views are static.
+  useLivePolling(load, 4000, isToday);
 
   const callNext = async () => {
     setActionLoading(true);
@@ -106,14 +155,27 @@ export default function ReceptionistDashboard() {
     }
   };
 
+  const openWalkinFor = (opts = {}) => {
+    // Allow opening the walk-in modal pre-scoped to a specific hospital staff.
+    setWalk((w) => ({
+      ...w,
+      staff_id: opts.staff_id || "",
+    }));
+    setWalkOpen(true);
+  };
+
   const addWalkin = async () => {
     if (!walk.name.trim()) return toast.error("Name required");
+    if (isHospital && hospitalStaff.length > 0 && !walk.staff_id) {
+      return toast.error("Select a doctor or service for this walk-in");
+    }
     setActionLoading(true);
     try {
       const payload = {
         name: walk.name,
         phone: walk.phone || null,
       };
+      if (walk.staff_id) payload.staff_id = walk.staff_id;
       if (isAutomobile) {
         payload.vehicle_reg_no = walk.vehicle_reg_no || null;
         payload.vehicle_model = walk.vehicle_model || null;
@@ -122,11 +184,14 @@ export default function ReceptionistDashboard() {
       } else if (walk.address) {
         payload.notes = walk.address;
       }
-      const { data } = await api.post("/queue/walkin", payload);
+      // Support back-dating / forward-dating via ?date=YYYY-MM-DD
+      const qs = !isToday ? `?date=${encodeURIComponent(selectedDate)}` : "";
+      const { data } = await api.post(`/queue/walkin${qs}`, payload);
       toast.success(`Added • Token #${data.token_number}`);
-      setWalk({ name: "", phone: "", address: "", vehicle_reg_no: "", vehicle_model: "", service_ref: "", service_type: "Paid" });
+      setWalk({ name: "", phone: "", address: "", vehicle_reg_no: "", vehicle_model: "", service_ref: "", service_type: "Paid", staff_id: "" });
       setWalkOpen(false);
       await load();
+      setMultiRefreshKey((k) => k + 1);
     } catch (e) {
       toast.error(e.response?.data?.detail || "Failed");
     } finally {
@@ -219,26 +284,62 @@ export default function ReceptionistDashboard() {
             <div className="ml-auto text-right">
               <p className="text-[10px] uppercase tracking-widest opacity-70">Now serving</p>
               <p className="font-heading font-black text-2xl">#{currentToken}</p>
+              <p data-testid="receptionist-selected-date" className="text-[10px] uppercase tracking-widest opacity-70 mt-1">
+                {isToday ? "Today" : selectedDate}
+              </p>
             </div>
           )}
         </div>
 
+        {/* Date navigation strip (−3 … today … +3) */}
+        <div className="flex items-center gap-1.5 overflow-x-auto -mx-1 px-1 pb-1" data-testid="receptionist-date-strip">
+          {dateStrip.map((d) => {
+            const on = d.iso === selectedDate;
+            const isTodayCell = d.iso === today;
+            return (
+              <button
+                key={d.iso}
+                data-testid={`date-cell-${d.iso}`}
+                onClick={() => setSelectedDate(d.iso)}
+                className={`shrink-0 min-w-[64px] rounded-xl px-2.5 py-2 text-center border-2 transition-all ${
+                  on
+                    ? "bg-forest border-forest text-cream-100 shadow-md"
+                    : "bg-white border-cream-300 text-ink hover:border-forest/40"
+                }`}
+              >
+                <p className={`text-[10px] font-bold uppercase tracking-wider ${on ? "text-cream-200" : "text-ink-muted"}`}>
+                  {isTodayCell ? "Today" : d.weekday}
+                </p>
+                <p className={`text-sm font-black ${on ? "text-cream-100" : "text-ink"}`}>
+                  {d.label}
+                </p>
+              </button>
+            );
+          })}
+        </div>
+
         {/* Multi-staff live queue (hospitals) — up to 3 assigned doctors/services */}
-        <AssistantMultiQueue />
+        <AssistantMultiQueue
+          date={selectedDate}
+          refreshKey={multiRefreshKey}
+          onOpenStaff={(s) => setOpenStaff({
+            staff_id: s.staff_id, staff_name: s.staff_name, staff_kind: s.staff_kind,
+          })}
+        />
 
         {/* Actions */}
         <div className="grid grid-cols-3 gap-2">
           <button
             data-testid="receptionist-call-next-btn"
             onClick={callNext}
-            disabled={actionLoading || active.length === 0}
+            disabled={actionLoading || active.length === 0 || !isToday}
             className="flex items-center justify-center gap-2 bg-accent text-white py-3 rounded-xl font-bold text-sm disabled:opacity-40 hover:bg-accent-dark"
           >
             <ChevronRight size={16} /> Call next
           </button>
           <button
             data-testid="receptionist-walkin-btn"
-            onClick={() => setWalkOpen(true)}
+            onClick={() => openWalkinFor()}
             className="flex items-center justify-center gap-2 bg-white border border-cream-300 text-ink py-3 rounded-xl font-bold text-sm hover:border-forest/40"
           >
             <UserPlus size={16} /> Walk-in
@@ -314,6 +415,37 @@ export default function ReceptionistDashboard() {
                 className="w-full bg-cream border border-cream-300 rounded-xl px-3 py-2.5 text-ink outline-none focus:ring-2 focus:ring-forest/20"
               />
 
+              {isHospital && hospitalStaff.length > 0 && (
+                <div>
+                  <label className="text-[10px] uppercase tracking-wider font-bold text-ink-muted mb-1 block">
+                    Doctor / Service *
+                  </label>
+                  <select
+                    data-testid="rec-walkin-staff"
+                    value={walk.staff_id}
+                    onChange={(e) => setWalk({ ...walk, staff_id: e.target.value })}
+                    className="w-full bg-cream border border-cream-300 rounded-xl px-3 py-2.5 text-ink outline-none focus:ring-2 focus:ring-forest/20"
+                  >
+                    <option value="">Select doctor or service…</option>
+                    {hospitalStaff.filter((s) => s.kind === "doctor").length > 0 && (
+                      <optgroup label="Doctors">
+                        {hospitalStaff.filter((s) => s.kind === "doctor").map((d) => (
+                          <option key={d.id} value={d.id}>
+                            {d.name}{d.specialization ? ` — ${d.specialization}` : ""}
+                          </option>
+                        ))}
+                      </optgroup>
+                    )}
+                    {hospitalStaff.filter((s) => s.kind === "service").length > 0 && (
+                      <optgroup label="Other Services">
+                        {hospitalStaff.filter((s) => s.kind === "service").map((c) => (
+                          <option key={c.id} value={c.id}>{c.name}</option>
+                        ))}
+                      </optgroup>
+                    )}
+                  </select>
+                </div>
+              )}
               {isAutomobile ? (
                 <>
                   <input
@@ -380,6 +512,20 @@ export default function ReceptionistDashboard() {
             </div>
           </div>
         </div>
+      )}
+
+      {openStaff && (
+        <StaffQueueModal
+          staffId={openStaff.staff_id}
+          staffName={openStaff.staff_name}
+          staffKind={openStaff.staff_kind}
+          date={selectedDate}
+          onClose={() => setOpenStaff(null)}
+          onWalkinRequested={({ staff_id }) => {
+            setOpenStaff(null);
+            openWalkinFor({ staff_id });
+          }}
+        />
       )}
     </AppShell>
   );

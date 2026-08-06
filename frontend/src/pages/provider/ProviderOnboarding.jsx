@@ -342,6 +342,16 @@ export default function ProviderOnboarding() {
               className="w-full bg-transparent outline-none text-ink font-medium placeholder:text-ink-muted"
             />
           </Field>
+          <Field label="Contact number (shown to customers)">
+            <input
+              data-testid="onboarding-contact-phone"
+              value={form.contact_phone || ""}
+              onChange={(e) => setForm({ ...form, contact_phone: e.target.value.replace(/[^\d+ ]/g, "").slice(0, 14) })}
+              placeholder="e.g. +91 98765 43210"
+              inputMode="tel"
+              className="w-full bg-transparent outline-none text-ink font-medium placeholder:text-ink-muted"
+            />
+          </Field>
           <Field label="Clinic location (Google Maps link)">
             <div className="w-full">
               <button

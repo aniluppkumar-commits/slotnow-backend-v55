@@ -42,6 +42,7 @@ export default function HospitalStaff() {
       service_tags: [],
       bio: "",
       photo: "",
+      phone: "",
       address: "",
       latitude: null,
       longitude: null,
@@ -193,6 +194,9 @@ export default function HospitalStaff() {
                     <p className="font-bold text-ink truncate">{d.name}</p>
                     {d.specialization && (
                       <p className="text-xs text-forest font-semibold">{d.specialization}</p>
+                    )}
+                    {d.phone && (
+                      <p className="text-[11px] text-emerald-700 font-semibold mt-0.5">📞 {d.phone}</p>
                     )}
                     <button
                       data-testid={`staff-schedule-${d.id}`}
@@ -390,6 +394,20 @@ export default function HospitalStaff() {
                   <img src={form.photo} alt="" className="w-20 h-20 rounded-xl object-cover mb-2" />
                 )}
                 <input type="file" accept="image/*" onChange={onPhoto} className="text-xs" data-testid="staff-photo" />
+              </div>
+              {/* Public contact phone (shown to customers on the sub-doctor / sub-service card) */}
+              <div>
+                <label className="block text-[11px] font-bold uppercase tracking-wider text-ink-muted mb-1">
+                  Contact number (optional, shown to customers)
+                </label>
+                <input
+                  data-testid="staff-phone"
+                  value={form.phone || ""}
+                  onChange={(e) => setForm({ ...form, phone: e.target.value.replace(/[^\d+ ]/g, "").slice(0, 14) })}
+                  placeholder="e.g. +91 98765 43210"
+                  inputMode="tel"
+                  className="w-full px-3 py-2 rounded-xl bg-cream border border-cream-300 focus:border-forest focus:outline-none text-sm"
+                />
               </div>
               {/* Bio (shared by both doctor + service) */}
               <div>

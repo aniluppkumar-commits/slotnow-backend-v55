@@ -295,6 +295,7 @@ class WalkinCreate(BaseModel):
     phone: Optional[str] = ""
     address: Optional[str] = ""
     service_id: Optional[str] = None
+    staff_id: Optional[str] = None  # hospital: which doctor/service the walk-in is for
     service_type: Optional[str] = None  # Automobile only: "Paid" | "Free"
     vehicle_reg_no: Optional[str] = None
     vehicle_model: Optional[str] = None
@@ -339,6 +340,7 @@ class HospitalStaff(BaseModel):
     service_tags: List[str] = []  # only for service centers
     bio: Optional[str] = ""  # short public description shown on the customer booking page
     photo: Optional[str] = None
+    phone: Optional[str] = ""  # public contact number so customers can call directly
     address: Optional[str] = ""
     latitude: Optional[float] = None
     longitude: Optional[float] = None
@@ -354,6 +356,7 @@ class HospitalStaffUpsert(BaseModel):
     service_tags: Optional[List[str]] = None
     bio: Optional[str] = ""
     photo: Optional[str] = None
+    phone: Optional[str] = ""
     address: Optional[str] = ""
     latitude: Optional[float] = None
     longitude: Optional[float] = None
@@ -1300,8 +1303,26 @@ async def get_provider(provider_id: str):
     services = await db.services.find({"provider_id": provider_id, "active": True}, {"_id": 0}).to_list(100)
     reviews = await db.reviews.find({"provider_id": provider_id}, {"_id": 0}).sort("created_at", -1).to_list(50)
     cat = await db.categories.find_one({"id": p["category_id"]}, {"_id": 0})
+    # `has_availability` includes any weekly rule OR any hospital sub-staff rule —
+    # hospitals typically leave the provider-wide schedule empty and configure per-doctor
+    # shifts instead, so counting only provider-wide rows would falsely mark them "Currently
+    # unavailable".
     has_availability = (await db.availability.count_documents({"provider_id": provider_id})) > 0
-    return {"provider": p, "services": services, "reviews": reviews, "category": cat, "has_availability": has_availability}
+    # Hospital-type providers: attach the active sub-staff (doctors + service centers) so
+    # the customer detail page can render the list and open per-staff booking.
+    staff = []
+    if p.get("provider_type") == "hospital":
+        staff = await db.hospital_staff.find(
+            {"hospital_id": provider_id, "active": True}, {"_id": 0}
+        ).sort([("kind", 1), ("name", 1)]).to_list(200)
+    return {
+        "provider": p,
+        "services": services,
+        "reviews": reviews,
+        "category": cat,
+        "has_availability": has_availability,
+        "staff": staff,
+    }
 
 
 @api.get("/providers/me/profile")
@@ -1582,6 +1603,7 @@ async def add_my_staff(body: HospitalStaffUpsert, user: User = Depends(current_u
         service_tags=body.service_tags or [],
         bio=(body.bio or "").strip(),
         photo=body.photo,
+        phone=(body.phone or "").strip(),
         address=(body.address or "").strip(),
         latitude=body.latitude,
         longitude=body.longitude,
@@ -1605,6 +1627,7 @@ async def update_my_staff(staff_id: str, body: HospitalStaffUpsert, user: User =
         "service_tags": body.service_tags or [],
         "bio": (body.bio or "").strip(),
         "photo": body.photo,
+        "phone": (body.phone or "").strip(),
         "address": (body.address or "").strip(),
         "latitude": body.latitude,
         "longitude": body.longitude,
@@ -2465,7 +2488,26 @@ async def add_walkin(w: WalkinCreate, user: User = Depends(current_user), date: 
         vehicle_reg_no = w.vehicle_reg_no.strip()
         vehicle_model = w.vehicle_model.strip()
     now = datetime.now(timezone.utc)
-    token = await next_token_for(pid, d)
+    # Hospital walk-ins can target a specific doctor/service — attach the
+    # staff_name so the assistant desk queue rows show who this walk-in is for.
+    staff_name = ""
+    staff_kind = None
+    if w.staff_id:
+        st = await db.hospital_staff.find_one(
+            {"id": w.staff_id, "hospital_id": pid, "active": True}, {"_id": 0}
+        )
+        if not st:
+            raise HTTPException(400, "Selected doctor/service not found")
+        staff_name = st.get("name", "")
+        staff_kind = st.get("kind")
+        # Per-staff token so each doctor/service has an independent walk-in queue
+        agg = await db.bookings.aggregate([
+            {"$match": {"provider_id": pid, "staff_id": w.staff_id, "date": d}},
+            {"$group": {"_id": None, "n": {"$max": "$token_number"}}},
+        ]).to_list(1)
+        token = (agg[0]["n"] if agg and agg[0].get("n") else 0) + 1
+    else:
+        token = await next_token_for(pid, d)
     booking = Booking(
         customer_id=None,
         customer_name=w.name,
@@ -2483,6 +2525,9 @@ async def add_walkin(w: WalkinCreate, user: User = Depends(current_user), date: 
         service_type=service_type,
         vehicle_reg_no=vehicle_reg_no,
         vehicle_model=vehicle_model,
+        staff_id=w.staff_id,
+        staff_name=staff_name,
+        staff_kind=staff_kind,
         token_number=token,
     )
     await db.bookings.insert_one(booking.model_dump())
@@ -2562,8 +2607,13 @@ async def assistant_multi_queue(user: User = Depends(current_user), date: Option
       - next_token: the token_number of the next active booking (lowest
         pending/confirmed) — null when queue is empty.
       - next_name: customer name (or walk-in name) attached to that next booking.
-      - active_count: how many pending/confirmed bookings remain today.
+      - active_count: how many pending/confirmed bookings remain today (includes
+        walk-ins tagged with this staff_id).
       - last_assigned: last token_number handed out (max of all bookings today).
+
+    Also returns:
+      - hospital_total: total confirmed/pending/completed bookings across the whole
+        hospital for the day (so the assistant can see aggregate load at a glance).
     """
     pid, assigned = await _assistant_scope(user)
     d = date or await get_today_str()
@@ -2574,8 +2624,10 @@ async def assistant_multi_queue(user: User = Depends(current_user), date: Option
     staff_by_id = {s["id"]: s for s in staff_rows}
     result = []
     for sid in assigned:
+        # Include walk-ins that are tagged to this doctor/service so the per-staff
+        # queue counts + card display reflect what actually happens at the desk.
         bks = await db.bookings.find(
-            {"provider_id": pid, "staff_id": sid, "date": d, "is_walkin": False},
+            {"provider_id": pid, "staff_id": sid, "date": d},
             {"_id": 0},
         ).sort("token_number", 1).to_list(500)
         active = [b for b in bks if b.get("status") in ("pending", "confirmed")]
@@ -2597,7 +2649,68 @@ async def assistant_multi_queue(user: User = Depends(current_user), date: Option
             "active_count": len(active),
             "last_assigned": last_assigned,
         })
-    return {"date": d, "provider_id": pid, "staff": result}
+    # Hospital-wide totals for the day (all bookings, walk-ins + booked)
+    hospital_total = await db.bookings.count_documents({
+        "provider_id": pid, "date": d,
+        "status": {"$in": ["pending", "confirmed", "completed"]},
+    })
+    hospital_active = await db.bookings.count_documents({
+        "provider_id": pid, "date": d,
+        "status": {"$in": ["pending", "confirmed"]},
+    })
+    hospital_completed = await db.bookings.count_documents({
+        "provider_id": pid, "date": d, "status": "completed",
+    })
+    return {
+        "date": d,
+        "provider_id": pid,
+        "staff": result,
+        "hospital_total": hospital_total,
+        "hospital_active": hospital_active,
+        "hospital_completed": hospital_completed,
+    }
+
+
+@api.get("/assistant/staff/{staff_id}/queue")
+async def assistant_staff_queue(
+    staff_id: str,
+    user: User = Depends(current_user),
+    date: Optional[str] = None,
+):
+    """Full booking list for a specific hospital staff on a given date.
+    Used by the per-doctor / per-service drill-in modal on the assistant desk."""
+    pid, assigned = await _assistant_scope(user)
+    if assigned and staff_id not in assigned:
+        raise HTTPException(403, "This staff is not assigned to you")
+    d = date or await get_today_str()
+    staff = await db.hospital_staff.find_one(
+        {"id": staff_id, "hospital_id": pid}, {"_id": 0}
+    )
+    if not staff:
+        raise HTTPException(404, "Staff not found")
+    items = await db.bookings.find(
+        {"provider_id": pid, "staff_id": staff_id, "date": d},
+        {"_id": 0},
+    ).sort("token_number", 1).to_list(500)
+    enriched = await _enrich_bookings(items)
+    active = [b for b in enriched if b.get("status") in ("pending", "confirmed")]
+    served = [b for b in enriched if b.get("status") in ("completed", "no_show", "rejected")]
+    return {
+        "date": d,
+        "staff": {
+            "id": staff["id"],
+            "name": staff.get("name", ""),
+            "kind": staff.get("kind"),
+            "photo": staff.get("photo"),
+            "phone": staff.get("phone", ""),
+            "specialization": staff.get("specialization", ""),
+        },
+        "items": enriched,
+        "current_token": max((b["token_number"] for b in served), default=0),
+        "next_token": (active[0].get("token_number") if active else None),
+        "active_count": len(active),
+        "completed_count": len(served),
+    }
 
 
 @api.post("/assistant/queue/next")

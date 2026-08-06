@@ -81,6 +81,16 @@ export default function QueueRow({
                 </span>
               )}
             </div>
+            {/* Show assigned doctor/service so the assistant knows who this token belongs to */}
+            {b.staff_name && (
+              <div
+                data-testid={`queue-staff-${b.id}`}
+                className="mt-0.5 inline-flex items-center gap-1 text-[10px] font-bold px-1.5 py-0.5 bg-forest-faint text-forest rounded uppercase tracking-wider"
+              >
+                {b.staff_kind === "service" ? "Service" : "Doctor"}
+                <span className="normal-case tracking-normal font-semibold">{b.staff_name}</span>
+              </div>
+            )}
             <div className="flex items-center gap-2 text-xs text-ink-soft mt-0.5">
               <span>{formatTime(b.start_time)}</span>
               <span>·</span>
