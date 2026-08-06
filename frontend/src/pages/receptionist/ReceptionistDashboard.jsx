@@ -95,6 +95,10 @@ export default function ReceptionistDashboard() {
   const [openStaff, setOpenStaff] = useState(null);
   // Bump on walk-in success so AssistantMultiQueue also refreshes immediately.
   const [multiRefreshKey, setMultiRefreshKey] = useState(0);
+  // Focused staff — when the assistant taps a doctor/service tile, the main queue
+  // list below is filtered to ONLY that staff's patients (mirrors the drill-in
+  // modal). Clearing focus returns to the full mixed hospital queue.
+  const [focusedStaff, setFocusedStaff] = useState(null); // { staff_id, staff_name, staff_kind } | null
 
   const isAutomobile =
     // The /queue/today response returns provider.category as a STRING (e.g. "Automobile"),
@@ -145,9 +149,16 @@ export default function ReceptionistDashboard() {
   const callNext = async () => {
     setActionLoading(true);
     try {
-      await api.post("/queue/next");
-      toast.success("Next customer called");
+      if (focusedStaff) {
+        // Advance this doctor's queue only (per-staff endpoint)
+        await api.post(`/assistant/queue/next?staff_id=${encodeURIComponent(focusedStaff.staff_id)}`);
+        toast.success(`${focusedStaff.staff_name}: next customer called`);
+      } else {
+        await api.post("/queue/next");
+        toast.success("Next customer called");
+      }
       await load();
+      setMultiRefreshKey((k) => k + 1);
     } catch (e) {
       toast.error(e.response?.data?.detail || "Failed");
     } finally {
@@ -199,7 +210,13 @@ export default function ReceptionistDashboard() {
     }
   };
 
-  const active = queue.filter((b) => !["completed", "cancelled"].includes(b.status));
+  // Client-side filter: when a doctor/service is focused, hide bookings not
+  // tagged with that staff_id so the main list matches what the assistant sees
+  // on that doctor's tile / drill-in modal.
+  const visibleQueue = focusedStaff
+    ? queue.filter((b) => (b.staff_id || null) === focusedStaff.staff_id)
+    : queue;
+  const active = visibleQueue.filter((b) => !["completed", "cancelled"].includes(b.status));
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
@@ -322,10 +339,36 @@ export default function ReceptionistDashboard() {
         <AssistantMultiQueue
           date={selectedDate}
           refreshKey={multiRefreshKey}
-          onOpenStaff={(s) => setOpenStaff({
-            staff_id: s.staff_id, staff_name: s.staff_name, staff_kind: s.staff_kind,
-          })}
+          onOpenStaff={(s) => {
+            const st = { staff_id: s.staff_id, staff_name: s.staff_name, staff_kind: s.staff_kind };
+            setOpenStaff(st);
+            setFocusedStaff(st); // filter the main list too
+          }}
         />
+
+        {/* Focused-staff banner — appears when the main list is filtered to one doctor */}
+        {focusedStaff && (
+          <div
+            data-testid="focused-staff-banner"
+            className="flex items-center justify-between gap-2 rounded-xl bg-forest-faint border border-forest/20 px-3 py-2"
+          >
+            <div className="min-w-0 flex items-center gap-2">
+              <span className="text-[10px] font-bold uppercase tracking-wider bg-forest text-cream-100 px-2 py-0.5 rounded-full shrink-0">
+                Focused
+              </span>
+              <p className="text-sm font-bold text-ink truncate">
+                Showing only <span className="text-forest">{focusedStaff.staff_name}</span>&apos;s patients
+              </p>
+            </div>
+            <button
+              data-testid="focused-staff-clear"
+              onClick={() => setFocusedStaff(null)}
+              className="text-xs font-bold text-forest hover:text-forest-dark shrink-0 flex items-center gap-1"
+            >
+              <X size={12} /> Show all patients
+            </button>
+          </div>
+        )}
 
         {/* Actions */}
         <div className="grid grid-cols-3 gap-2">
@@ -339,10 +382,11 @@ export default function ReceptionistDashboard() {
           </button>
           <button
             data-testid="receptionist-walkin-btn"
-            onClick={() => openWalkinFor()}
+            onClick={() => openWalkinFor(focusedStaff ? { staff_id: focusedStaff.staff_id } : {})}
             className="flex items-center justify-center gap-2 bg-white border border-cream-300 text-ink py-3 rounded-xl font-bold text-sm hover:border-forest/40"
           >
-            <UserPlus size={16} /> Walk-in
+            <UserPlus size={16} />
+            {focusedStaff ? `Walk-in · ${focusedStaff.staff_name.split(" ")[0]}` : "Walk-in"}
           </button>
           <button
             data-testid="receptionist-history-btn"
@@ -358,17 +402,24 @@ export default function ReceptionistDashboard() {
           <div className="flex justify-center py-12">
             <Loader2 className="animate-spin text-forest" />
           </div>
-        ) : queue.length === 0 ? (
-          <p className="text-sm text-ink-soft italic text-center py-12">{t("no_bookings_today")}</p>
+        ) : visibleQueue.length === 0 ? (
+          <p data-testid="rec-queue-empty" className="text-sm text-ink-soft italic text-center py-12">
+            {focusedStaff
+              ? `No patients yet for ${focusedStaff.staff_name} on ${isToday ? "today" : selectedDate}.`
+              : t("no_bookings_today")}
+          </p>
         ) : (
           <>
             <p className="text-[10px] uppercase tracking-widest font-bold text-ink-muted flex items-center gap-1">
-              <GripVertical size={11} /> Drag or use ↑ ↓ to reorder
+              <GripVertical size={11} />
+              {focusedStaff
+                ? `${visibleQueue.length} patient${visibleQueue.length === 1 ? "" : "s"} · ${focusedStaff.staff_name}`
+                : "Drag or use ↑ ↓ to reorder"}
             </p>
             <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
-              <SortableContext items={queue.map((b) => b.id)} strategy={verticalListSortingStrategy}>
+              <SortableContext items={visibleQueue.map((b) => b.id)} strategy={verticalListSortingStrategy}>
                 <div className="space-y-2">
-                  {queue.map((b, idx) => (
+                  {visibleQueue.map((b, idx) => (
                     <SortableItem
                       key={b.id}
                       booking={b}
@@ -376,7 +427,7 @@ export default function ReceptionistDashboard() {
                       onMoveUp={() => moveByOne(b.id, "up")}
                       onMoveDown={() => moveByOne(b.id, "down")}
                       canMoveUp={idx > 0}
-                      canMoveDown={idx < queue.length - 1}
+                      canMoveDown={idx < visibleQueue.length - 1}
                     />
                   ))}
                 </div>
