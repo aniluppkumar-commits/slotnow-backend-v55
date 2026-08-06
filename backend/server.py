@@ -2727,9 +2727,12 @@ async def assistant_queue_next(
     if staff_id not in assigned:
         raise HTTPException(403, "This staff is not assigned to you")
     d = date or await get_today_str()
+    # Advance the earliest active token for this staff — includes walk-ins
+    # tagged to the same staff_id, since hospital walk-ins are a valid part of
+    # a doctor's live queue.
     next_active = await db.bookings.find_one(
         {"provider_id": pid, "staff_id": staff_id, "date": d,
-         "status": {"$in": ["pending", "confirmed"]}, "is_walkin": False},
+         "status": {"$in": ["pending", "confirmed"]}},
         {"_id": 0},
         sort=[("token_number", 1)],
     )
