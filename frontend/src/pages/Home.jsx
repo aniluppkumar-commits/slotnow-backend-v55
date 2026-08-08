@@ -79,31 +79,44 @@ export default function Home() {
     return () => { alive = false; clearTimeout(handle); };
   }, [cityQuery]);
 
-  // Server-side search fired on every meaningful filter change (debounced 300ms
-  // so keystrokes don't hammer the API).
-  useEffect(() => {
+  // Server-side search only fires when the user explicitly asks for it —
+  // either by hitting the Search button, pressing Enter in the search box, or
+  // by picking Nearby / a city suggestion (both of which auto-bump the nonce
+  // for a good tap-to-see-results feel). Filter chip / input changes alone no
+  // longer hit the API — this prevents the "filter changes but list doesn't
+  // update / half-updates" experience.
+  const [searchNonce, setSearchNonce] = useState(0);
+
+  const runSearch = () => {
     const hasAnyFilter = query.trim() || secondaryValue || cityQuery || geo || selectedCategoryId;
-    if (!hasAnyFilter) return;
-    const handle = setTimeout(() => {
-      const params = new URLSearchParams();
-      if (query.trim()) params.set("q", query.trim());
-      if (cityQuery) params.set("city", cityQuery);
-      if (selectedCategoryId) params.set("category_id", selectedCategoryId);
-      if (secondaryValue) params.set(filterSpec.param || "service", secondaryValue);
-      if (geo) {
-        params.set("lat", String(geo.lat));
-        params.set("lng", String(geo.lng));
-      }
-      params.set("limit", "60");
-      setSearching(true);
-      api
-        .get(`/search/providers?${params.toString()}`)
-        .then((r) => setProviders(r.data || []))
-        .catch(() => setProviders([]))
-        .finally(() => setSearching(false));
-    }, 300);
-    return () => clearTimeout(handle);
-  }, [query, cityQuery, selectedCategoryId, secondaryValue, geo, filterSpec.param]);
+    if (!hasAnyFilter) {
+      // Reset to the full unfiltered list
+      api.get("/providers").then((r) => setProviders(r.data || [])).catch(() => {});
+      return;
+    }
+    const params = new URLSearchParams();
+    if (query.trim()) params.set("q", query.trim());
+    if (cityQuery) params.set("city", cityQuery);
+    if (selectedCategoryId) params.set("category_id", selectedCategoryId);
+    if (secondaryValue) params.set(filterSpec.param || "service", secondaryValue);
+    if (geo) {
+      params.set("lat", String(geo.lat));
+      params.set("lng", String(geo.lng));
+    }
+    params.set("limit", "60");
+    setSearching(true);
+    api
+      .get(`/search/providers?${params.toString()}`)
+      .then((r) => setProviders(r.data || []))
+      .catch(() => setProviders([]))
+      .finally(() => setSearching(false));
+  };
+
+  useEffect(() => {
+    if (searchNonce === 0) return; // initial mount handled by the /providers fetch
+    runSearch();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchNonce]);
 
   const useMyLocation = () => {
     if (!navigator.geolocation) return toast.error("Location not supported");
@@ -113,6 +126,7 @@ export default function Home() {
         setGeo({ lat: pos.coords.latitude, lng: pos.coords.longitude });
         setLocating(false);
         toast.success("Showing providers nearby you");
+        setSearchNonce((n) => n + 1); // auto-fire after location resolves
       },
       () => { setLocating(false); toast.error("Could not access location"); },
       { enableHighAccuracy: true, timeout: 8000 },
@@ -168,28 +182,43 @@ export default function Home() {
           </h2>
         </div>
 
-        {/* Global search bar */}
-        <div className="relative mb-3">
-          <Search size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-ink-soft" />
-          <input
-            data-testid="home-search-input"
-            type="text"
-            placeholder="Search provider, doctor, clinic or service…"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            className="w-full bg-white border border-cream-300 rounded-2xl pl-11 pr-10 py-3.5 text-sm text-ink placeholder:text-ink-muted focus:ring-2 focus:ring-forest/15 focus:border-forest outline-none transition-all"
-          />
-          {query && (
-            <button
-              onClick={() => setQuery("")}
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-ink-muted hover:text-ink"
-              aria-label="Clear search"
-              data-testid="home-search-clear"
-            >
-              <X size={16} />
-            </button>
-          )}
-        </div>
+        {/* Global search bar — filters below are STAGED; click Search to apply. */}
+        <form
+          onSubmit={(e) => { e.preventDefault(); setSearchNonce((n) => n + 1); }}
+          className="mb-3 flex items-stretch gap-2"
+        >
+          <div className="relative flex-1 min-w-0">
+            <Search size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-ink-soft" />
+            <input
+              data-testid="home-search-input"
+              type="text"
+              placeholder="Search provider, doctor, clinic or service…"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              className="w-full bg-white border border-cream-300 rounded-2xl pl-11 pr-10 py-3.5 text-sm text-ink placeholder:text-ink-muted focus:ring-2 focus:ring-forest/15 focus:border-forest outline-none transition-all"
+            />
+            {query && (
+              <button
+                type="button"
+                onClick={() => setQuery("")}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-ink-muted hover:text-ink"
+                aria-label="Clear search"
+                data-testid="home-search-clear"
+              >
+                <X size={16} />
+              </button>
+            )}
+          </div>
+          <button
+            data-testid="home-search-btn"
+            type="submit"
+            disabled={searching}
+            className="shrink-0 inline-flex items-center justify-center gap-1.5 bg-accent hover:bg-accent-dark disabled:bg-accent/50 text-white px-4 sm:px-5 py-3.5 rounded-2xl font-bold text-sm shadow-[0_6px_20px_rgba(249,115,22,0.28)] transition-colors"
+          >
+            {searching ? <Loader2 size={16} className="animate-spin" /> : <Search size={16} />}
+            <span className="hidden sm:inline">Search</span>
+          </button>
+        </form>
 
         {/* Filters row: Nearby + City + Category-aware secondary */}
         <div className="flex flex-wrap items-center gap-2 mb-3">
