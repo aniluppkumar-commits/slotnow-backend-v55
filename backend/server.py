@@ -126,9 +126,10 @@ class ProviderProfile(BaseModel):
     business_name: str
     category_id: str
     # Sub-type inside a category (esp. Healthcare):
-    #   "hospital" | "doctor_clinic" | "diagnostic_center" | "" (legacy / other categories)
+    #   "hospital" | "clinic" | "service" | "" (legacy / other categories)
+    # Mobile app (Book Preview 11) uses these exact strings — do not diverge.
     provider_type: str = ""
-    # Doctor specialization (for doctor_clinic only, e.g. "Neurologist")
+    # Doctor specialization (for `clinic` type only, e.g. "Neurologist")
     specialization: str = ""
     # Free-form service tags used for search (e.g. ["X-ray", "MRI", "Blood test"])
     service_tags: List[str] = []
@@ -993,8 +994,8 @@ async def healthcare_reference():
     return {
         "provider_types": [
             {"key": "hospital", "label": "Hospital"},
-            {"key": "doctor_clinic", "label": "Doctor / Clinic"},
-            {"key": "diagnostic_center", "label": "Any Service"},
+            {"key": "clinic", "label": "Doctor / Clinic"},
+            {"key": "service", "label": "Any Service"},
         ],
         "specializations": DOCTOR_SPECIALIZATIONS,
         "services": DIAGNOSTIC_SERVICES,
@@ -3350,6 +3351,28 @@ async def seed():
         await db.providers.create_index([("location", "2dsphere")])
     except Exception as e:
         logger.warning(f"providers 2dsphere index skipped: {e}")
+    # Idempotent iter54 migration: legacy provider_type values → mobile parity.
+    # Safe to run on every boot — no matches means no writes.
+    try:
+        for old, new in {"doctor_clinic": "clinic", "diagnostic_center": "service"}.items():
+            r = await db.providers.update_many(
+                {"provider_type": old}, {"$set": {"provider_type": new}}
+            )
+            if r.modified_count:
+                logger.info(f"iter54 migration: {old!r} → {new!r}: {r.modified_count} rows updated")
+    except Exception as e:
+        logger.warning(f"iter54 provider_type migration skipped: {e}")
+    # Idempotent iter53 migration: any residual `hospital_id` on staff rows
+    # (from legacy hospital_staff collection) → `provider_id` in-place.
+    try:
+        r = await db.staff.update_many(
+            {"hospital_id": {"$exists": True}, "provider_id": {"$exists": False}},
+            [{"$set": {"provider_id": "$hospital_id"}}, {"$unset": "hospital_id"}],
+        )
+        if r.modified_count:
+            logger.info(f"iter53 migration: staff.hospital_id → provider_id: {r.modified_count} rows updated")
+    except Exception as e:
+        logger.warning(f"iter53 staff field rename skipped: {e}")
 
 
 async def _run_seed():

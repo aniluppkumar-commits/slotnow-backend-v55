@@ -200,12 +200,12 @@ export default function ProviderOnboarding() {
             const selCat = categories.find((c) => c.id === form.category_id);
             const isHealthcare = selCat?.name?.toLowerCase() === "healthcare";
             if (!isHealthcare) return null;
-            const isClinic = form.provider_type === "doctor_clinic";
+            const isClinic = form.provider_type === "clinic";
             const isHospital = form.provider_type === "hospital";
-            // Only diagnostic centers get the flat "Services offered" checklist.
-            // Hospitals add their own doctors + services on the next screen,
-            // so this checklist would just confuse them.
-            const showServices = form.provider_type === "diagnostic_center";
+            // Only "Any Service" providers (path labs, diagnostic centers) get
+            // the flat services checklist. Hospitals add doctors + services on
+            // the next screen so a duplicate list would just confuse them.
+            const showServices = form.provider_type === "service";
             return (
               <>
                 <Field label="Provider type" required>

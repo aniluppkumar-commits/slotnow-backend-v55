@@ -93,6 +93,16 @@ History page (Provider + Assistant) with Call/WhatsApp/Print + Provider-only Del
 
 - **Iteration 52: EXPLICIT SEARCH BUTTON ON CUSTOMER HOME (Feb 2026)** — User reported: filters visible but "search sahi se kaam nahi kar raha". Fix: replaced the auto-firing 300ms debounced useEffect with an explicit user-triggered `runSearch()` on `Home.jsx`. Now filter chips (category / secondary / city / near-me / name query) stage locally and only actually hit `/search/providers` when the user (a) clicks the new orange `home-search-btn` (Search) next to the search bar, (b) presses Enter in the search input, (c) picks Nearby (auto-fires after GPS resolves) or (d) taps Clear all (returns to unfiltered `/providers`). Search bar + button are wrapped in a `<form>` so Enter naturally submits. Verified via screenshots: staging Healthcare filter did NOT auto-refresh the list; clicking Search did; typing "Sharma" + Enter correctly narrowed to Sharma Clinic + apollo hospital test.
 
+- **Iteration 53–54: MOBILE-APP SCHEMA ALIGNMENT + PROVIDER_TYPE VALUE MIGRATION (Feb 2026)** — User confirmed the SlotNow Web backend must share the exact same MongoDB schema as the mobile app (`Book Preview 11`) so both apps hit the shared `book-preview-11` database without transformation. Aligned schema:
+  1. **Collection rename**: `hospital_staff` → `staff` (43 references in `server.py` refactored; frontend `ProviderAnalytics.jsx` response key `hospital_staff` → `staff`).
+  2. **Field rename**: `hospital_id` → `provider_id` on staff docs. All API filters + insert paths updated. Public `/providers/{id}/staff` endpoint renamed internally (`public_hospital_staff` → `public_provider_staff`), URL preserved.
+  3. **Model class rename**: `HospitalStaff` → `Staff`, `HospitalStaffUpsert` → `StaffUpsert`. Added optional `designation: Optional[str] = ""` field to match mobile spec.
+  4. **provider_type value migration**: `doctor_clinic` → `clinic`, `diagnostic_center` → `service` (hospital unchanged). Backend `/reference/healthcare` returns mobile-parity keys. Frontend `ProviderOnboarding.jsx` updated to check `"clinic"` and `"service"` instead of legacy values. **Migration**: idempotent script at `/app/backend/scripts/migrate_iter54_provider_type.py` + backend startup hook auto-runs both iter53 (`staff.hospital_id` → `provider_id`) and iter54 (`providers.provider_type` renames) on every boot — safe to re-run, no-op when clean.
+  5. **PIN parity**: web already used `pin_hash` + `has_pin` + `bcrypt.gensalt(rounds=12)` — verified byte-for-byte identical to mobile spec. `GET /admin/users` and `/admin/referrals` were leaking `pin_hash` in raw docs → added `{"pin_hash": 0}` projections. Cross-hash test proves a mobile-generated hash verifies via web's `verify_pin()`.
+  6. **Local data migration**: 7 legacy `hospital_staff` docs auto-migrated into `staff` on preview DB via one-time script. Production DB will migrate on first boot after redeploy.
+  7. **Test coverage**: `/app/backend/tests/test_iter53_schema_alignment_mobile.py` (8/8 pass) + `test_iter54_provider_type_alignment.py` (3/3 pass) locking down all cross-app invariants. Total regression: **25/25 pytest cases green** (iter47 + 48 + 49 + 51 + 53 + 54).
+
+
 
 
 
