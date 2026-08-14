@@ -3053,7 +3053,8 @@ async def admin_stats(user: User = Depends(current_user)):
 @api.get("/admin/users")
 async def admin_users(user: User = Depends(current_user)):
     await require_role(user, "admin")
-    return await db.users.find({}, {"_id": 0}).sort("created_at", -1).to_list(500)
+    # Strip pin_hash so admin dashboard never leaks the bcrypt digest.
+    return await db.users.find({}, {"_id": 0, "pin_hash": 0}).sort("created_at", -1).to_list(500)
 
 
 @api.get("/admin/providers")
@@ -3121,7 +3122,8 @@ async def admin_referrals(user: User = Depends(current_user)):
     with their current subscription status so commissions can be reconciled."""
     await require_role(user, "admin")
     now = datetime.now(timezone.utc)
-    all_users = await db.users.find({}, {"_id": 0}).to_list(5000)
+    # pin_hash excluded to avoid ever surfacing a bcrypt digest through the referral view.
+    all_users = await db.users.find({}, {"_id": 0, "pin_hash": 0}).to_list(5000)
     by_phone = {u.get("phone"): u for u in all_users if u.get("phone")}
     providers = await db.providers.find({}, {"_id": 0}).to_list(5000)
     prov_by_user = {p["user_id"]: p for p in providers}
