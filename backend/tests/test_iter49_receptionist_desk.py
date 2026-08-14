@@ -89,8 +89,8 @@ def _assistant_token(session):
     async def _seed():
         c = AsyncIOMotorClient(MONGO_URL); db = c[DB_NAME]
         # Attach to first 3 hospital staff so /queue/multi returns them
-        staff = await db.hospital_staff.find(
-            {"hospital_id": HOSPITAL_ID, "active": True}, {"_id": 0, "id": 1},
+        staff = await db.staff.find(
+            {"provider_id": HOSPITAL_ID, "active": True}, {"_id": 0, "id": 1},
         ).sort("created_at", 1).to_list(50)
         ids = [s["id"] for s in staff][:3]
         uid = str(uuid.uuid4())
@@ -152,8 +152,8 @@ def test_per_staff_queue_endpoint(s):
     # Unauthorized staff id (belongs to hospital but not in assigned_staff_ids)
     async def _extra():
         c = AsyncIOMotorClient(MONGO_URL); db = c[DB_NAME]
-        row = await db.hospital_staff.find_one(
-            {"hospital_id": HOSPITAL_ID, "id": {"$nin": staff_ids}}, {"_id": 0}
+        row = await db.staff.find_one(
+            {"provider_id": HOSPITAL_ID, "id": {"$nin": staff_ids}}, {"_id": 0}
         )
         c.close(); return row
     extra = asyncio.run(_extra())

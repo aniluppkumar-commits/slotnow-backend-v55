@@ -260,7 +260,7 @@ class Booking(BaseModel):
     service_type: Optional[str] = None  # "Paid" | "Free"
     vehicle_reg_no: Optional[str] = None
     vehicle_model: Optional[str] = None
-    # Hospital sub-doctor / sub-service (HospitalStaff.id) when booked under a hospital
+    # Hospital sub-doctor / sub-service (Staff.id) when booked under a hospital
     staff_id: Optional[str] = None
     staff_name: Optional[str] = ""
     staff_kind: Optional[str] = None  # "doctor" | "service"
@@ -331,29 +331,31 @@ class Notification(BaseModel):
 
 
 # --- Hospital-managed staff (doctors + service centers) ---------------
-class HospitalStaff(BaseModel):
+class Staff(BaseModel):
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
-    hospital_id: str  # parent ProviderProfile.id (must be provider_type=hospital)
-    kind: Literal["doctor", "service"]
+    provider_id: str  # parent ProviderProfile.id (hospital / clinic / service center)
+    kind: Literal["doctor", "service"] = "doctor"
     name: str
     specialization: Optional[str] = ""  # only for doctors
     service_tags: List[str] = []  # only for service centers
+    designation: Optional[str] = ""  # e.g. "Front Desk" — matches mobile spec
     bio: Optional[str] = ""  # short public description shown on the customer booking page
     photo: Optional[str] = None
     phone: Optional[str] = ""  # public contact number so customers can call directly
     address: Optional[str] = ""
     latitude: Optional[float] = None
     longitude: Optional[float] = None
-    daily_slot_limit: Optional[int] = None  # None = unlimited (falls back to hospital-level limit)
+    daily_slot_limit: Optional[int] = None  # None = unlimited (falls back to provider-level limit)
     active: bool = True
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 
-class HospitalStaffUpsert(BaseModel):
+class StaffUpsert(BaseModel):
     kind: Literal["doctor", "service"]
     name: str
     specialization: Optional[str] = ""
     service_tags: Optional[List[str]] = None
+    designation: Optional[str] = ""
     bio: Optional[str] = ""
     photo: Optional[str] = None
     phone: Optional[str] = ""
@@ -366,7 +368,7 @@ class HospitalStaffUpsert(BaseModel):
 
 # --- Assistant staff assignment ---------------------------------------
 class AssistantAssignmentUpdate(BaseModel):
-    staff_ids: List[str] = []  # HospitalStaff ids the assistant can manage
+    staff_ids: List[str] = []  # Staff ids the assistant can manage
 
 
 # --- Provider subscription plans (Razorpay) --------------------------
@@ -1143,14 +1145,14 @@ async def search_providers(
     if q:
         rx = {"$regex": q, "$options": "i"}
         # Union provider_ids where a matching sub-doctor / service name lives.
-        staff_match = await db.hospital_staff.find(
+        staff_match = await db.staff.find(
             {"$or": [{"name": rx}, {"specialization": rx}]},
-            {"_id": 0, "hospital_id": 1},
+            {"_id": 0, "provider_id": 1},
         ).to_list(500)
         svc_match = await db.services.find(
             {"name": rx}, {"_id": 0, "provider_id": 1},
         ).to_list(500)
-        extra_ids = {s["hospital_id"] for s in staff_match} | {s["provider_id"] for s in svc_match}
+        extra_ids = {s["provider_id"] for s in staff_match} | {s["provider_id"] for s in svc_match}
         or_clauses = [
             {"business_name": rx},
             {"specialization": rx},
@@ -1312,8 +1314,8 @@ async def get_provider(provider_id: str):
     # the customer detail page can render the list and open per-staff booking.
     staff = []
     if p.get("provider_type") == "hospital":
-        staff = await db.hospital_staff.find(
-            {"hospital_id": provider_id, "active": True}, {"_id": 0}
+        staff = await db.staff.find(
+            {"provider_id": provider_id, "active": True}, {"_id": 0}
         ).sort([("kind", 1), ("name", 1)]).to_list(200)
     return {
         "provider": p,
@@ -1563,8 +1565,8 @@ async def assign_assistant_staff(
         raise HTTPException(404, "Assistant not found")
     # Validate every id belongs to this hospital
     if body.staff_ids:
-        valid = await db.hospital_staff.count_documents(
-            {"hospital_id": p["id"], "id": {"$in": body.staff_ids}}
+        valid = await db.staff.count_documents(
+            {"provider_id": p["id"], "id": {"$in": body.staff_ids}}
         )
         if valid != len(body.staff_ids):
             raise HTTPException(400, "Some staff ids are invalid")
@@ -1587,20 +1589,21 @@ async def _my_hospital_or_400(user: User) -> dict:
 async def list_my_staff(user: User = Depends(current_user)):
     await require_role(user, "provider")
     p = await _my_hospital_or_400(user)
-    rows = await db.hospital_staff.find({"hospital_id": p["id"]}, {"_id": 0}).sort("created_at", 1).to_list(500)
+    rows = await db.staff.find({"provider_id": p["id"]}, {"_id": 0}).sort("created_at", 1).to_list(500)
     return rows
 
 
 @api.post("/providers/me/staff")
-async def add_my_staff(body: HospitalStaffUpsert, user: User = Depends(current_user)):
+async def add_my_staff(body: StaffUpsert, user: User = Depends(current_user)):
     await require_role(user, "provider")
     p = await _my_hospital_or_400(user)
-    doc = HospitalStaff(
-        hospital_id=p["id"],
+    doc = Staff(
+        provider_id=p["id"],
         kind=body.kind,
         name=body.name.strip(),
         specialization=(body.specialization or "").strip(),
         service_tags=body.service_tags or [],
+        designation=(body.designation or "").strip(),
         bio=(body.bio or "").strip(),
         photo=body.photo,
         phone=(body.phone or "").strip(),
@@ -1609,15 +1612,15 @@ async def add_my_staff(body: HospitalStaffUpsert, user: User = Depends(current_u
         longitude=body.longitude,
         daily_slot_limit=body.daily_slot_limit,
     )
-    await db.hospital_staff.insert_one(doc.model_dump())
+    await db.staff.insert_one(doc.model_dump())
     return doc.model_dump(mode="json")
 
 
 @api.patch("/providers/me/staff/{staff_id}")
-async def update_my_staff(staff_id: str, body: HospitalStaffUpsert, user: User = Depends(current_user)):
+async def update_my_staff(staff_id: str, body: StaffUpsert, user: User = Depends(current_user)):
     await require_role(user, "provider")
     p = await _my_hospital_or_400(user)
-    exists = await db.hospital_staff.find_one({"id": staff_id, "hospital_id": p["id"]}, {"_id": 0})
+    exists = await db.staff.find_one({"id": staff_id, "provider_id": p["id"]}, {"_id": 0})
     if not exists:
         raise HTTPException(404, "Staff not found")
     update = {
@@ -1625,6 +1628,7 @@ async def update_my_staff(staff_id: str, body: HospitalStaffUpsert, user: User =
         "name": body.name.strip(),
         "specialization": (body.specialization or "").strip(),
         "service_tags": body.service_tags or [],
+        "designation": (body.designation or "").strip(),
         "bio": (body.bio or "").strip(),
         "photo": body.photo,
         "phone": (body.phone or "").strip(),
@@ -1634,8 +1638,8 @@ async def update_my_staff(staff_id: str, body: HospitalStaffUpsert, user: User =
         "daily_slot_limit": body.daily_slot_limit,
         "active": bool(body.active),
     }
-    await db.hospital_staff.update_one({"id": staff_id}, {"$set": update})
-    fresh = await db.hospital_staff.find_one({"id": staff_id}, {"_id": 0})
+    await db.staff.update_one({"id": staff_id}, {"$set": update})
+    fresh = await db.staff.find_one({"id": staff_id}, {"_id": 0})
     return fresh
 
 
@@ -1643,18 +1647,18 @@ async def update_my_staff(staff_id: str, body: HospitalStaffUpsert, user: User =
 async def delete_my_staff(staff_id: str, user: User = Depends(current_user)):
     await require_role(user, "provider")
     p = await _my_hospital_or_400(user)
-    r = await db.hospital_staff.delete_one({"id": staff_id, "hospital_id": p["id"]})
+    r = await db.staff.delete_one({"id": staff_id, "provider_id": p["id"]})
     return {"ok": r.deleted_count > 0}
 
 
 @api.get("/providers/{provider_id}/staff")
-async def public_hospital_staff(provider_id: str):
+async def public_provider_staff(provider_id: str):
     """Public list of a hospital's doctors + service centers (only active)."""
     p = await db.providers.find_one({"id": provider_id, "approved": True}, {"_id": 0})
     if not p or p.get("provider_type") != "hospital":
         return []
-    rows = await db.hospital_staff.find(
-        {"hospital_id": provider_id, "active": True}, {"_id": 0}
+    rows = await db.staff.find(
+        {"provider_id": provider_id, "active": True}, {"_id": 0}
     ).sort("created_at", 1).to_list(500)
     return rows
 
@@ -1664,7 +1668,7 @@ async def public_hospital_staff(provider_id: str):
 async def get_my_staff_availability(staff_id: str, user: User = Depends(current_user)):
     await require_role(user, "provider")
     p = await _my_hospital_or_400(user)
-    exists = await db.hospital_staff.find_one({"id": staff_id, "hospital_id": p["id"]}, {"_id": 0})
+    exists = await db.staff.find_one({"id": staff_id, "provider_id": p["id"]}, {"_id": 0})
     if not exists:
         raise HTTPException(404, "Staff not found")
     rows = await db.availability.find(
@@ -1677,7 +1681,7 @@ async def get_my_staff_availability(staff_id: str, user: User = Depends(current_
 async def add_my_staff_availability(staff_id: str, a: AvailabilityCreate, user: User = Depends(current_user)):
     await require_role(user, "provider")
     p = await _my_hospital_or_400(user)
-    exists = await db.hospital_staff.find_one({"id": staff_id, "hospital_id": p["id"]}, {"_id": 0})
+    exists = await db.staff.find_one({"id": staff_id, "provider_id": p["id"]}, {"_id": 0})
     if not exists:
         raise HTTPException(404, "Staff not found")
     payload = a.model_dump()
@@ -1746,7 +1750,7 @@ async def add_override(o: AvailabilityOverrideCreate, user: User = Depends(curre
         raise HTTPException(400, "Invalid date, expected YYYY-MM-DD")
     # Validate staff belongs to this provider
     if o.staff_id:
-        s = await db.hospital_staff.find_one({"id": o.staff_id, "hospital_id": p["id"]}, {"_id": 0})
+        s = await db.staff.find_one({"id": o.staff_id, "provider_id": p["id"]}, {"_id": 0})
         if not s:
             raise HTTPException(404, "Staff not found")
     # Validate shift override fields
@@ -2182,8 +2186,8 @@ async def create_booking(b: BookingCreate, user: User = Depends(current_user)):
     staff_name = ""
     staff_kind = None
     if b.staff_id:
-        st = await db.hospital_staff.find_one(
-            {"id": b.staff_id, "hospital_id": b.provider_id, "active": True}, {"_id": 0}
+        st = await db.staff.find_one(
+            {"id": b.staff_id, "provider_id": b.provider_id, "active": True}, {"_id": 0}
         )
         if not st:
             raise HTTPException(400, "Selected doctor/service not found")
@@ -2493,8 +2497,8 @@ async def add_walkin(w: WalkinCreate, user: User = Depends(current_user), date: 
     staff_name = ""
     staff_kind = None
     if w.staff_id:
-        st = await db.hospital_staff.find_one(
-            {"id": w.staff_id, "hospital_id": pid, "active": True}, {"_id": 0}
+        st = await db.staff.find_one(
+            {"id": w.staff_id, "provider_id": pid, "active": True}, {"_id": 0}
         )
         if not st:
             raise HTTPException(400, "Selected doctor/service not found")
@@ -2590,8 +2594,8 @@ async def _assistant_scope(user: User) -> tuple[str, List[str]]:
     assigned = list(row.get("assigned_staff_ids") or [])
     if not assigned:
         # Fall back to every active staff under the hospital (max 3 shown by UI).
-        all_staff = await db.hospital_staff.find(
-            {"hospital_id": pid, "active": True}, {"_id": 0, "id": 1},
+        all_staff = await db.staff.find(
+            {"provider_id": pid, "active": True}, {"_id": 0, "id": 1},
         ).sort("created_at", 1).to_list(50)
         assigned = [s["id"] for s in all_staff][:3]
     return pid, assigned
@@ -2618,8 +2622,8 @@ async def assistant_multi_queue(user: User = Depends(current_user), date: Option
     pid, assigned = await _assistant_scope(user)
     d = date or await get_today_str()
     # Fetch staff metadata in a single query.
-    staff_rows = await db.hospital_staff.find(
-        {"hospital_id": pid, "id": {"$in": assigned}}, {"_id": 0}
+    staff_rows = await db.staff.find(
+        {"provider_id": pid, "id": {"$in": assigned}}, {"_id": 0}
     ).to_list(50)
     staff_by_id = {s["id"]: s for s in staff_rows}
     result = []
@@ -2683,8 +2687,8 @@ async def assistant_staff_queue(
     if assigned and staff_id not in assigned:
         raise HTTPException(403, "This staff is not assigned to you")
     d = date or await get_today_str()
-    staff = await db.hospital_staff.find_one(
-        {"id": staff_id, "hospital_id": pid}, {"_id": 0}
+    staff = await db.staff.find_one(
+        {"id": staff_id, "provider_id": pid}, {"_id": 0}
     )
     if not staff:
         raise HTTPException(404, "Staff not found")
@@ -2878,13 +2882,13 @@ async def provider_analytics(
         ps["heatmap"][weekday][min(23, max(0, hour))] += 1
 
     # Fetch staff names + capacity for utilisation
-    hospital_staff = []
+    staff_docs = []
     if prov.get("provider_type") == "hospital":
-        hospital_staff = await db.hospital_staff.find(
-            {"hospital_id": prov["id"]}, {"_id": 0}
+        staff_docs = await db.staff.find(
+            {"provider_id": prov["id"]}, {"_id": 0}
         ).to_list(500)
         # Fill in names for staff that appear in bookings
-        for hs in hospital_staff:
+        for hs in staff_docs:
             key = hs["id"]
             if key in per_staff:
                 per_staff[key]["staff_name"] = hs.get("name") or per_staff[key]["staff_name"]
@@ -2941,7 +2945,9 @@ async def provider_analytics(
         "utilisation_pct": round((total_bookings / total_capacity) * 100, 1) if total_capacity else 0.0,
         "heatmap": heatmap,  # [7][24]
         "per_staff": list(per_staff.values()),
-        "hospital_staff": [{"id": s["id"], "name": s.get("name"), "kind": s.get("kind")} for s in hospital_staff],
+        # `staff` key matches the mobile app's convention. Old clients that
+        # requested `hospital_staff` will need the frontend to be updated.
+        "staff": [{"id": s["id"], "name": s.get("name"), "kind": s.get("kind")} for s in staff_docs],
     }
 
 

@@ -75,8 +75,8 @@ def h(t): return {"Authorization": f"Bearer {t}"}
 def _login_assistant(session):
     async def _seed():
         c = AsyncIOMotorClient(MONGO_URL); db = c[DB_NAME]
-        staff = await db.hospital_staff.find(
-            {"hospital_id": HOSPITAL_ID, "active": True}, {"_id": 0},
+        staff = await db.staff.find(
+            {"provider_id": HOSPITAL_ID, "active": True}, {"_id": 0},
         ).sort("created_at", 1).to_list(50)
         ids = [x["id"] for x in staff][:3]
         uid = str(uuid.uuid4())
@@ -131,8 +131,8 @@ def test_assistant_queue_next_still_403_for_unassigned_staff(s):
     tok, staff_ids = _login_assistant(s)
     async def _extra():
         c = AsyncIOMotorClient(MONGO_URL); db = c[DB_NAME]
-        row = await db.hospital_staff.find_one(
-            {"hospital_id": HOSPITAL_ID, "id": {"$nin": staff_ids}}, {"_id": 0}
+        row = await db.staff.find_one(
+            {"provider_id": HOSPITAL_ID, "id": {"$nin": staff_ids}}, {"_id": 0}
         )
         c.close(); return row
     extra = asyncio.run(_extra())

@@ -65,7 +65,7 @@ export default function ProviderAnalytics() {
               </button>
             ))}
           </div>
-          {data?.hospital_staff?.length > 0 && (
+          {data?.staff?.length > 0 && (
             <select
               data-testid="analytics-staff-select"
               value={staffId}
@@ -73,7 +73,7 @@ export default function ProviderAnalytics() {
               className="bg-white border border-cream-300 rounded-lg text-xs font-bold px-2 py-1.5 text-ink"
             >
               <option value="">All doctors / services</option>
-              {data.hospital_staff.map((s) => (
+              {data.staff.map((s) => (
                 <option key={s.id} value={s.id}>{s.name}</option>
               ))}
             </select>
