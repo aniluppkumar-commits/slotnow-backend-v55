@@ -22,3 +22,20 @@ export function toIndianE164(phone) {
   if (digits.length === 11 && digits.startsWith("0")) return `91${digits.slice(1)}`;
   return digits;
 }
+
+/**
+ * Return the bare 10-digit Indian mobile number.
+ * Book Preview 11 (mobile) stores users with `phone` as a bare 10-digit
+ * string (e.g. "9412575970") — no `+91` prefix, no spaces. The web app
+ * shares the same database in production, so auth endpoints must send
+ * the exact same format so lookups match on both sides.
+ */
+export function toBareIndianPhone(phone) {
+  if (!phone) return "";
+  const digits = String(phone).replace(/\D/g, "");
+  if (digits.length === 10) return digits;
+  if (digits.length === 12 && digits.startsWith("91")) return digits.slice(2);
+  if (digits.length === 11 && digits.startsWith("0")) return digits.slice(1);
+  // Fallback: last 10 digits (handles pasted numbers with country codes)
+  return digits.slice(-10);
+}

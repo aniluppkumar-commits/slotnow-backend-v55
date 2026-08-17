@@ -181,7 +181,7 @@ export default function Login() {
 
   const handleSetPin = async (e) => {
     e.preventDefault();
-    if (!/^\d{4,6}$/.test(newPin)) return toast.error("PIN must be 4-6 digits");
+    if (!/^\d{4}$/.test(newPin)) return toast.error("PIN must be exactly 4 digits");
     setLoading(true);
     try {
       await setPinApi(newPin);
@@ -395,7 +395,7 @@ export default function Login() {
                         inputMode="numeric"
                         placeholder="••••"
                         value={pin}
-                        onChange={(e) => setPin(e.target.value.replace(/\D/g, "").slice(0, 6))}
+                        onChange={(e) => setPin(e.target.value.replace(/\D/g, "").slice(0, 4))}
                         className="w-full bg-white border border-cream-300 rounded-xl pl-10 pr-4 py-3.5 text-lg tracking-[0.4em] font-bold text-ink placeholder:text-ink-muted placeholder:tracking-normal focus:ring-2 focus:ring-forest/20 focus:border-forest outline-none"
                       />
                     </div>
@@ -408,7 +408,7 @@ export default function Login() {
                   disabled={
                     loading ||
                     (mode === "email" ? !validEmail || !emailPassword : !validPhone) ||
-                    (mode === "pin" && pin.length < 4)
+                    (mode === "pin" && pin.length !== 4)
                   }
                   className="w-full flex items-center justify-center gap-2 bg-accent hover:bg-accent-dark disabled:bg-accent/40 text-white py-3.5 rounded-xl font-bold transition-colors shadow-[0_6px_20px_rgba(249,115,22,0.25)]"
                 >
@@ -556,9 +556,9 @@ export default function Login() {
                   data-testid="setpin-input"
                   type="password"
                   inputMode="numeric"
-                  placeholder="4-6 digit PIN"
+                  placeholder="4-digit PIN"
                   value={newPin}
-                  onChange={(e) => setNewPin(e.target.value.replace(/\D/g, "").slice(0, 6))}
+                  onChange={(e) => setNewPin(e.target.value.replace(/\D/g, "").slice(0, 4))}
                   className="w-full bg-white border border-cream-300 rounded-xl pl-10 pr-4 py-3.5 text-lg tracking-[0.4em] font-bold text-ink placeholder:text-ink-muted placeholder:tracking-normal focus:ring-2 focus:ring-forest/20 focus:border-forest outline-none"
                   autoFocus
                 />
@@ -575,7 +575,7 @@ export default function Login() {
                 <button
                   data-testid="setpin-save-btn"
                   type="submit"
-                  disabled={loading || newPin.length < 4}
+                  disabled={loading || newPin.length !== 4}
                   className="flex-1 bg-accent hover:bg-accent-dark disabled:bg-accent/40 text-white py-3 rounded-xl font-bold"
                 >
                   {loading ? <Loader2 size={18} className="animate-spin mx-auto" /> : t("save_pin")}

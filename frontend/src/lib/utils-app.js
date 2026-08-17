@@ -57,10 +57,29 @@ export function formatDateShort(dateStr) {
 
 export function formatTime(hhmm) {
   if (!hhmm) return "";
-  const [h, m] = hhmm.split(":").map(Number);
+  const s = String(hhmm).trim();
+  let h, m;
+  // Book Preview 11 (mobile) sometimes stores booking times as full ISO
+  // timestamps (e.g. "2026-08-15T09:30:00Z") instead of a bare "HH:MM"
+  // string. Detect that and convert to the user's LOCAL time — otherwise
+  // splitting on ":" produces "NaN:30 AM" or shifts by the UTC offset.
+  if (s.includes("T") || s.length > 5) {
+    const dt = new Date(s);
+    if (!isNaN(dt.getTime())) {
+      h = dt.getHours();
+      m = dt.getMinutes();
+    } else {
+      return "";
+    }
+  } else {
+    const parts = s.split(":").map(Number);
+    h = parts[0];
+    m = parts[1] || 0;
+    if (Number.isNaN(h)) return "";
+  }
   const ampm = h >= 12 ? "PM" : "AM";
   const hr = h % 12 || 12;
-  return `${hr}:${m.toString().padStart(2, "0")} ${ampm}`;
+  return `${hr}:${String(m).padStart(2, "0")} ${ampm}`;
 }
 
 export function todayISO() {

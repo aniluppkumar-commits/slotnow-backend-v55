@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useMemo } from "react";
 import api from "@/lib/api";
-import { toIndianE164 } from "@/lib/phone";
+import { toBareIndianPhone } from "@/lib/phone";
 
 const AuthContext = createContext(null);
 
@@ -42,9 +42,11 @@ export function AuthProvider({ children }) {
   const sendOtp = async (phone, role = "customer") => {
     setLoading(true);
     try {
-      // Normalize to 91-prefixed 12-digit so the deployed backend passes a
-      // MSG91-valid number through — a 10-digit input causes silent MSG91 rejection.
-      const { data } = await api.post("/auth/send-otp", { phone: toIndianE164(phone), role });
+      // Book Preview 11's backend stores users with a bare 10-digit phone.
+      // Sending E164 (`91XXXXXXXXXX`) would create a duplicate user + prevent
+      // PIN login from finding the mobile-created row. Match mobile's exact
+      // format so both apps share the same user records.
+      const { data } = await api.post("/auth/send-otp", { phone: toBareIndianPhone(phone), role });
       return data;
     } finally {
       setLoading(false);
@@ -55,7 +57,7 @@ export function AuthProvider({ children }) {
     setLoading(true);
     try {
       const body = {
-        phone: toIndianE164(phone),
+        phone: toBareIndianPhone(phone),
         otp,
         role,
         via_referral: !!ref,
@@ -72,7 +74,7 @@ export function AuthProvider({ children }) {
   const pinLogin = async (phone, pin, role = "customer") => {
     setLoading(true);
     try {
-      const { data } = await api.post("/auth/pin-login", { phone: toIndianE164(phone), pin, role });
+      const { data } = await api.post("/auth/pin-login", { phone: toBareIndianPhone(phone), pin, role });
       persist(data.token, data.user);
       return data;
     } finally {

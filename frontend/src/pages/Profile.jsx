@@ -52,7 +52,7 @@ export default function Profile() {
   };
 
   const savePin = async () => {
-    if (!/^\d{4,6}$/.test(newPin)) return toast.error("PIN must be 4-6 digits");
+    if (!/^\d{4}$/.test(newPin)) return toast.error("PIN must be exactly 4 digits");
     setSavingPin(true);
     try {
       await setPin(newPin);
@@ -186,15 +186,15 @@ export default function Profile() {
             type="password"
             inputMode="numeric"
             value={newPin}
-            onChange={(e) => setNewPin(e.target.value.replace(/\D/g, "").slice(0, 6))}
-            placeholder="4-6 digit PIN"
+            onChange={(e) => setNewPin(e.target.value.replace(/\D/g, "").slice(0, 4))}
+            placeholder="4-digit PIN"
             className="w-full bg-cream border border-cream-300 rounded-xl px-3 py-3 text-lg tracking-[0.4em] font-bold text-ink placeholder:text-ink-muted placeholder:tracking-normal outline-none focus:ring-2 focus:ring-forest/20"
             autoFocus
           />
           <button
             data-testid="profile-newpin-save-btn"
             onClick={savePin}
-            disabled={savingPin || newPin.length < 4}
+            disabled={savingPin || newPin.length !== 4}
             className="w-full mt-3 bg-forest text-cream-100 py-3 rounded-xl font-bold hover:bg-forest-dark disabled:opacity-60"
           >
             {savingPin ? <Loader2 size={16} className="animate-spin mx-auto" /> : "Save"}
