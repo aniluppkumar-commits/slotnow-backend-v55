@@ -157,6 +157,18 @@ History page (Provider + Assistant) with Call/WhatsApp/Print + Provider-only Del
 - Emergent-managed Google Auth.
 - Provider avatar upload (currently business image only).
 - Referral rewards ledger (backend needs schema + rules).
+- Bulk Doctor Import via CSV (P1).
+- Provider Verification / Certificate Upload → admin approves → verified badge (P1).
+- DLT Template ID Config Integration (awaiting DLT approval).
+- Live Razorpay Keys integration (paid subscriptions).
+
+## Iteration 55 — Clinic Waiting Screen final polish + Cabin field (Feb 2026)
+- **Cabin field** end-to-end: `Staff.cabin` (already on model) added to `StaffUpsert`, `POST/PATCH /api/providers/me/staff` now persist `cabin`. `HospitalStaff.jsx` modal has a new "Cabin / Room label (optional)" input (`data-testid=staff-cabin`, max 12 chars). `GET /public/waiting/{provider}` surfaces the clinic-supplied cabin string; falls back to auto A/B/C on the LED screen.
+- **Waiting Screen footer**: "SlotNow" text now sits right next to the SlotNow logo in the bilingual footer banner (matches the approved mock).
+- **Chime**: Web Audio API 2-tone ding-dong (880 → 660 Hz) fires only when `current_token` advances (silent on first snapshot). Uses a shared `window.__slotnowAC` context so it doesn't re-init.
+- **Voice Announcement**: `SpeechSynthesis` speaks "Token number X, {patient}, please proceed to cabin Y" using `en-IN` voice when available. Delayed 900 ms after chime to prevent overlap.
+- **Autoplay-safe unlock**: One-tap "Enable Sound" overlay on first load satisfies browser autoplay policy. Add `?mute=1` to skip and run silently.
+- **Kiosk guide**: `/app/docs/kiosk-setup.md` — Fire TV / Chromecast / Android TV / Windows-kiosk full-screen + sleep + auto-launch instructions and a sound-troubleshooting table.
 
 ## Test credentials
 - Customer: `9999999999` / OTP `123456` / PIN `1234`

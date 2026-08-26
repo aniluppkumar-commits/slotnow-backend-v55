@@ -16,12 +16,16 @@ export default function WaitingScreen() {
   const [params] = useSearchParams();
   const staffIds = params.get("staff") || "";
   const refreshMs = Math.max(2000, Number(params.get("refresh")) * 1000 || 5000);
+  const muted = params.get("mute") === "1";
   const [snap, setSnap] = useState(() => {
     try { return JSON.parse(localStorage.getItem(CACHE_KEY(providerId)) || "null"); }
     catch { return null; }
   });
   const [online, setOnline] = useState(navigator.onLine);
   const [now, setNow] = useState(new Date());
+  // Track the last-seen token per column so we can chime + announce only on advance.
+  const lastTokensRef = useRef({});
+  const bootedRef = useRef(false);
 
   const fetchSnap = useCallback(async () => {
     try {
@@ -43,6 +47,27 @@ export default function WaitingScreen() {
       window.removeEventListener("online", on); window.removeEventListener("offline", off); };
   }, [fetchSnap, refreshMs]);
 
+  // Chime + Text-to-Speech whenever a column's current_token changes.
+  // Silent on the very first snapshot (bootedRef) so we do not blast on load.
+  useEffect(() => {
+    if (muted || !snap) return;
+    const cols = snap.columns || [];
+    const seen = lastTokensRef.current;
+    const changes = [];
+    cols.forEach((c) => {
+      const key = c.staff_id || "single";
+      const cur = c.current_token || 0;
+      const prev = seen[key];
+      if (prev !== undefined && cur && cur !== prev) changes.push(c);
+      seen[key] = cur;
+    });
+    if (bootedRef.current && changes.length > 0) {
+      playChime();
+      changes.forEach(speakToken);
+    }
+    bootedRef.current = true;
+  }, [snap, muted]);
+
   const provider = snap?.provider;
   const columns = snap?.columns || [];
   const isMulti = columns.length >= 2;
@@ -50,6 +75,29 @@ export default function WaitingScreen() {
   const dateLabel = now.toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" });
   const clinicName = provider?.business_name || "Clinic";
   const isHospital = provider?.provider_type === "hospital";
+  const [audioUnlocked, setAudioUnlocked] = useState(muted);
+
+  const unlockAudio = () => {
+    try {
+      const AC = window.AudioContext || window.webkitAudioContext;
+      if (AC) {
+        window.__slotnowAC = window.__slotnowAC || new AC();
+        window.__slotnowAC.resume?.().catch(() => {});
+        // Silent priming beep so subsequent playChime() works on strict browsers.
+        const ctx = window.__slotnowAC;
+        const o = ctx.createOscillator();
+        const g = ctx.createGain();
+        g.gain.value = 0.0001;
+        o.connect(g).connect(ctx.destination);
+        o.start(); o.stop(ctx.currentTime + 0.05);
+      }
+      if (window.speechSynthesis) {
+        const u = new SpeechSynthesisUtterance(" ");
+        u.volume = 0; window.speechSynthesis.speak(u);
+      }
+    } catch { /* ignore */ }
+    setAudioUnlocked(true);
+  };
 
   return (
     // Deep navy background with a very subtle medical caduceus SVG overlay
@@ -109,7 +157,10 @@ export default function WaitingScreen() {
           </p>
           <p className="mt-1 text-white text-2xl sm:text-3xl font-black leading-tight flex items-center gap-2 flex-wrap">
             BOOK YOUR APPOINTMENT VIA
-            <img src={SLOTNOW_LOGO} alt="SlotNow" className="inline h-8 sm:h-10 w-auto align-middle" />
+            <span className="inline-flex items-center gap-1.5">
+              <img src={SLOTNOW_LOGO} alt="SlotNow" className="inline h-8 sm:h-10 w-auto align-middle" />
+              <span className="text-yellow-300">SlotNow</span>
+            </span>
             <span>APP NOW!</span>
             <span className="text-yellow-300 font-black">| Scan the QR Code →</span>
           </p>
@@ -121,6 +172,30 @@ export default function WaitingScreen() {
           className="w-24 h-24 sm:w-28 sm:h-28 bg-white p-1.5 rounded-lg shrink-0"
         />
       </footer>
+
+      {/* One-tap audio unlock overlay — required by browser autoplay policies.
+          Automatically skipped when the URL has ?mute=1. */}
+      {!audioUnlocked && (
+        <button
+          type="button"
+          data-testid="waiting-audio-unlock"
+          onClick={unlockAudio}
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm"
+        >
+          <div className="bg-white text-ink rounded-3xl px-8 py-6 shadow-2xl text-center max-w-md mx-4">
+            <p className="text-3xl font-black text-forest">🔔 Enable Sound</p>
+            <p className="text-base text-ink-muted mt-2">
+              Tap once to enable chime + voice announcements when tokens change.
+            </p>
+            <p className="text-xs text-ink-muted mt-3">
+              (Add <code className="bg-cream px-1.5 py-0.5 rounded">?mute=1</code> to the URL to skip this screen.)
+            </p>
+            <span className="mt-4 inline-block bg-forest text-white font-bold px-6 py-2 rounded-xl">
+              Tap anywhere to continue
+            </span>
+          </div>
+        </button>
+      )}
     </div>
   );
 }
@@ -269,4 +344,65 @@ function CaduceusIcon({ className = "" }) {
       <path d="M32 6l-5 6M32 6l5 6" />
     </svg>
   );
+}
+
+// --- Audio helpers -------------------------------------------------------
+// Two-tone "ding-dong" chime on token advance using the Web Audio API. No
+// external assets, and Chrome / Silk / Fire-TV Silk all support this. The
+// AudioContext lives on window so we don't re-create it on every call.
+function playChime() {
+  try {
+    const AC = window.AudioContext || window.webkitAudioContext;
+    if (!AC) return;
+    window.__slotnowAC = window.__slotnowAC || new AC();
+    const ctx = window.__slotnowAC;
+    if (ctx.state === "suspended") ctx.resume().catch(() => {});
+    const now = ctx.currentTime;
+    [
+      { f: 880, t: now, d: 0.35 },       // high tone
+      { f: 660, t: now + 0.32, d: 0.5 }, // low tone
+    ].forEach(({ f, t, d }) => {
+      const o = ctx.createOscillator();
+      const g = ctx.createGain();
+      o.type = "sine";
+      o.frequency.setValueAtTime(f, t);
+      g.gain.setValueAtTime(0.0001, t);
+      g.gain.exponentialRampToValueAtTime(0.35, t + 0.05);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + d);
+      o.connect(g).connect(ctx.destination);
+      o.start(t);
+      o.stop(t + d + 0.05);
+    });
+  } catch { /* ignore audio failures on kiosks that block it */ }
+}
+
+// Announce the new token + patient name via SpeechSynthesis. Runs after the
+// chime so it does not overlap. Selects an English voice if available and
+// falls back to the browser default. Guarded so it never throws.
+function speakToken(col) {
+  try {
+    const synth = window.speechSynthesis;
+    if (!synth || !col?.current_token) return;
+    const doc = col.staff_name || "";
+    const patient = col.current_patient?.masked_name || "";
+    const cabin = col.cabin || "";
+    const parts = [
+      `Token number ${col.current_token}`,
+      patient ? `${patient}` : "",
+      cabin ? `please proceed to cabin ${cabin}` : (doc ? `please proceed to ${doc}` : "please proceed"),
+    ].filter(Boolean);
+    const utter = new SpeechSynthesisUtterance(parts.join(", "));
+    utter.rate = 0.95;
+    utter.pitch = 1.0;
+    utter.volume = 1.0;
+    utter.lang = "en-IN";
+    // Prefer an Indian-English voice when present for clearer pronunciation.
+    const voices = synth.getVoices?.() || [];
+    const pick = voices.find((v) => /en-IN/i.test(v.lang)) || voices.find((v) => /en/i.test(v.lang));
+    if (pick) utter.voice = pick;
+    // Chrome sometimes queues stale utterances — cancel before speak on advance.
+    synth.cancel();
+    // Delay slightly so the chime finishes first.
+    setTimeout(() => { try { synth.speak(utter); } catch { /* noop */ } }, 900);
+  } catch { /* ignore TTS failures */ }
 }

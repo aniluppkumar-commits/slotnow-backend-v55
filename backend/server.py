@@ -347,6 +347,7 @@ class Staff(BaseModel):
     latitude: Optional[float] = None
     longitude: Optional[float] = None
     daily_slot_limit: Optional[int] = None  # None = unlimited (falls back to provider-level limit)
+    cabin: Optional[str] = ""  # override the auto A/B/C label on the LED waiting screen
     active: bool = True
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
@@ -364,6 +365,7 @@ class StaffUpsert(BaseModel):
     latitude: Optional[float] = None
     longitude: Optional[float] = None
     daily_slot_limit: Optional[int] = None
+    cabin: Optional[str] = ""  # clinic-supplied cabin label shown on the LED waiting screen
     active: Optional[bool] = True
 
 
@@ -1612,6 +1614,7 @@ async def add_my_staff(body: StaffUpsert, user: User = Depends(current_user)):
         latitude=body.latitude,
         longitude=body.longitude,
         daily_slot_limit=body.daily_slot_limit,
+        cabin=(body.cabin or "").strip(),
     )
     await db.staff.insert_one(doc.model_dump())
     return doc.model_dump(mode="json")
@@ -1637,6 +1640,7 @@ async def update_my_staff(staff_id: str, body: StaffUpsert, user: User = Depends
         "latitude": body.latitude,
         "longitude": body.longitude,
         "daily_slot_limit": body.daily_slot_limit,
+        "cabin": (body.cabin or "").strip(),
         "active": bool(body.active),
     }
     await db.staff.update_one({"id": staff_id}, {"$set": update})
@@ -1726,7 +1730,7 @@ async def public_waiting_screen(
             "staff_name": (staff_row or {}).get("name") if staff_row else provider_info["business_name"],
             "specialization": (staff_row or {}).get("specialization") or "",
             "kind": (staff_row or {}).get("kind"),
-            "cabin": (staff_row or {}).get("cabin") or "",  # future-proofed if we add cabins
+            "cabin": (staff_row or {}).get("cabin") or "",  # clinic-supplied cabin label
             "current_token": current.get("token_number") if current else 0,
             "last_served_token": max((b["token_number"] for b in served), default=0),
             "current_patient": (

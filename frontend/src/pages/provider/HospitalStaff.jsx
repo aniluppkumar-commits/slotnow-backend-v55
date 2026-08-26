@@ -46,6 +46,7 @@ export default function HospitalStaff() {
       address: "",
       latitude: null,
       longitude: null,
+      cabin: "",
     });
   };
 
@@ -467,6 +468,22 @@ export default function HospitalStaff() {
                 />
                 <p className="text-[10px] text-ink-muted mt-1">
                   How many customers can book this {modalKind === "doctor" ? "doctor" : "service"} per day.
+                </p>
+              </div>
+              {/* Cabin label — overrides the auto A/B/C on the LED waiting screen */}
+              <div>
+                <label className="block text-[11px] font-bold uppercase tracking-wider text-ink-muted mb-1">
+                  Cabin / Room label (optional)
+                </label>
+                <input
+                  data-testid="staff-cabin"
+                  value={form.cabin || ""}
+                  onChange={(e) => setForm({ ...form, cabin: e.target.value.slice(0, 12) })}
+                  placeholder="e.g. A, 101, OPD-2"
+                  className="w-full px-3 py-2 rounded-xl bg-cream border border-cream-300 focus:border-forest focus:outline-none text-sm"
+                />
+                <p className="text-[10px] text-ink-muted mt-1">
+                  Shown on the Clinic Waiting Screen (LED / Smart-TV). Leave empty to auto-assign A, B, C…
                 </p>
               </div>
             </div>
