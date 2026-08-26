@@ -1664,6 +1664,113 @@ async def public_provider_staff(provider_id: str):
     return rows
 
 
+def _mask_patient_name(full_name: Optional[str]) -> str:
+    """Privacy-preserving name for the waiting-screen LED display.
+    "Ramesh Kumar Singh" -> "R. Singh". Falls back to full name if only one token.
+    """
+    if not full_name:
+        return "Guest"
+    parts = [p for p in str(full_name).strip().split() if p]
+    if len(parts) == 1:
+        return parts[0]
+    return f"{parts[0][0].upper()}. {parts[-1]}"
+
+
+@api.get("/public/waiting/{provider_id}")
+async def public_waiting_screen(
+    provider_id: str,
+    staff_ids: Optional[str] = None,
+    up_next: int = 3,
+):
+    """Public LED / Smart-TV waiting-screen snapshot for the clinic. Zero auth
+    so any TV browser can just open the URL. Returns a compact structure with:
+      - provider name / image
+      - up to 3 columns (multi-doctor) OR 1 column (single-doctor / non-hospital)
+      - masked patient names (initial + last name) for privacy
+    Query params:
+      - staff_ids: comma-separated Staff.id list (overrides auto-pick of first 3 active)
+      - up_next: how many future tokens to preview per column (default 3)
+    """
+    p = await db.providers.find_one({"id": provider_id}, {"_id": 0})
+    if not p:
+        raise HTTPException(404, "Provider not found")
+    today = await get_today_str()
+    provider_info = {
+        "id": p["id"],
+        "business_name": p.get("business_name") or "Clinic",
+        "image": p.get("image"),
+        "city": p.get("city"),
+        "provider_type": p.get("provider_type"),
+    }
+
+    columns: List[dict] = []
+
+    async def _build_column(staff_row: Optional[dict]):
+        """One column = one doctor OR the whole provider queue."""
+        q = {"provider_id": provider_id, "date": today}
+        if staff_row:
+            q["staff_id"] = staff_row["id"]
+        bookings = await db.bookings.find(q, {"_id": 0}).sort("token_number", 1).to_list(500)
+        active = [b for b in bookings if b.get("status") in ("pending", "confirmed")]
+        served = [b for b in bookings if b.get("status") in ("completed", "no_show", "rejected")]
+        current = active[0] if active else None
+        upcoming = active[1:1 + max(0, up_next)]
+        # Age lookup — best-effort; mobile app may not always store age on the user
+        current_age = None
+        if current and current.get("customer_id"):
+            u = await db.users.find_one({"id": current["customer_id"]}, {"_id": 0, "age": 1})
+            if u and u.get("age"):
+                current_age = u["age"]
+        return {
+            "staff_id": staff_row["id"] if staff_row else None,
+            "staff_name": (staff_row or {}).get("name") if staff_row else provider_info["business_name"],
+            "specialization": (staff_row or {}).get("specialization") or "",
+            "kind": (staff_row or {}).get("kind"),
+            "cabin": (staff_row or {}).get("cabin") or "",  # future-proofed if we add cabins
+            "current_token": current.get("token_number") if current else 0,
+            "last_served_token": max((b["token_number"] for b in served), default=0),
+            "current_patient": (
+                None
+                if not current
+                else {
+                    "masked_name": _mask_patient_name(current.get("customer_name")),
+                    "age": current_age,
+                    "is_walkin": bool(current.get("is_walkin")),
+                }
+            ),
+            "up_next": [
+                {"token": b["token_number"], "masked_name": _mask_patient_name(b.get("customer_name"))}
+                for b in upcoming
+            ],
+            "active_count": len(active),
+        }
+
+    if p.get("provider_type") == "hospital":
+        # Pick either the caller-supplied staff_ids or the first 3 active staff.
+        if staff_ids:
+            ids = [x.strip() for x in staff_ids.split(",") if x.strip()][:3]
+            staff_docs = await db.staff.find(
+                {"provider_id": provider_id, "id": {"$in": ids}, "active": True}, {"_id": 0}
+            ).to_list(3)
+            # Preserve the caller's order
+            staff_docs.sort(key=lambda s: ids.index(s["id"]) if s["id"] in ids else 99)
+        else:
+            staff_docs = await db.staff.find(
+                {"provider_id": provider_id, "active": True}, {"_id": 0}
+            ).sort("created_at", 1).to_list(3)
+        for s in staff_docs:
+            columns.append(await _build_column(s))
+    if not columns:
+        columns.append(await _build_column(None))
+
+    return {
+        "provider": provider_info,
+        "date": today,
+        "server_time": datetime.now(timezone.utc).isoformat(),
+        "columns": columns,
+    }
+
+
 # ---------- Per-staff availability (Hospital sub-doctor / service schedule) ----------
 @api.get("/providers/me/staff/{staff_id}/availability")
 async def get_my_staff_availability(staff_id: str, user: User = Depends(current_user)):

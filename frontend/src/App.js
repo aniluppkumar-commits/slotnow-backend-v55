@@ -6,6 +6,7 @@ import { AuthProvider, useAuth } from "@/context/AuthContext";
 import { I18nProvider } from "@/i18n";
 import RequireAuth from "@/components/RequireAuth";
 import Login from "@/pages/Login";
+import WaitingScreen from "@/pages/WaitingScreen";
 import LandingPage from "@/pages/LandingPage";
 import PublicProviderPage from "@/pages/PublicProviderPage";
 import CategoryPublicPage from "@/pages/CategoryPublicPage";
@@ -88,6 +89,7 @@ function App() {
             <Route path="/c/:slug/:city" element={<CategoryPublicPage />} />
             <Route path="/city/:cityName" element={<CityPublicPage />} />
             <Route path="/search" element={<CustomerSearch />} />
+            <Route path="/waiting/:providerId" element={<WaitingScreen />} />
             <Route path="/login" element={<Login />} />
 
             {/* Customer */}
