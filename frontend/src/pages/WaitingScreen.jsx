@@ -89,15 +89,17 @@ export default function WaitingScreen() {
       </header>
 
       {/* Body */}
-      <main className="relative z-10 flex-1 px-8 pb-6">
+      <main className="relative z-10 flex-1 min-h-0 px-8 pb-6 flex flex-col">
         {isMulti ? (
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-5 h-full">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-5 flex-1 auto-rows-fr">
             {columns.slice(0, 3).map((c, i) => (
               <DoctorColumn key={c.staff_id || i} column={c} cabinFallback={String.fromCharCode(65 + i)} />
             ))}
           </div>
         ) : (
-          <SingleView column={columns[0]} />
+          <div className="flex-1">
+            <SingleView column={columns[0]} />
+          </div>
         )}
       </main>
 
@@ -130,25 +132,29 @@ function DoctorColumn({ column, cabinFallback }) {
   const c = column || {};
   const cabin = c.cabin || cabinFallback;
   return (
-    <div className="bg-white/[0.03] border border-white/10 rounded-3xl px-5 pt-4 pb-5 flex flex-col backdrop-blur-sm">
-      <div className="text-center border-b border-white/10 pb-3 mb-3">
-        <p data-testid={`waiting-doc-${c.staff_id}`} className="text-2xl sm:text-3xl font-black tracking-wide truncate">
+    <div className="h-full bg-white/[0.03] border border-white/10 rounded-3xl px-6 pt-5 pb-6 flex flex-col backdrop-blur-sm">
+      <div className="text-center border-b border-white/10 pb-4 mb-4">
+        <p data-testid={`waiting-doc-${c.staff_id}`} className="text-3xl sm:text-4xl font-black tracking-wide truncate">
           {(c.staff_name || "").toUpperCase()}
           {c.specialization && (
-            <span className="block text-base sm:text-lg font-semibold text-sky-300/90 mt-1">
+            <span className="block text-xl sm:text-2xl font-semibold text-sky-300/90 mt-1">
               ({c.specialization})
             </span>
           )}
         </p>
       </div>
-      <p className="text-center text-lg sm:text-xl font-bold uppercase tracking-wider text-white/90">NOW SERVING:</p>
-      <p className="text-center text-2xl sm:text-3xl font-bold text-white mt-1">
-        TOKEN NO:{" "}
-        <span data-testid={`waiting-token-${c.staff_id}`} className="text-yellow-300 text-6xl sm:text-8xl font-black align-middle ml-2">
-          {c.current_token || "—"}
-        </span>
+      <p className="text-center text-2xl sm:text-3xl font-bold uppercase tracking-wider text-white/90">NOW SERVING:</p>
+      <p className="text-center text-3xl sm:text-4xl font-bold text-white mt-2">
+        TOKEN NO:
       </p>
-      <p className="text-center text-base sm:text-lg mt-3">
+      <p
+        data-testid={`waiting-token-${c.staff_id}`}
+        className="flex-1 flex items-center justify-center text-yellow-300 font-black leading-none"
+        style={{ fontSize: "clamp(7rem, 14vw, 13rem)" }}
+      >
+        {c.current_token || "—"}
+      </p>
+      <p className="text-center text-xl sm:text-2xl mt-2">
         {c.current_patient ? (
           <>
             <span className="font-bold">Patient:</span>{" "}
@@ -162,15 +168,15 @@ function DoctorColumn({ column, cabinFallback }) {
           <span className="text-sky-300/80 italic">Waiting for next patient</span>
         )}
       </p>
-      <div className="mt-4 border-t border-white/10 pt-3 flex-1">
-        <p className="text-yellow-300 text-lg sm:text-xl font-black uppercase tracking-wider mb-2">UP NEXT:</p>
+      <div className="mt-4 border-t border-white/10 pt-4">
+        <p className="text-yellow-300 text-2xl sm:text-3xl font-black uppercase tracking-wider mb-2">UP NEXT:</p>
         {(c.up_next || []).length === 0 ? (
-          <p className="text-white/60 italic">—</p>
+          <p className="text-white/60 italic text-xl">—</p>
         ) : (
-          <ul className="space-y-1">
+          <ul className="space-y-1.5">
             {(c.up_next || []).slice(0, 3).map((u) => (
-              <li key={u.token} className="text-lg sm:text-xl text-white">
-                <span className="font-bold">{u.token}</span> - {u.masked_name}
+              <li key={u.token} className="text-2xl sm:text-3xl text-white leading-snug">
+                <span className="font-black">{u.token}</span> - {u.masked_name}
               </li>
             ))}
           </ul>
