@@ -97,9 +97,7 @@ export default function WaitingScreen() {
             ))}
           </div>
         ) : (
-          <div className="flex-1">
-            <SingleView column={columns[0]} />
-          </div>
+          <SingleView column={columns[0]} />
         )}
       </main>
 
@@ -191,15 +189,19 @@ function SingleView({ column }) {
   if (!column) return null;
   const c = column;
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-[3fr_2fr] gap-6 h-full">
-      <div className="bg-white/[0.03] border border-white/10 rounded-3xl p-10 flex flex-col justify-center items-center backdrop-blur-sm">
+    <div className="grid grid-cols-1 lg:grid-cols-[3fr_2fr] gap-6 flex-1 min-h-0">
+      <div className="h-full bg-white/[0.03] border border-white/10 rounded-3xl p-10 flex flex-col justify-center items-center backdrop-blur-sm">
         <p className="text-white text-3xl sm:text-4xl font-bold uppercase tracking-wider">NOW SERVING:</p>
         <p className="text-white text-4xl sm:text-5xl font-bold mt-3">TOKEN NO:</p>
-        <p data-testid="waiting-current-token" className="text-yellow-300 text-[10rem] sm:text-[14rem] font-black leading-none mt-2">
+        <p
+          data-testid="waiting-current-token"
+          className="flex-1 flex items-center justify-center text-yellow-300 font-black leading-none w-full"
+          style={{ fontSize: "clamp(9rem, 22vw, 22rem)" }}
+        >
           {c.current_token || "—"}
         </p>
         {c.current_patient ? (
-          <p className="mt-4 text-2xl sm:text-3xl font-semibold text-center">
+          <p className="mt-2 text-3xl sm:text-4xl font-semibold text-center">
             <span className="font-bold">Patient:</span>{" "}
             <span data-testid="waiting-current-patient">
               {c.current_patient.masked_name}
@@ -208,24 +210,26 @@ function SingleView({ column }) {
             {c.cabin && <span className="text-sky-300"> | Cabin {c.cabin}</span>}
           </p>
         ) : (
-          <p className="mt-4 text-2xl text-sky-300/80 italic">Waiting for the next patient…</p>
+          <p className="mt-2 text-2xl text-sky-300/80 italic">Waiting for the next patient…</p>
         )}
       </div>
-      <div className="bg-white/[0.03] border border-white/10 rounded-3xl p-8 flex flex-col backdrop-blur-sm">
-        <p className="text-yellow-300 text-3xl sm:text-4xl font-black uppercase tracking-widest text-center">UP NEXT</p>
-        <p className="text-sky-300/80 text-center text-lg mb-6">अगले नंबर</p>
-        {(c.up_next || []).length === 0 ? (
-          <p className="text-white/60 italic text-center">Queue empty</p>
-        ) : (
-          <ul className="space-y-3">
-            {(c.up_next || []).map((u) => (
-              <li key={u.token} className="text-2xl sm:text-3xl bg-white/5 border border-white/10 rounded-2xl px-5 py-3">
-                <span className="font-black text-yellow-300 mr-2">{u.token}</span>
-                <span className="font-semibold">- {u.masked_name}</span>
-              </li>
-            ))}
-          </ul>
-        )}
+      <div className="h-full bg-white/[0.03] border border-white/10 rounded-3xl p-8 flex flex-col backdrop-blur-sm">
+        <p className="text-yellow-300 text-4xl sm:text-5xl font-black uppercase tracking-widest text-center">UP NEXT</p>
+        <p className="text-sky-300/80 text-center text-xl mb-4">अगले नंबर</p>
+        <div className="flex-1 flex flex-col justify-center">
+          {(c.up_next || []).length === 0 ? (
+            <p className="text-white/60 italic text-center text-2xl">Queue empty</p>
+          ) : (
+            <ul className="space-y-4">
+              {(c.up_next || []).map((u) => (
+                <li key={u.token} className="text-3xl sm:text-4xl bg-white/5 border border-white/10 rounded-2xl px-5 py-4">
+                  <span className="font-black text-yellow-300 mr-2">{u.token}</span>
+                  <span className="font-semibold">- {u.masked_name}</span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
       </div>
     </div>
   );
