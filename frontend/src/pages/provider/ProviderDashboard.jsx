@@ -18,6 +18,10 @@ import {
   Settings2,
   ShieldAlert,
   BarChart3,
+  Tv,
+  Copy,
+  ExternalLink,
+  Check,
 } from "lucide-react";
 import { toast } from "sonner";
 import PublicPageShare from "@/components/PublicPageShare";
@@ -191,6 +195,9 @@ export default function ProviderDashboard() {
             approved={profile.approved}
           />
         )}
+
+        {/* Waiting-Screen kiosk URL (LED TV / Smart TV / tablet display) */}
+        {profile?.id && <WaitingScreenUrlCard providerId={profile.id} />}
 
         {/* Upgrade to Pro */}
         {profile?.id && (
@@ -393,5 +400,101 @@ function Row({ icon, title, onClick, testid }) {
       <p className="flex-1 font-semibold text-ink text-sm">{title}</p>
       <ChevronRight size={16} className="text-ink-muted" />
     </button>
+  );
+}
+
+// -----------------------------------------------------------------------------
+// Waiting-Screen URL card
+// Shows the LED / Smart-TV kiosk URL for THIS provider with one-tap copy and
+// open. Silent mute toggle lets clinics pick sound-on vs sound-off kiosks.
+// -----------------------------------------------------------------------------
+function WaitingScreenUrlCard({ providerId }) {
+  const [mute, setMute] = useState(false);
+  const [copied, setCopied] = useState(false);
+
+  const url = `${window.location.origin}/waiting/${providerId}${mute ? "?mute=1" : ""}`;
+
+  const copy = async () => {
+    try {
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(url);
+      } else {
+        // Fallback for older browsers
+        const ta = document.createElement("textarea");
+        ta.value = url;
+        document.body.appendChild(ta);
+        ta.select();
+        document.execCommand("copy");
+        document.body.removeChild(ta);
+      }
+      setCopied(true);
+      toast.success("URL copied — paste on your TV browser");
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      toast.error("Could not copy — please long-press the URL to copy manually");
+    }
+  };
+
+  const open = () => window.open(url, "_blank", "noopener");
+
+  return (
+    <div
+      data-testid="waiting-screen-url-card"
+      className="bg-white border-2 border-forest/20 rounded-2xl p-4 shadow-sm"
+    >
+      <div className="flex items-start gap-3">
+        <div className="w-10 h-10 rounded-xl bg-forest text-cream-100 flex items-center justify-center shrink-0">
+          <Tv size={18} />
+        </div>
+        <div className="min-w-0 flex-1">
+          <p className="font-heading font-bold text-ink text-sm">Clinic Waiting Screen</p>
+          <p className="text-[11px] text-ink-muted mt-0.5">
+            Open this on a Smart TV / tablet at the reception — patients see live tokens + your app QR.
+          </p>
+        </div>
+      </div>
+
+      {/* URL box */}
+      <div className="mt-3 bg-cream border border-cream-300 rounded-xl px-3 py-2.5 font-mono text-[11px] sm:text-xs text-ink break-all select-all">
+        {url}
+      </div>
+
+      {/* Actions */}
+      <div className="mt-3 flex flex-wrap items-center gap-2">
+        <button
+          data-testid="waiting-url-copy"
+          onClick={copy}
+          className="flex items-center gap-1.5 bg-forest text-cream-100 px-3.5 py-2 rounded-xl text-xs font-bold hover:bg-forest-dark transition-colors"
+        >
+          {copied ? <Check size={13} strokeWidth={3} /> : <Copy size={13} strokeWidth={2.5} />}
+          {copied ? "Copied" : "Copy URL"}
+        </button>
+        <button
+          data-testid="waiting-url-open"
+          onClick={open}
+          className="flex items-center gap-1.5 bg-white border border-forest text-forest px-3.5 py-2 rounded-xl text-xs font-bold hover:bg-forest-faint transition-colors"
+        >
+          <ExternalLink size={13} strokeWidth={2.5} />
+          Open now
+        </button>
+        <label
+          data-testid="waiting-url-mute-toggle"
+          className="ml-auto flex items-center gap-1.5 text-[11px] font-bold text-ink-muted cursor-pointer select-none"
+        >
+          <input
+            type="checkbox"
+            className="w-4 h-4 accent-forest"
+            checked={mute}
+            onChange={(e) => setMute(e.target.checked)}
+          />
+          Silent (no chime / voice)
+        </label>
+      </div>
+
+      <p className="mt-2 text-[10px] text-ink-muted leading-relaxed">
+        Setup guide (Fire TV, Chromecast, Android TV):{" "}
+        <span className="font-mono">/app/docs/kiosk-setup.md</span> in your codebase.
+      </p>
+    </div>
   );
 }
