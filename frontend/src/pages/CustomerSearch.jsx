@@ -3,6 +3,7 @@ import { Link, useSearchParams } from "react-router-dom";
 import { MapPin, Star, Search, ArrowRight, Locate, ChevronLeft, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { api } from "@/lib/api";
+import { fetchHealthcareReference } from "@/lib/healthcareReference";
 
 /**
  * Public customer search — filters by city, specialization, service and can
@@ -33,7 +34,7 @@ export default function CustomerSearch() {
 
   // Load reference lists + city aggregations for dropdowns
   useEffect(() => {
-    api.get("/reference/healthcare").then((r) => setReference(r.data)).catch(() => {});
+    fetchHealthcareReference().then(setReference);
     // Derive cities from provider list (light-weight — top 50 approved)
     api
       .get("/search/providers?limit=500")

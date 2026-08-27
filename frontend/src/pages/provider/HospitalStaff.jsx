@@ -5,6 +5,7 @@ import { Stethoscope, Building2, Plus, X, Trash2, Loader2, MapPin, CalendarClock
 import AppShell from "@/components/AppShell";
 import { api } from "@/lib/api";
 import { compressImageToDataURL } from "@/lib/image";
+import { fetchHealthcareReference } from "@/lib/healthcareReference";
 
 /**
  * Hospital-only management screen: add doctors and diagnostic service centers
@@ -29,7 +30,7 @@ export default function HospitalStaff() {
   };
 
   useEffect(() => {
-    api.get("/reference/healthcare").then((r) => setReference(r.data)).catch(() => {});
+    fetchHealthcareReference().then(setReference);
     load();
   }, []);
 

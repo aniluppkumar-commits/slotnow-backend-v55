@@ -9,6 +9,7 @@ import { packAddress, unpackAddress } from "@/lib/address";
 import LocationPickerModal from "@/components/LocationPickerModal";
 import { Store, Loader2, Save, Upload, ImageIcon, X as XIcon, MapPin } from "lucide-react";
 import { toast } from "sonner";
+import { fetchHealthcareReference } from "@/lib/healthcareReference";
 
 export default function ProviderOnboarding() {
   const { t } = useI18n();
@@ -62,10 +63,10 @@ export default function ProviderOnboarding() {
         ]);
         setCategories(catRes.data || []);
         try {
-          const refRes = await api.get("/reference/healthcare");
-          setReference(refRes.data);
+          const ref = await fetchHealthcareReference();
+          setReference(ref);
         } catch {
-          setReference({ provider_types: [], specializations: [], services: [] });
+          setReference(null);
         }
         if (meRes.data) {
           setExisting(meRes.data);
