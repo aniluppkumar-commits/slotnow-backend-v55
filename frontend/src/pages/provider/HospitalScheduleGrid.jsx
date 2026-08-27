@@ -67,6 +67,10 @@ export default function HospitalScheduleGrid() {
         weekday: jsToPyWeekday(addOpen.jsDay),
         start_time: form.start_time,
         end_time: form.end_time,
+        // Older backends (pro-booking-21) expect `start`/`end`; latest expects
+        // `start_time`/`end_time`. Send both so the payload works on either.
+        start: form.start_time,
+        end: form.end_time,
         slot_duration: Number(form.slot_duration) || 30,
         max_bookings: form.max_bookings === "" ? null : Number(form.max_bookings),
       });
@@ -101,6 +105,8 @@ export default function HospitalScheduleGrid() {
             weekday: jsToPyWeekday(targetJsDay),
             start_time: r.start_time,
             end_time: r.end_time,
+            start: r.start_time,
+            end: r.end_time,
             slot_duration: r.slot_duration || 30,
             max_bookings: r.max_bookings ?? null,
           });

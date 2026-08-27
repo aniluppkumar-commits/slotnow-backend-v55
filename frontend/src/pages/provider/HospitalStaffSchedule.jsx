@@ -75,6 +75,10 @@ export default function HospitalStaffSchedule() {
         weekday: jsToPyWeekday(Number(form.weekday)),
         start_time: form.start_time,
         end_time: form.end_time,
+        // Older backends (pro-booking-21) expect `start`/`end`; latest expects
+        // `start_time`/`end_time`. Send both so the payload works on either.
+        start: form.start_time,
+        end: form.end_time,
         slot_duration: Number(form.slot_duration) || 30,
         max_bookings: form.max_bookings === "" ? null : Number(form.max_bookings),
       });
@@ -126,6 +130,9 @@ export default function HospitalStaffSchedule() {
       if (ovForm.kind === "shift") {
         body.start_time = ovForm.start_time;
         body.end_time = ovForm.end_time;
+        // Older backends may key on start/end — send both for compatibility.
+        body.start = ovForm.start_time;
+        body.end = ovForm.end_time;
         body.slot_duration = 30;
         body.max_bookings = ovForm.max_bookings === "" ? null : Number(ovForm.max_bookings);
       }
